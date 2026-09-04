@@ -6,7 +6,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 
 - Default position: left side of canvas, vertically centered.
 - Default orientation: vertical.
-- Contains document/library, draw, erase, shape, lasso, settings, page navigation, page indicator, and add page controls.
+- Contains document/library, draw, erase, shape, add image, lasso, settings, page navigation, page indicator, and add page controls.
 - Toolbars are draggable.
 - Dragging to top or bottom edge should use horizontal orientation.
 - Dragging to left or right edge should use vertical orientation.
@@ -53,6 +53,7 @@ When hiding toolbars, fade out:
 - fullscreen toolbar
 - shape action toolbar
 - lasso action toolbar
+- image action toolbar
 
 Hiding should not change the selected tool. Showing toolbars again should only show the brush preset toolbar when the draw tool is selected.
 

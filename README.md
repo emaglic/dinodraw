@@ -32,11 +32,13 @@ Documents are shown with the most recently opened document first.
 
 ## Drawing
 
-Use the main toolbar to switch between tools such as drawing, erasing, selection, shapes, pages, and settings.
+Use the main toolbar to switch between tools such as drawing, erasing, selection, shapes, images, pages, and settings.
 
 The brush preset toolbar gives quick access to saved brush styles. Double tap a brush preset to edit its settings, including size, opacity, and whether it should draw behind normal ink.
 
 Use `Draw Behind` for highlighter-style strokes. These strokes appear underneath normal writing so they do not obscure text as much as ordinary translucent ink.
+
+Use Add Image to choose an image from the device or paste an image from the clipboard when the browser allows clipboard image access. Imported images start centered on the canvas, fit within half the canvas size, and can be moved, proportionally resized, rotated, confirmed, or deleted before they are baked into the page.
 
 ## Erasing
 

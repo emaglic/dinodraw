@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.53";
+const APP_VERSION = "v0.8.54";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -26,6 +26,7 @@ const presetButtons = Array.from(
 const settingsDialog = document.querySelector("#settings-dialog");
 const eraserDialog = document.querySelector("#eraser-dialog");
 const shapeDialog = document.querySelector("#shape-dialog");
+const addImageDialog = document.querySelector("#add-image-dialog");
 const presetDialog = document.querySelector("#preset-dialog");
 const appDialog = document.querySelector("#app-dialog");
 const guideDialog = document.querySelector("#guide-dialog");
@@ -40,6 +41,7 @@ const appDialogCancelButtons = Array.from(
   document.querySelectorAll("[data-app-dialog-cancel]")
 );
 const openSettingsButton = document.querySelector("[data-open-settings]");
+const addImageButton = document.querySelector("[data-add-image]");
 const resetToolbarsButton = document.querySelector("[data-reset-toolbars]");
 const documentScreen = document.querySelector("[data-document-screen]");
 const documentSubtitle = document.querySelector("[data-document-subtitle]");
@@ -78,12 +80,17 @@ const importDocumentButtons = Array.from(
 const importDocumentInput = document.querySelector("[data-import-input]");
 const saveStatus = document.querySelector("[data-save-status]");
 const shapeActionToolbar = document.querySelector("[data-shape-action-toolbar]");
+const imageActionToolbar = document.querySelector("[data-image-action-toolbar]");
 const lassoActionToolbar = document.querySelector("[data-lasso-action-toolbar]");
 const shapeSettingsButton = document.querySelector("[data-shape-settings]");
 const shapeRotateLeftButton = document.querySelector("[data-shape-rotate-left]");
 const shapeRotateRightButton = document.querySelector("[data-shape-rotate-right]");
 const shapeCommitButton = document.querySelector("[data-shape-commit]");
 const shapeDeleteButton = document.querySelector("[data-shape-delete]");
+const imageRotateLeftButton = document.querySelector("[data-image-rotate-left]");
+const imageRotateRightButton = document.querySelector("[data-image-rotate-right]");
+const imageCommitButton = document.querySelector("[data-image-commit]");
+const imageDeleteButton = document.querySelector("[data-image-delete]");
 const lassoRotateLeftButton = document.querySelector("[data-lasso-rotate-left]");
 const lassoRotateRightButton = document.querySelector("[data-lasso-rotate-right]");
 const lassoCommitButton = document.querySelector("[data-lasso-commit]");
@@ -104,6 +111,14 @@ const pageActionMenu = document.querySelector("[data-page-action-menu]");
 const addPageBeforeButton = document.querySelector("[data-add-page-before]");
 const addPageAfterButton = document.querySelector("[data-add-page-after]");
 const addPageEndButton = document.querySelector("[data-add-page-end]");
+const imageFileButton = document.querySelector("[data-image-file-button]");
+const imageInput = document.querySelector("[data-image-input]");
+const imagePasteButton = document.querySelector("[data-image-paste]");
+const clipboardPreview = document.querySelector("[data-clipboard-preview]");
+const clipboardPreviewImage = document.querySelector(
+  "[data-clipboard-preview-image]"
+);
+const clipboardStatus = document.querySelector("[data-clipboard-status]");
 const pageInsertBeforeButton = document.querySelector("[data-page-insert-before]");
 const pageInsertAfterButton = document.querySelector("[data-page-insert-after]");
 const pageDeleteButton = document.querySelector("[data-page-delete]");
@@ -150,6 +165,10 @@ const state = {
   editingPresetIndex: 0,
   pendingShape: null,
   shapeInteraction: null,
+  pendingImage: null,
+  imageInteraction: null,
+  clipboardImageBlob: null,
+  clipboardPreviewUrl: "",
   lassoPath: [],
   selection: null,
   selectionInteraction: null,
@@ -570,6 +589,28 @@ function loadImage(dataUrl) {
     image.onload = () => resolve(image);
     image.onerror = () => resolve(null);
     image.src = dataUrl;
+  });
+}
+
+function loadImageBlob(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      reject(new Error("No image data."));
+      return;
+    }
+
+    const image = new Image();
+    const url = URL.createObjectURL(blob);
+
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Image could not be loaded."));
+    };
+    image.src = url;
   });
 }
 
@@ -2022,6 +2063,95 @@ function drawPendingShapeOverlay() {
   context.restore();
 }
 
+function getImageCenter(imageItem) {
+  return {
+    x: imageItem.x + imageItem.width / 2,
+    y: imageItem.y + imageItem.height / 2,
+  };
+}
+
+function getImageHandle(imageItem) {
+  const center = getImageCenter(imageItem);
+  const handlePoint = getRotatedPoint(
+    {
+      x: imageItem.x + imageItem.width,
+      y: imageItem.y + imageItem.height,
+    },
+    center,
+    imageItem.rotation
+  );
+
+  return {
+    x: handlePoint.x,
+    y: handlePoint.y,
+    size: 18,
+  };
+}
+
+function drawCanvasImage(targetContext, imageItem) {
+  if (!imageItem || !imageItem.image) {
+    return;
+  }
+
+  const center = getImageCenter(imageItem);
+
+  targetContext.save();
+  targetContext.translate(center.x, center.y);
+  targetContext.rotate(imageItem.rotation);
+  targetContext.drawImage(
+    imageItem.image,
+    -imageItem.width / 2,
+    -imageItem.height / 2,
+    imageItem.width,
+    imageItem.height
+  );
+  targetContext.restore();
+}
+
+function drawPendingImageOverlay() {
+  if (!state.pendingImage) {
+    return;
+  }
+
+  const imageItem = state.pendingImage;
+  const handle = getImageHandle(imageItem);
+
+  drawCanvasImage(context, imageItem);
+  context.save();
+  context.translate(
+    imageItem.x + imageItem.width / 2,
+    imageItem.y + imageItem.height / 2
+  );
+  context.rotate(imageItem.rotation);
+  context.setLineDash([8, 6]);
+  context.strokeStyle = "#000000";
+  context.lineWidth = 2;
+  context.strokeRect(
+    -imageItem.width / 2,
+    -imageItem.height / 2,
+    imageItem.width,
+    imageItem.height
+  );
+  context.restore();
+  context.save();
+  context.fillStyle = "#ffffff";
+  context.strokeStyle = "#000000";
+  context.lineWidth = 2;
+  context.fillRect(
+    handle.x - handle.size / 2,
+    handle.y - handle.size / 2,
+    handle.size,
+    handle.size
+  );
+  context.strokeRect(
+    handle.x - handle.size / 2,
+    handle.y - handle.size / 2,
+    handle.size,
+    handle.size
+  );
+  context.restore();
+}
+
 function drawLassoPathOverlay() {
   if (state.lassoPath.length < 2) {
     return;
@@ -2072,14 +2202,17 @@ function renderWorkspace() {
   renderPage();
   drawSelectionOverlay();
   drawPendingShapeOverlay();
+  drawPendingImageOverlay();
   drawLassoPathOverlay();
 }
 
 function updateActionToolbar() {
   const hasShape = Boolean(state.pendingShape);
+  const hasImage = Boolean(state.pendingImage);
   const hasSelection = Boolean(state.selection);
 
   shapeActionToolbar.classList.toggle("is-hidden", !hasShape);
+  imageActionToolbar.classList.toggle("is-hidden", !hasImage);
   lassoActionToolbar.classList.toggle("is-hidden", !hasSelection);
 }
 
@@ -2277,6 +2410,8 @@ function getToolbarToggleOffsetFromPointer(edge, point) {
 function clearTemporaryCanvasState() {
   state.pendingShape = null;
   state.shapeInteraction = null;
+  state.pendingImage = null;
+  state.imageInteraction = null;
   state.lassoPath = [];
   state.selection = null;
   state.selectionInteraction = null;
@@ -2334,6 +2469,11 @@ function redoPageHistory() {
 function undo() {
   if (state.pendingShape) {
     deletePendingShape();
+    return;
+  }
+
+  if (state.pendingImage) {
+    deletePendingImage();
     return;
   }
 
@@ -2477,6 +2617,10 @@ function resizeCanvas() {
 function setTool(tool) {
   if (tool !== "shape" && state.pendingShape) {
     commitPendingShape();
+  }
+
+  if (state.pendingImage) {
+    commitPendingImage();
   }
 
   if (tool !== "lasso" && state.selection) {
@@ -2663,6 +2807,200 @@ function rotatePendingShape(amount) {
   }
 
   state.pendingShape.rotation += amount;
+  renderWorkspace();
+}
+
+function getInitialImagePlacement(image) {
+  const naturalWidth = image.naturalWidth || image.width || 1;
+  const naturalHeight = image.naturalHeight || image.height || 1;
+  const maxWidth = Math.max(1, canvas.width * 0.5);
+  const maxHeight = Math.max(1, canvas.height * 0.5);
+  const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight, 1);
+  const width = Math.max(1, Math.round(naturalWidth * scale));
+  const height = Math.max(1, Math.round(naturalHeight * scale));
+
+  return {
+    x: Math.round((canvas.width - width) / 2),
+    y: Math.round((canvas.height - height) / 2),
+    width,
+    height,
+  };
+}
+
+function addPendingImage(image) {
+  if (!image) {
+    return;
+  }
+
+  commitPendingShape();
+  commitPendingImage();
+  commitSelection();
+
+  const placement = getInitialImagePlacement(image);
+
+  state.pendingImage = {
+    image,
+    x: placement.x,
+    y: placement.y,
+    width: placement.width,
+    height: placement.height,
+    rotation: 0,
+  };
+  state.imageInteraction = null;
+  updateActionToolbar();
+  renderWorkspace();
+  setSaveStatus("Place image");
+}
+
+function commitPendingImage() {
+  if (!state.pendingImage) {
+    return;
+  }
+
+  drawCanvasImage(getActivePage().context, state.pendingImage);
+  state.pendingImage = null;
+  state.imageInteraction = null;
+  pushHistorySnapshot();
+  updateActionToolbar();
+  renderWorkspace();
+}
+
+function deletePendingImage() {
+  state.pendingImage = null;
+  state.imageInteraction = null;
+  updateActionToolbar();
+  renderWorkspace();
+}
+
+function rotatePendingImage(amount) {
+  if (!state.pendingImage) {
+    return;
+  }
+
+  state.pendingImage.rotation += amount;
+  renderWorkspace();
+}
+
+function getImageHit(point) {
+  if (!state.pendingImage) {
+    return null;
+  }
+
+  const imageItem = state.pendingImage;
+  const center = getImageCenter(imageItem);
+  const localPoint = getRotatedPoint(point, center, -imageItem.rotation);
+  const handle = getImageHandle(imageItem);
+  const hitHandle = getDistance(point, handle) <= handle.size;
+  const hitBody =
+    localPoint.x >= imageItem.x &&
+    localPoint.x <= imageItem.x + imageItem.width &&
+    localPoint.y >= imageItem.y &&
+    localPoint.y <= imageItem.y + imageItem.height;
+
+  if (hitHandle) {
+    return "resize";
+  }
+
+  return hitBody ? "move" : null;
+}
+
+function resizePendingImageToPoint(point) {
+  const interaction = state.imageInteraction;
+  const startImage = interaction.startImage;
+  const rotation = startImage.rotation;
+  const startCenter = getImageCenter(startImage);
+  const anchor = getRotatedPoint(
+    { x: startImage.x, y: startImage.y },
+    startCenter,
+    rotation
+  );
+  const axisX = { x: Math.cos(rotation), y: Math.sin(rotation) };
+  const axisY = { x: -Math.sin(rotation), y: Math.cos(rotation) };
+  const pointerDelta = {
+    x: point.x - anchor.x,
+    y: point.y - anchor.y,
+  };
+  const widthAlongAxis =
+    pointerDelta.x * axisX.x + pointerDelta.y * axisX.y;
+  const heightAlongAxis =
+    pointerDelta.x * axisY.x + pointerDelta.y * axisY.y;
+  const minSize = 24;
+  const minScale = Math.max(minSize / startImage.width, minSize / startImage.height);
+  const requestedScale = Math.max(
+    widthAlongAxis / startImage.width,
+    heightAlongAxis / startImage.height
+  );
+  const scale = Math.max(minScale, requestedScale);
+  const width = Math.round(startImage.width * scale);
+  const height = Math.round(startImage.height * scale);
+  const center = {
+    x: anchor.x + axisX.x * width / 2 + axisY.x * height / 2,
+    y: anchor.y + axisX.y * width / 2 + axisY.y * height / 2,
+  };
+
+  state.pendingImage.x = center.x - width / 2;
+  state.pendingImage.y = center.y - height / 2;
+  state.pendingImage.width = width;
+  state.pendingImage.height = height;
+}
+
+function startImage(event) {
+  const point = getPoint(event);
+  const hit = getImageHit(point);
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  if (!hit) {
+    commitPendingImage();
+    return false;
+  }
+
+  state.imageInteraction = {
+    mode: hit,
+    startPoint: point,
+    startImage: { ...state.pendingImage },
+  };
+
+  return true;
+}
+
+function continueImage(event) {
+  if (!state.imageInteraction || !state.pendingImage) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  const point = getPoint(event);
+  const deltaX = point.x - state.imageInteraction.startPoint.x;
+  const deltaY = point.y - state.imageInteraction.startPoint.y;
+  const startImage = state.imageInteraction.startImage;
+
+  if (state.imageInteraction.mode === "move") {
+    state.pendingImage.x = startImage.x + deltaX;
+    state.pendingImage.y = startImage.y + deltaY;
+  } else {
+    resizePendingImageToPoint(point);
+  }
+
+  renderWorkspace();
+}
+
+function endImage(event) {
+  if (!state.imageInteraction) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  state.imageInteraction = null;
+  updateActionToolbar();
   renderWorkspace();
 }
 
@@ -3200,6 +3538,22 @@ function endStroke(event) {
 }
 
 function startCanvasAction(event) {
+  if (
+    state.pendingImage &&
+    !state.isDrawing &&
+    !shouldIgnoreCanvasPointer(event) &&
+    event.button === 0
+  ) {
+    const didStartImageInteraction = startImage(event);
+
+    if (didStartImageInteraction) {
+      canvas.setPointerCapture(event.pointerId);
+      state.isDrawing = true;
+      state.activePointerId = event.pointerId;
+    }
+    return;
+  }
+
   if (state.tool === "draw" || state.tool === "erase") {
     startStroke(event);
     return;
@@ -3231,6 +3585,15 @@ function startCanvasAction(event) {
 }
 
 function continueCanvasAction(event) {
+  if (
+    state.imageInteraction &&
+    state.isDrawing &&
+    event.pointerId === state.activePointerId
+  ) {
+    continueImage(event);
+    return;
+  }
+
   if (state.tool === "draw" || state.tool === "erase") {
     continueStroke(event);
     return;
@@ -3250,6 +3613,21 @@ function continueCanvasAction(event) {
 }
 
 function endCanvasAction(event) {
+  if (
+    state.imageInteraction &&
+    state.isDrawing &&
+    event.pointerId === state.activePointerId
+  ) {
+    if (canvas.hasPointerCapture(event.pointerId)) {
+      canvas.releasePointerCapture(event.pointerId);
+    }
+
+    endImage(event);
+    state.isDrawing = false;
+    state.activePointerId = null;
+    return;
+  }
+
   if (state.tool === "draw" || state.tool === "erase") {
     endStroke(event);
     return;
@@ -3324,6 +3702,7 @@ function isBlockingPageKeyNavigation() {
     settingsDialog,
     eraserDialog,
     shapeDialog,
+    addImageDialog,
     presetDialog,
     pageDialog,
     addPageDialog,
@@ -3389,6 +3768,7 @@ function updatePageControls() {
 
 function setActivePage(index) {
   commitPendingShape();
+  commitPendingImage();
   commitSelection();
   state.activePageIndex = Math.max(0, Math.min(index, state.pages.length - 1));
   syncBackgroundInputs();
@@ -3404,6 +3784,7 @@ function addPage() {
   }
 
   commitPendingShape();
+  commitPendingImage();
   commitSelection();
   syncAddPageDialog();
 
@@ -3536,6 +3917,7 @@ function getInsertedPageBackground(index) {
 
 function insertPageAt(index, shouldActivateInsertedPage = false) {
   commitPendingShape();
+  commitPendingImage();
   commitSelection();
 
   const activePage = getActivePage();
@@ -3570,6 +3952,7 @@ function deletePage(index) {
     }
 
     commitPendingShape();
+    commitPendingImage();
     commitSelection();
     state.pages.splice(index, 1);
 
@@ -3650,6 +4033,7 @@ function openPageDialog() {
   }
 
   commitPendingShape();
+  commitPendingImage();
   commitSelection();
   renderPageList();
 
@@ -3775,6 +4159,208 @@ function openShapeSettings() {
   }
 
   shapeDialog.setAttribute("open", "");
+}
+
+function closeAddImageDialog() {
+  if (addImageDialog.open && addImageDialog.close) {
+    addImageDialog.close();
+    return;
+  }
+
+  addImageDialog.removeAttribute("open");
+}
+
+function revokeClipboardPreviewUrl() {
+  if (state.clipboardPreviewUrl) {
+    URL.revokeObjectURL(state.clipboardPreviewUrl);
+    state.clipboardPreviewUrl = "";
+  }
+}
+
+function setClipboardPreviewStatus(message, blob) {
+  revokeClipboardPreviewUrl();
+  state.clipboardImageBlob = blob || null;
+
+  if (blob) {
+    state.clipboardPreviewUrl = URL.createObjectURL(blob);
+    clipboardPreviewImage.src = state.clipboardPreviewUrl;
+    clipboardPreview.classList.add("has-image");
+    imagePasteButton.disabled = false;
+  } else {
+    clipboardPreviewImage.removeAttribute("src");
+    clipboardPreview.classList.remove("has-image");
+    imagePasteButton.disabled = true;
+  }
+
+  clipboardStatus.textContent = message;
+}
+
+async function readClipboardImageBlob() {
+  if (!navigator.clipboard || !navigator.clipboard.read) {
+    return null;
+  }
+
+  const items = await navigator.clipboard.read();
+
+  for (const item of items) {
+    for (const type of item.types) {
+      if (type.indexOf("image/") === 0) {
+        return item.getType(type);
+      }
+    }
+  }
+
+  return null;
+}
+
+async function refreshClipboardImagePreview() {
+  setClipboardPreviewStatus("Checking clipboard...", null);
+
+  try {
+    const blob = await readClipboardImageBlob();
+
+    if (!addImageDialog.open && !addImageDialog.hasAttribute("open")) {
+      return;
+    }
+
+    if (blob) {
+      setClipboardPreviewStatus("Clipboard image ready", blob);
+      return;
+    }
+
+    setClipboardPreviewStatus("No image found in clipboard", null);
+  } catch (error) {
+    setClipboardPreviewStatus("Clipboard preview unavailable", null);
+    console.error(error);
+  }
+}
+
+function openAddImageDialog() {
+  hideToolbarTooltip();
+
+  if (!state.documentId || state.pages.length === 0) {
+    setSaveStatus("No document");
+    return;
+  }
+
+  setClipboardPreviewStatus("Checking clipboard...", null);
+
+  if (addImageDialog.showModal) {
+    addImageDialog.showModal();
+  } else {
+    addImageDialog.setAttribute("open", "");
+  }
+
+  refreshClipboardImagePreview();
+}
+
+async function importImageBlob(blob, failureMessage) {
+  try {
+    const image = await loadImageBlob(blob);
+
+    closeAddImageDialog();
+    addPendingImage(image);
+  } catch (error) {
+    setSaveStatus("Image import failed");
+    await showAlertDialog(
+      "Image Import Failed",
+      failureMessage || "That image could not be imported."
+    );
+    console.error(error);
+  }
+}
+
+async function importImageFile(file) {
+  if (!file) {
+    return;
+  }
+
+  if (file.type.indexOf("image/") !== 0) {
+    await showAlertDialog("Image Import Failed", "Choose an image file.");
+    return;
+  }
+
+  await importImageBlob(file, "That image file could not be imported.");
+}
+
+async function pasteClipboardImage() {
+  let blob = state.clipboardImageBlob;
+
+  if (!blob) {
+    try {
+      blob = await readClipboardImageBlob();
+    } catch (error) {
+      setClipboardPreviewStatus("Clipboard image unavailable", null);
+      console.error(error);
+      return;
+    }
+  }
+
+  if (!blob) {
+    setClipboardPreviewStatus("No image found in clipboard", null);
+    return;
+  }
+
+  await importImageBlob(blob, "The clipboard image could not be imported.");
+}
+
+function getImageBlobFromDataTransfer(dataTransfer) {
+  if (!dataTransfer) {
+    return null;
+  }
+
+  if (dataTransfer.items) {
+    for (const item of dataTransfer.items) {
+      if (item.kind === "file" && item.type.indexOf("image/") === 0) {
+        const file = item.getAsFile();
+
+        if (file) {
+          return file;
+        }
+      }
+    }
+  }
+
+  if (dataTransfer.files) {
+    for (const file of dataTransfer.files) {
+      if (file.type.indexOf("image/") === 0) {
+        return file;
+      }
+    }
+  }
+
+  return null;
+}
+
+function handlePasteEvent(event) {
+  const isAddImageOpen =
+    addImageDialog.open || addImageDialog.hasAttribute("open");
+
+  if (
+    isEditableKeyTarget(event.target) ||
+    (!isAddImageOpen && isBlockingPageKeyNavigation()) ||
+    !state.documentId ||
+    state.pages.length === 0 ||
+    documentScreen.classList.contains("is-hidden") === false
+  ) {
+    return;
+  }
+
+  const blob = getImageBlobFromDataTransfer(event.clipboardData);
+
+  if (!blob) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  if (isAddImageOpen) {
+    closeAddImageDialog();
+  }
+
+  importImageBlob(blob, "The pasted image could not be imported.");
 }
 
 function buildShapeColorGrid(grid, key) {
@@ -4916,6 +5502,7 @@ toolButtons.forEach(addToolButtonInteractions);
 
 presetButtons.forEach(addPresetButtonInteractions);
 openSettingsButton.addEventListener("click", openSettings);
+addImageButton.addEventListener("click", openAddImageDialog);
 resetToolbarsButton.addEventListener("click", resetToolbarPositions);
 openLibraryButton.addEventListener("click", showDocumentScreen);
 closeLibraryButton.addEventListener("click", hideDocumentScreen);
@@ -5073,6 +5660,14 @@ shapeRotateRightButton.addEventListener("click", () =>
 );
 shapeCommitButton.addEventListener("click", commitPendingShape);
 shapeDeleteButton.addEventListener("click", deletePendingShape);
+imageRotateLeftButton.addEventListener("click", () =>
+  rotatePendingImage(-Math.PI / 12)
+);
+imageRotateRightButton.addEventListener("click", () =>
+  rotatePendingImage(Math.PI / 12)
+);
+imageCommitButton.addEventListener("click", commitPendingImage);
+imageDeleteButton.addEventListener("click", deletePendingImage);
 lassoRotateLeftButton.addEventListener("click", () =>
   rotateSelection(-Math.PI / 12)
 );
@@ -5091,6 +5686,26 @@ addPageButton.addEventListener("click", addPage);
 addPageBeforeButton.addEventListener("click", () => addPageAtPlacement("before"));
 addPageAfterButton.addEventListener("click", () => addPageAtPlacement("after"));
 addPageEndButton.addEventListener("click", () => addPageAtPlacement("end"));
+imageFileButton.addEventListener("click", () => imageInput.click());
+imageInput.addEventListener("change", () => {
+  const file = imageInput.files && imageInput.files[0];
+
+  importImageFile(file).catch((error) => {
+    setSaveStatus("Image import failed");
+    console.error(error);
+  });
+});
+imagePasteButton.addEventListener("click", () => {
+  pasteClipboardImage().catch((error) => {
+    setSaveStatus("Image paste failed");
+    console.error(error);
+  });
+});
+addImageDialog.addEventListener("close", () => {
+  revokeClipboardPreviewUrl();
+  state.clipboardImageBlob = null;
+  imageInput.value = "";
+});
 pageIndicator.addEventListener("click", openPageDialog);
 pageDialog.addEventListener("click", (event) => {
   if (!event.target.closest(".page-menu-wrap, .page-menu")) {
@@ -5181,5 +5796,6 @@ window.addEventListener("resize", () => {
   reclampToolbarTogglePosition();
 });
 window.addEventListener("keydown", handlePageNavigationKeyDown, true);
+document.addEventListener("paste", handlePasteEvent);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 initializeApp();

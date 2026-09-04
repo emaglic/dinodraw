@@ -95,13 +95,26 @@ Implementation notes:
 - Lines snap to horizontal or vertical while being created/resized based on dominant pointer movement.
 - Shape rotations use 15-degree increments from the action toolbar.
 
+## Images
+
+Imported images render to the normal drawing layer when committed. Before commit, an image is a temporary overlay like a pending shape.
+
+Implementation notes:
+
+- Add Image opens a modal with device file import and clipboard import.
+- Clipboard import uses browser clipboard image access when available and can show a small preview.
+- New images start centered and fit within 50% of the canvas width and 50% of the canvas height without upscaling.
+- Pending images can be moved, proportionally resized from the corner handle, rotated in 15-degree increments, confirmed, or deleted.
+- Clicking outside a pending image commits it to the page.
+- After commit, images are baked into the canvas pixels and can be manipulated later with lasso selection.
+
 ## History
 
 - Each page has independent undo/redo stacks.
 - History snapshots clone background, `underLayer`, and `layer`.
 - `pushHistorySnapshot()` clears redo and schedules a document save.
 - The undo stack is capped by `historyLimit = 30`.
-- Undo deletes a pending shape first, then restores a floating lasso selection origin, then falls back to page history.
+- Undo deletes a pending shape or image first, then restores a floating lasso selection origin, then falls back to page history.
 
 ## Palm Rejection
 

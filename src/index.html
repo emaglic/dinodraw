@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.53">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.54">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.53">
+    <link rel="stylesheet" href="./styles.css?v=0.8.54">
   </head>
   <body>
     <main class="app-shell">
@@ -45,6 +45,9 @@
         </button>
         <button class="tool-button" type="button" data-tool="shape" aria-label="Shape" aria-pressed="false" title="Shape">
           &#9633;
+        </button>
+        <button class="tool-button" type="button" data-add-image aria-label="Add image" title="Add image">
+          <span class="image-icon" aria-hidden="true"></span>
         </button>
         <button class="tool-button" type="button" data-tool="lasso" aria-label="Lasso" aria-pressed="false" title="Lasso">
           <span class="lasso-icon" aria-hidden="true"></span>
@@ -122,6 +125,21 @@
         </button>
       </div>
 
+      <div class="action-toolbar is-hidden" data-image-action-toolbar role="toolbar" aria-label="Image actions">
+        <button class="action-button" type="button" data-image-rotate-left aria-label="Rotate image left" title="Rotate image left">
+          &#8630;
+        </button>
+        <button class="action-button" type="button" data-image-rotate-right aria-label="Rotate image right" title="Rotate image right">
+          &#8631;
+        </button>
+        <button class="action-button" type="button" data-image-commit aria-label="Done with image" title="Done">
+          &#10003;
+        </button>
+        <button class="action-button" type="button" data-image-delete aria-label="Delete image" title="Delete image">
+          x
+        </button>
+      </div>
+
       <div class="action-toolbar is-hidden" data-lasso-action-toolbar role="toolbar" aria-label="Lasso selection actions">
         <button class="action-button" type="button" data-lasso-rotate-left aria-label="Rotate selection left" title="Rotate selection left">
           &#8630;
@@ -150,7 +168,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.53</div>
+      <div class="version-badge" aria-label="Version">v0.8.54</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -158,7 +176,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.53</small>
+          <small data-brand-version>v0.8.54</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -235,7 +253,7 @@
           <section class="guide-section" aria-labelledby="guide-draw-title">
             <h2 id="guide-draw-title">Draw</h2>
             <ul>
-              <li>Choose the pencil for drawing, eraser for erasing, square for shapes, or lasso for selection.</li>
+              <li>Choose the pencil for drawing, eraser for erasing, square for shapes, image for importing, or lasso for selection.</li>
               <li>Tap a brush preset to select it. Double tap a preset to edit size, opacity, color, or Draw Behind.</li>
               <li>Double tap the eraser tool to change eraser size.</li>
               <li>Draw Behind places highlighter-style ink under normal writing.</li>
@@ -328,6 +346,32 @@
             <button class="document-button document-button-primary" type="button" data-add-page-after>Insert After</button>
             <button class="document-button" type="button" data-add-page-end>Add to End</button>
           </div>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog add-image-dialog" id="add-image-dialog" aria-labelledby="add-image-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="add-image-title">Add Image</h1>
+          <button class="icon-button" type="submit" aria-label="Close add image" title="Close">
+            x
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="add-image-device-title">
+          <h2 id="add-image-device-title">From Device</h2>
+          <button class="document-button document-button-primary" type="button" data-image-file-button>Choose Image</button>
+          <input class="file-input" type="file" accept="image/*" data-image-input>
+        </section>
+
+        <section class="settings-section" aria-labelledby="add-image-clipboard-title">
+          <h2 id="add-image-clipboard-title">From Clipboard</h2>
+          <div class="clipboard-preview" data-clipboard-preview>
+            <img alt="" aria-hidden="true" data-clipboard-preview-image>
+            <span data-clipboard-status>Checking clipboard...</span>
+          </div>
+          <button class="document-button" type="button" data-image-paste disabled>Paste From Clipboard</button>
         </section>
       </form>
     </dialog>
@@ -547,11 +591,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.53"></script>
+    <script src="./app.js?v=0.8.54"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.53", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.54", {
             updateViaCache: "none"
           }).catch(function () {});
         });
