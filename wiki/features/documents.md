@@ -7,6 +7,7 @@ Document behavior is implemented mostly in `src/app.js`, with markup in `src/ind
 - The app opens to the Documents screen.
 - The landing page shows the DinoDraw SVG logo centered above "Documents".
 - It shows "Dino Draw" and the current version under the logo.
+- The Documents screen includes a dismissible "What is Dino Draw?" intro card below the logo/version and above the Documents heading. The close button sits beside the heading, while the explanation and right-aligned Instructions button span the card width. Dismissing the card only hides it until the page is reloaded.
 - The close X is absolutely positioned at the top-right.
 - Hide or disable the close X when closing is not allowed, such as the initial state with no active document behind the screen.
 
@@ -30,6 +31,8 @@ Avoid native browser `prompt`, `confirm`, and `alert` dialogs. Use the integrate
 - import errors
 - save/export errors
 - other app-level confirmations
+
+The Instructions guide should remain local/offline, full-screen, readable on tablets, and focused on actual workflows rather than marketing copy. Keep it reachable from the Documents intro card and from Settings.
 
 ## Saving
 
@@ -75,9 +78,14 @@ Each saved page includes:
 - Deleting pages uses the custom app dialog, not a browser confirm dialog.
 - A document must always keep at least one page.
 - New or inserted pages should choose a background from the active/neighboring page where appropriate.
+- The main toolbar `+` opens a compact Add Page modal showing the current page and vertical Insert Before, Insert After, and Add to End choices. Each choice inserts a blank page at that placement and makes the inserted page active.
 - Page thumbnails are generated from the same render order as the main canvas: background, `underLayer`, then normal `layer`.
 - Insert Page Before/After keeps the active page active by remembering the active page object before splicing.
 - Delete Page adjusts the active page index to remain valid after removal.
+
+## Global Settings
+
+Device-specific preferences should live outside document records. Current global settings are stored in localStorage under `dinodrawGlobalSettings`; Touch drawing lives there. The Documents intro-card dismissal is session-only runtime state and should reappear on reload.
 
 ## Document Screen Flow
 

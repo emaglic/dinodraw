@@ -62,7 +62,8 @@ Draw Behind uses `underLayer`, allowing highlighter-style marks to sit below nor
 ## Eraser
 
 - Erasing affects both `underLayer` and normal `layer`.
-- BOOX pen eraser or secondary button maps to erasing where browser/device events expose it.
+- BOOX pen eraser, pen barrel/auxiliary buttons, or secondary button maps to erasing where browser/device events expose it.
+- Samsung S Pen side-button behavior may appear as a pen auxiliary/barrel event and may only become visible on pointer movement after contact, so stroke routing checks temporary eraser state while moving as well as on start.
 - Eraser preview should be lightweight. Avoid accumulating many overlapping preview marks, especially for physical pen eraser use.
 - `drawLine()` switches erasing to `globalCompositeOperation = "destination-out"` on both layer contexts.
 - Eraser preview is drawn only on the visible canvas with a short timer, not committed into page layers.
@@ -106,7 +107,9 @@ Implementation notes:
 
 Palm rejection should prefer pen input and ignore likely accidental touch/palm input while the pen is active.
 
-Current code ignores `pointerType === "touch"` and non-primary pointers for drawing, shape, and lasso starts.
+Touch drawing is controlled by the global `dinodrawGlobalSettings` localStorage preference. It defaults to on so finger-only devices can draw immediately, but can be disabled once per pen-first device from Settings for palm rejection.
+
+Current code ignores non-primary pointers for drawing, shape, and lasso starts. It also ignores `pointerType === "touch"` while the global Touch drawing preference is off.
 
 ## Pointer Routing
 
@@ -114,4 +117,8 @@ Current code ignores `pointerType === "touch"` and non-primary pointers for draw
 - Draw and erase tools use stroke handling.
 - Shape and lasso tools require primary left-button style input.
 - Pointer capture is used during active drawing/shape/lasso actions.
-- Right/secondary button and pen eraser button codes are interpreted as temporary erasing via `getStrokeTool()`.
+- Right/secondary button, pen eraser button codes, and pen barrel/auxiliary button codes are interpreted as temporary erasing via `getStrokeTool()`.
+
+## Page Key Navigation
+
+The app listens for browser-delivered hardware/navigation key events while a document is open and no modal is active. `AudioVolumeUp`/`VolumeUp` and `PageUp` move to the previous page; `AudioVolumeDown`/`VolumeDown` and `PageDown` move to the next page. This depends on the browser/device exposing those hardware buttons to web content.

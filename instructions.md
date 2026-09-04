@@ -46,7 +46,7 @@ Update all of these together:
 - `CACHE_NAME` in `src/service-worker.js`
 - cached `styles.css` and `app.js` URLs in `src/service-worker.js`
 
-Current version at the time this guide was last updated: `v0.8.41`.
+Current version at the time this guide was last updated: `v0.8.53`.
 
 ## Compatibility
 

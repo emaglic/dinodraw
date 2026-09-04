@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.41";
+const APP_VERSION = "v0.8.53";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -28,6 +28,7 @@ const eraserDialog = document.querySelector("#eraser-dialog");
 const shapeDialog = document.querySelector("#shape-dialog");
 const presetDialog = document.querySelector("#preset-dialog");
 const appDialog = document.querySelector("#app-dialog");
+const guideDialog = document.querySelector("#guide-dialog");
 const appDialogForm = document.querySelector("[data-app-dialog-form]");
 const appDialogTitle = document.querySelector("[data-app-dialog-title]");
 const appDialogMessage = document.querySelector("[data-app-dialog-message]");
@@ -52,6 +53,12 @@ const documentSavePdfButton = document.querySelector("[data-document-save-pdf]")
 const documentDeleteButton = document.querySelector("[data-document-delete]");
 const openLibraryButton = document.querySelector("[data-open-library]");
 const closeLibraryButton = document.querySelector("[data-close-library]");
+const openGuideButtons = Array.from(document.querySelectorAll("[data-open-guide]"));
+const openGuideButton = document.querySelector("[data-open-guide]");
+const documentIntro = document.querySelector("[data-document-intro]");
+const dismissDocumentIntroButton = document.querySelector(
+  "[data-dismiss-document-intro]"
+);
 const newDocumentButton = document.querySelector("[data-new-document]");
 const saveDocumentButtons = Array.from(
   document.querySelectorAll("[data-save-document]")
@@ -90,8 +97,13 @@ const fullscreenDragHandle = document.querySelector("[data-fullscreen-drag-handl
 const fullscreenButton = document.querySelector("[data-fullscreen-toggle]");
 const pageIndicator = document.querySelector("[data-page-indicator]");
 const pageDialog = document.querySelector("#page-dialog");
+const addPageDialog = document.querySelector("#add-page-dialog");
+const addPageCurrentPage = document.querySelector("[data-add-page-current-page]");
 const pageList = document.querySelector("[data-page-list]");
 const pageActionMenu = document.querySelector("[data-page-action-menu]");
+const addPageBeforeButton = document.querySelector("[data-add-page-before]");
+const addPageAfterButton = document.querySelector("[data-add-page-after]");
+const addPageEndButton = document.querySelector("[data-add-page-end]");
 const pageInsertBeforeButton = document.querySelector("[data-page-insert-before]");
 const pageInsertAfterButton = document.querySelector("[data-page-insert-after]");
 const pageDeleteButton = document.querySelector("[data-page-delete]");
@@ -125,6 +137,7 @@ const shapeFillColorGrid = document.querySelector("[data-shape-fill-color-grid]"
 const backgroundInputs = Array.from(
   document.querySelectorAll("input[name='background']")
 );
+const touchDrawingInput = document.querySelector("[data-touch-drawing-enabled]");
 
 const state = {
   tool: "draw",
@@ -166,6 +179,10 @@ const state = {
   isSavingDocument: false,
   shouldSaveAgain: false,
   toolbarsHidden: false,
+  documentIntroDismissed: false,
+  globalSettings: {
+    touchDrawingEnabled: true,
+  },
 };
 
 const brush = {
@@ -192,6 +209,7 @@ const presetToolbarPositionStorageKey = "presetToolbarPositionBottomLeft";
 const undoToolbarPositionStorageKey = "undoToolbarPositionTopLeft";
 const fullscreenToolbarPositionStorageKey = "fullscreenToolbarPosition";
 const toolbarTogglePositionStorageKey = "toolbarVisibilityTabPosition";
+const globalSettingsStorageKey = "dinodrawGlobalSettings";
 const databaseName = "booxDrawingDocuments";
 const databaseVersion = 1;
 const documentStoreName = "documents";
@@ -1681,6 +1699,74 @@ function savePresets() {
   }
 }
 
+function normalizeGlobalSettings(settings = {}) {
+  const hasTouchDrawingSetting = Object.prototype.hasOwnProperty.call(
+    settings,
+    "touchDrawingEnabled"
+  );
+
+  return {
+    touchDrawingEnabled: hasTouchDrawingSetting
+      ? Boolean(settings.touchDrawingEnabled)
+      : true,
+  };
+}
+
+function syncGlobalSettingsControls() {
+  if (touchDrawingInput) {
+    touchDrawingInput.checked = Boolean(state.globalSettings.touchDrawingEnabled);
+  }
+
+  if (documentIntro) {
+    documentIntro.classList.toggle(
+      "is-hidden",
+      Boolean(state.documentIntroDismissed)
+    );
+  }
+}
+
+function saveGlobalSettings() {
+  try {
+    localStorage.setItem(
+      globalSettingsStorageKey,
+      JSON.stringify(state.globalSettings)
+    );
+  } catch {
+    return;
+  }
+}
+
+function restoreGlobalSettings() {
+  let savedSettings = null;
+
+  try {
+    savedSettings = localStorage.getItem(globalSettingsStorageKey);
+  } catch {
+    savedSettings = null;
+  }
+
+  if (savedSettings) {
+    try {
+      state.globalSettings = normalizeGlobalSettings(JSON.parse(savedSettings));
+    } catch {
+      state.globalSettings = normalizeGlobalSettings();
+    }
+  } else {
+    state.globalSettings = normalizeGlobalSettings();
+  }
+
+  syncGlobalSettingsControls();
+}
+
+function updateGlobalSettings(settings = {}) {
+  state.globalSettings = normalizeGlobalSettings({
+    ...state.globalSettings,
+    ...settings,
+  });
+  saveGlobalSettings();
+  syncGlobalSettingsControls();
+}
+
 function presetsMatch(preset, comparison) {
   return (
     preset &&
@@ -2422,12 +2508,45 @@ function setTool(tool) {
   renderWorkspace();
 }
 
-function getStrokeTool(event) {
+function hasPointerButton(event, buttonMask) {
   const buttons = event.buttons || 0;
-  const isPenEraser = event.button === 5 || (buttons & 32) === 32;
-  const isSecondaryButton = event.button === 2 || (buttons & 2) === 2;
 
-  return isPenEraser || isSecondaryButton ? "erase" : state.tool;
+  return (buttons & buttonMask) === buttonMask;
+}
+
+function isPenButtonEraseEvent(event) {
+  if (event.pointerType !== "pen") {
+    return false;
+  }
+
+  return (
+    event.button === 1 ||
+    event.button === 2 ||
+    event.button === 5 ||
+    hasPointerButton(event, 2) ||
+    hasPointerButton(event, 4) ||
+    hasPointerButton(event, 32)
+  );
+}
+
+function isTemporaryEraseEvent(event) {
+  const isSecondaryButton =
+    event.button === 2 || hasPointerButton(event, 2);
+  const isPenEraser = event.button === 5 || hasPointerButton(event, 32);
+
+  return isPenEraser || isSecondaryButton || isPenButtonEraseEvent(event);
+}
+
+function getStrokeTool(event) {
+  return isTemporaryEraseEvent(event) ? "erase" : state.tool;
+}
+
+function canStartStroke(event) {
+  if ([0, 2, 5].includes(event.button)) {
+    return true;
+  }
+
+  return isPenButtonEraseEvent(event);
 }
 
 function getPoint(event) {
@@ -2981,16 +3100,22 @@ function endLasso(event) {
   finalizeLassoSelection();
 }
 
+function shouldIgnoreCanvasPointer(event) {
+  return (
+    event.isPrimary === false ||
+    (event.pointerType === "touch" && !state.globalSettings.touchDrawingEnabled)
+  );
+}
+
 function startStroke(event) {
   if (
     state.isDrawing ||
-    event.pointerType === "touch" ||
-    event.isPrimary === false
+    shouldIgnoreCanvasPointer(event)
   ) {
     return;
   }
 
-  if (![0, 2, 5].includes(event.button)) {
+  if (!canStartStroke(event)) {
     return;
   }
 
@@ -3019,6 +3144,8 @@ function continueStroke(event) {
   if (event.cancelable) {
     event.preventDefault();
   }
+
+  state.strokeTool = getStrokeTool(event);
 
   const coalescedEvents = event.getCoalescedEvents
     ? event.getCoalescedEvents()
@@ -3080,8 +3207,7 @@ function startCanvasAction(event) {
 
   if (
     state.isDrawing ||
-    event.pointerType === "touch" ||
-    event.isPrimary === false ||
+    shouldIgnoreCanvasPointer(event) ||
     event.button !== 0
   ) {
     return;
@@ -3149,6 +3275,95 @@ function endCanvasAction(event) {
   state.activePointerId = null;
 }
 
+function getPageNavigationDirection(event) {
+  const key = event.key || "";
+  const code = event.code || "";
+
+  if (
+    key === "AudioVolumeUp" ||
+    key === "VolumeUp" ||
+    code === "AudioVolumeUp" ||
+    code === "VolumeUp" ||
+    key === "PageUp" ||
+    code === "PageUp"
+  ) {
+    return -1;
+  }
+
+  if (
+    key === "AudioVolumeDown" ||
+    key === "VolumeDown" ||
+    code === "AudioVolumeDown" ||
+    code === "VolumeDown" ||
+    key === "PageDown" ||
+    code === "PageDown"
+  ) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function isEditableKeyTarget(target) {
+  if (!target) {
+    return false;
+  }
+
+  const tagName = target.tagName;
+
+  return (
+    target.isContentEditable ||
+    tagName === "INPUT" ||
+    tagName === "TEXTAREA" ||
+    tagName === "SELECT"
+  );
+}
+
+function isBlockingPageKeyNavigation() {
+  const dialogs = [
+    settingsDialog,
+    eraserDialog,
+    shapeDialog,
+    presetDialog,
+    pageDialog,
+    addPageDialog,
+    guideDialog,
+    appDialog,
+  ];
+
+  return dialogs.some(
+    (dialog) => dialog && (dialog.open || dialog.hasAttribute("open"))
+  );
+}
+
+function handlePageNavigationKeyDown(event) {
+  const direction = getPageNavigationDirection(event);
+
+  if (
+    direction === 0 ||
+    isEditableKeyTarget(event.target) ||
+    isBlockingPageKeyNavigation() ||
+    !state.documentId ||
+    documentScreen.classList.contains("is-hidden") === false ||
+    state.pages.length === 0
+  ) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  const nextPageIndex = Math.max(
+    0,
+    Math.min(state.activePageIndex + direction, state.pages.length - 1)
+  );
+
+  if (nextPageIndex !== state.activePageIndex) {
+    setActivePage(nextPageIndex);
+  }
+}
+
 function updatePageControls() {
   if (state.pages.length === 0) {
     pageIndicator.textContent = "0/0";
@@ -3183,15 +3398,53 @@ function setActivePage(index) {
 }
 
 function addPage() {
+  if (state.pages.length === 0) {
+    insertPageAt(0, true);
+    return;
+  }
+
   commitPendingShape();
   commitSelection();
-  const activePage = getActivePage();
-  const background = activePage ? activePage.background : "blank";
-  const page = createPage(background);
+  syncAddPageDialog();
 
-  state.pages.push(page);
-  pushHistorySnapshot(page);
-  setActivePage(state.pages.length - 1);
+  if (addPageDialog.showModal) {
+    addPageDialog.showModal();
+    return;
+  }
+
+  addPageDialog.setAttribute("open", "");
+}
+
+function syncAddPageDialog() {
+  if (!addPageCurrentPage) {
+    return;
+  }
+
+  addPageCurrentPage.textContent = `Current page ${
+    state.activePageIndex + 1
+  } of ${state.pages.length}`;
+}
+
+function closeAddPageDialog() {
+  if (addPageDialog.open && addPageDialog.close) {
+    addPageDialog.close();
+    return;
+  }
+
+  addPageDialog.removeAttribute("open");
+}
+
+function addPageAtPlacement(placement) {
+  let insertIndex = state.activePageIndex + 1;
+
+  if (placement === "before") {
+    insertIndex = state.activePageIndex;
+  } else if (placement === "end") {
+    insertIndex = state.pages.length;
+  }
+
+  closeAddPageDialog();
+  insertPageAt(insertIndex, true);
 }
 
 function closePageDialog() {
@@ -3281,16 +3534,19 @@ function getInsertedPageBackground(index) {
   return nextPage ? nextPage.background : "blank";
 }
 
-function insertPageAt(index) {
+function insertPageAt(index, shouldActivateInsertedPage = false) {
   commitPendingShape();
   commitSelection();
 
   const activePage = getActivePage();
-  const page = createPage(getInsertedPageBackground(index));
+  const insertIndex = Math.max(0, Math.min(index, state.pages.length));
+  const page = createPage(getInsertedPageBackground(insertIndex));
 
-  state.pages.splice(index, 0, page);
+  state.pages.splice(insertIndex, 0, page);
   pushHistorySnapshot(page);
-  state.activePageIndex = Math.max(0, state.pages.indexOf(activePage));
+  state.activePageIndex = shouldActivateInsertedPage
+    ? insertIndex
+    : Math.max(0, state.pages.indexOf(activePage));
   syncBackgroundInputs();
   updatePageControls();
   renderWorkspace();
@@ -3599,6 +3855,27 @@ function openSettings() {
   }
 
   settingsDialog.setAttribute("open", "");
+}
+
+function openGuide() {
+  closeDocumentMenus();
+
+  if (!guideDialog) {
+    return;
+  }
+
+  if (settingsDialog && settingsDialog.open && settingsDialog.close) {
+    settingsDialog.close();
+  } else if (settingsDialog) {
+    settingsDialog.removeAttribute("open");
+  }
+
+  if (guideDialog.showModal) {
+    guideDialog.showModal();
+    return;
+  }
+
+  guideDialog.setAttribute("open", "");
 }
 
 function openEraserSettings() {
@@ -4588,6 +4865,7 @@ function addToolButtonInteractions(button) {
 async function initializeApp() {
   ensureVersionBadge();
   restorePresets();
+  restoreGlobalSettings();
   buildPresetColorGrid();
   buildShapeColorGrid(shapeStrokeColorGrid, "strokeColor");
   buildShapeColorGrid(shapeFillColorGrid, "fillColor");
@@ -4641,6 +4919,15 @@ openSettingsButton.addEventListener("click", openSettings);
 resetToolbarsButton.addEventListener("click", resetToolbarPositions);
 openLibraryButton.addEventListener("click", showDocumentScreen);
 closeLibraryButton.addEventListener("click", hideDocumentScreen);
+openGuideButtons.forEach((button) => {
+  button.addEventListener("click", openGuide);
+});
+if (dismissDocumentIntroButton) {
+  dismissDocumentIntroButton.addEventListener("click", () => {
+    state.documentIntroDismissed = true;
+    syncGlobalSettingsControls();
+  });
+}
 newDocumentButton.addEventListener("click", () => {
   createNewDocument().catch((error) => {
     setSaveStatus("Create failed");
@@ -4801,6 +5088,9 @@ nextPageButton.addEventListener("click", () =>
   setActivePage(state.activePageIndex + 1)
 );
 addPageButton.addEventListener("click", addPage);
+addPageBeforeButton.addEventListener("click", () => addPageAtPlacement("before"));
+addPageAfterButton.addEventListener("click", () => addPageAtPlacement("after"));
+addPageEndButton.addEventListener("click", () => addPageAtPlacement("end"));
 pageIndicator.addEventListener("click", openPageDialog);
 pageDialog.addEventListener("click", (event) => {
   if (!event.target.closest(".page-menu-wrap, .page-menu")) {
@@ -4857,6 +5147,18 @@ shapeFillEnabledInput.addEventListener("change", () =>
 backgroundInputs.forEach((input) => {
   input.addEventListener("change", () => setBackground(input.value));
 });
+if (touchDrawingInput) {
+  touchDrawingInput.addEventListener("change", () => {
+    updateGlobalSettings({
+      touchDrawingEnabled: touchDrawingInput.checked,
+    });
+    setSaveStatus(
+      touchDrawingInput.checked
+        ? "Touch drawing enabled"
+        : "Touch drawing disabled"
+    );
+  });
+}
 dragHandle.addEventListener("pointerdown", startToolbarDrag);
 presetDragHandle.addEventListener("pointerdown", startPresetToolbarDrag);
 undoDragHandle.addEventListener("pointerdown", startUndoToolbarDrag);
@@ -4878,5 +5180,6 @@ window.addEventListener("resize", () => {
   reclampFullscreenToolbarPosition();
   reclampToolbarTogglePosition();
 });
+window.addEventListener("keydown", handlePageNavigationKeyDown, true);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 initializeApp();

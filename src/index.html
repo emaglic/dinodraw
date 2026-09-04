@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.41">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.53">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.41">
+    <link rel="stylesheet" href="./styles.css?v=0.8.53">
   </head>
   <body>
     <main class="app-shell">
@@ -150,7 +150,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.41</div>
+      <div class="version-badge" aria-label="Version">v0.8.53</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -158,8 +158,20 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.41</small>
+          <small data-brand-version>v0.8.53</small>
         </div>
+
+        <div class="document-intro-card" data-document-intro>
+          <div class="document-intro-header">
+            <h2>What is Dino Draw?</h2>
+            <button class="icon-button document-intro-close" type="button" data-dismiss-document-intro aria-label="Hide introduction" title="Hide">
+              x
+            </button>
+          </div>
+          <p>Dino Draw is a local-first sketchbook for handwritten notes, sketches, and multi-page notebooks.</p>
+          <button class="document-button document-button-primary" type="button" data-open-guide>Instructions</button>
+        </div>
+
         <header class="document-header">
           <div>
             <h1 id="document-title">Documents</h1>
@@ -197,6 +209,82 @@
       </div>
     </section>
 
+    <dialog class="guide-dialog" id="guide-dialog" aria-labelledby="guide-title">
+      <form method="dialog" class="guide-panel">
+        <header class="guide-header">
+          <div>
+            <h1 id="guide-title">Dino Draw Instructions</h1>
+            <p>Local drawing, notebooks, and exports for pen-first tablets.</p>
+          </div>
+          <button class="icon-button" type="submit" aria-label="Close instructions" title="Close">
+            x
+          </button>
+        </header>
+
+        <div class="guide-content">
+          <section class="guide-section" aria-labelledby="guide-start-title">
+            <h2 id="guide-start-title">Start</h2>
+            <ul>
+              <li>Use New to create a local document.</li>
+              <li>Use Import to open a saved DinoDraw JSON file.</li>
+              <li>Open returns to the drawing canvas for a document.</li>
+              <li>The document menu handles rename, export, PNG, PDF, and delete.</li>
+            </ul>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guide-draw-title">
+            <h2 id="guide-draw-title">Draw</h2>
+            <ul>
+              <li>Choose the pencil for drawing, eraser for erasing, square for shapes, or lasso for selection.</li>
+              <li>Tap a brush preset to select it. Double tap a preset to edit size, opacity, color, or Draw Behind.</li>
+              <li>Double tap the eraser tool to change eraser size.</li>
+              <li>Draw Behind places highlighter-style ink under normal writing.</li>
+            </ul>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guide-pages-title">
+            <h2 id="guide-pages-title">Pages</h2>
+            <ul>
+              <li>Use the arrow buttons to move between pages.</li>
+              <li>Tap the page counter to browse thumbnails and manage pages.</li>
+              <li>Tap + to add a page before, after, or at the end of the document.</li>
+              <li>On supported browsers, volume up moves to the previous page and volume down moves to the next page.</li>
+            </ul>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guide-device-title">
+            <h2 id="guide-device-title">Device Settings</h2>
+            <ul>
+              <li>Touch drawing is on by default so finger-only devices can draw right away.</li>
+              <li>Turn Touch drawing off from Settings when using a pen-first tablet to reduce palm marks.</li>
+              <li>Touch drawing is saved on this device, not inside each document.</li>
+              <li>Pen erasers, secondary buttons, and supported pen side buttons temporarily erase while drawing.</li>
+            </ul>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guide-settings-title">
+            <h2 id="guide-settings-title">Settings And Files</h2>
+            <ul>
+              <li>Settings opens page paper, device settings, document actions, and toolbar reset.</li>
+              <li>Page Paper changes the current page background to blank, ruled, or graph.</li>
+              <li>Export saves an editable DinoDraw document file.</li>
+              <li>Save PNG and Save PDF create shareable flattened copies.</li>
+            </ul>
+          </section>
+
+          <section class="guide-section" aria-labelledby="guide-toolbars-title">
+            <h2 id="guide-toolbars-title">Toolbars</h2>
+            <ul>
+              <li>Drag a toolbar handle to move a toolbar.</li>
+              <li>Move a toolbar near an edge to change its orientation.</li>
+              <li>Use the tab at the screen edge to hide or show toolbars.</li>
+              <li>Reset Toolbars restores the default toolbar positions.</li>
+            </ul>
+          </section>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="page-dialog" id="page-dialog" aria-labelledby="page-title">
       <form method="dialog" class="page-panel">
         <header class="settings-header">
@@ -223,6 +311,27 @@
       </form>
     </dialog>
 
+    <dialog class="settings-dialog add-page-dialog" id="add-page-dialog" aria-labelledby="add-page-title" aria-describedby="add-page-current-page">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="add-page-title">Add Page</h1>
+          <button class="icon-button" type="submit" aria-label="Close add page" title="Close">
+            x
+          </button>
+        </header>
+        <p class="add-page-current" id="add-page-current-page" data-add-page-current-page>Current page 1 of 1</p>
+
+        <section class="settings-section" aria-labelledby="add-page-placement-title">
+          <h2 id="add-page-placement-title">Placement</h2>
+          <div class="document-actions add-page-actions">
+            <button class="document-button" type="button" data-add-page-before>Insert Before</button>
+            <button class="document-button document-button-primary" type="button" data-add-page-after>Insert After</button>
+            <button class="document-button" type="button" data-add-page-end>Add to End</button>
+          </div>
+        </section>
+      </form>
+    </dialog>
+
     <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
       <form method="dialog" class="settings-panel">
         <header class="settings-header">
@@ -231,6 +340,11 @@
             x
           </button>
         </header>
+
+        <section class="settings-section" aria-labelledby="help-settings-title">
+          <h2 id="help-settings-title">Help</h2>
+          <button class="document-button reset-button" type="button" data-open-guide>Instructions</button>
+        </section>
 
         <section class="settings-section" aria-labelledby="paper-title">
           <h2 id="paper-title">Page Paper</h2>
@@ -248,6 +362,14 @@
               <span>Graph</span>
             </label>
           </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="device-settings-title">
+          <h2 id="device-settings-title">Device</h2>
+          <label class="toggle-row">
+            <input type="checkbox" data-touch-drawing-enabled>
+            <span>Touch drawing</span>
+          </label>
         </section>
 
         <section class="settings-section" aria-labelledby="document-settings-title">
@@ -425,11 +547,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.41"></script>
+    <script src="./app.js?v=0.8.53"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.41", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.53", {
             updateViaCache: "none"
           }).catch(function () {});
         });

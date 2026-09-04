@@ -58,11 +58,11 @@ Eraser and lasso operations should affect both drawing layers together. Backgrou
 
 Most app state lives in `state` in `src/app.js`, including active document, pages, tool selection, presets, history, selection state, toolbar visibility, and modal/menu state.
 
-Brush configuration, toolbar positions, and other user preferences use local browser storage where appropriate.
+Device-specific global preferences and toolbar positions use local browser storage where appropriate.
 
 Important global objects:
 
-- `state`: active tool, active pointer, active page, presets, pending shape, lasso path, selection, tooltip state, app dialog state, documents, save queue, and toolbar visibility.
+- `state`: active tool, active pointer, active page, presets, pending shape, lasso path, selection, tooltip state, app dialog state, documents, save queue, toolbar visibility, and global settings.
 - `brush`: currently stores `eraseSize`.
 - `shapeConfig`: shape type, stroke/fill settings, colors, and stroke width.
 
@@ -102,6 +102,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.41`.
+Current app version: `v0.8.53`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

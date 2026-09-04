@@ -23,3 +23,64 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - User created `output/` as ignored agent-generated scratch output for human-consumable artifacts.
 - Documented that agents should write to `output/` only on explicit request, and should copy durable findings from generated artifacts back into the wiki when appropriate.
+
+## [2026-09-04] feature | Added Device-Level Input Preferences
+
+- Added a global localStorage settings pattern for device-specific preferences.
+- Documented Touch drawing as a global setting that defaults off for pen-first palm rejection and can be enabled per device.
+- Documented hardware/navigation key page turning support where the browser exposes volume or page keys.
+- Recorded that the toolbar `+` inserts after the active page and activates the inserted page.
+
+## [2026-09-04] fix | Broadened Pen Button Eraser Mapping
+
+- Added pen barrel/auxiliary button detection for temporary erasing, aimed at Samsung S Pen side-button browser events.
+- Updated active stroke routing to re-check temporary eraser state during pointer movement so a pen button exposed after contact can switch the stroke into erasing.
+
+## [2026-09-04] feature | Added Add Page Placement Dialog
+
+- Changed the main toolbar `+` to open a placement dialog instead of inserting immediately.
+- Placement options are Insert Before, Insert After, and Add to End, and all options switch to the inserted page.
+
+## [2026-09-04] polish | Refined Add Page Dialog
+
+- Made Add Page placement buttons stack vertically in a narrower modal.
+- Added a current-page readout beneath the Add Page title.
+
+## [2026-09-04] feature | Added In-App Instructions
+
+- Added an Instructions button near the top of the Documents screen.
+- Added a full-screen offline user guide covering documents, drawing, pages, device settings, files, and toolbars.
+
+## [2026-09-04] polish | Moved Instructions Above Documents
+
+- Moved the Instructions button below the Dino Draw logo/version and above the Documents heading for clearer app-level placement.
+
+## [2026-09-04] polish | Added Dismissible Intro Card
+
+- Replaced the standalone Documents-screen Instructions button with a textured "What is Dino Draw?" intro card below the logo/version.
+- Added a close button that persists the intro-card dismissal in global localStorage settings.
+- Added an Instructions button to the Settings modal.
+
+## [2026-09-04] fix | Added Guide Button Cache Compatibility
+
+- BOOX testing surfaced a script error for a stale `openGuideButton` reference.
+- Restored a singular guide-button compatibility handle and made guide opening tolerate missing/stale dialog markup.
+
+## [2026-09-04] polish | Made Intro Dismissal Temporary
+
+- Changed the Documents intro-card close button to hide the card only until page reload instead of persisting dismissal.
+- Increased intro-card spacing and right-aligned its Instructions button.
+
+## [2026-09-04] polish | Refined Intro Card Header
+
+- Moved the intro-card close button into a heading row so the description and Instructions button can use the full card width.
+
+## [2026-09-04] polish | Increased Intro Card Texture Contrast
+
+- Darkened and widened the intro-card diagonal texture so it remains visible on BOOX/e-ink rendering.
+
+## [2026-09-04] polish | Shortened Intro Copy And Defaulted Touch On
+
+- Shortened the Documents intro card to a single sentence.
+- Changed Touch drawing to default on for fresh devices while preserving saved per-device choices.
+- Updated in-app instructions to recommend turning Touch drawing off on pen-first tablets.

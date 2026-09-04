@@ -719,6 +719,70 @@ button {
   gap: 8px;
 }
 
+.document-intro-card {
+  display: grid;
+  gap: 14px;
+  padding: 14px;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background-color: #ffffff;
+  background-image: repeating-linear-gradient(
+    135deg,
+    #ffffff 0,
+    #ffffff 7px,
+    #d0d0d0 7px,
+    #d0d0d0 10px,
+    #ffffff 10px,
+    #ffffff 16px
+  );
+}
+
+.document-intro-card.is-hidden {
+  display: none;
+}
+
+.document-intro-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+}
+
+.document-intro-card h2 {
+  margin: 0;
+  color: #000000;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.document-intro-card p {
+  margin: 0;
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.document-intro-card .document-button {
+  justify-self: end;
+  width: min(220px, 100%);
+  min-height: 42px;
+}
+
+.document-intro-close {
+  width: 32px;
+  height: 32px;
+}
+
+.add-page-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+}
+
+.add-page-actions .document-button {
+  width: 100%;
+}
+
 .document-start-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -882,6 +946,100 @@ button {
 
 .settings-dialog::backdrop {
   background: rgba(255, 255, 255, 0.72);
+}
+
+.guide-dialog {
+  width: 100vw;
+  height: 100vh;
+  max-width: 100vw;
+  max-height: 100vh;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: #ffffff;
+  color: #000000;
+}
+
+.guide-dialog::backdrop {
+  background: #ffffff;
+}
+
+.guide-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  background: #ffffff;
+}
+
+.guide-header {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px;
+  border-bottom: 2px solid #000000;
+  background: #ffffff;
+}
+
+.guide-header h1 {
+  margin: 0;
+  color: #000000;
+  font-size: 24px;
+  line-height: 1.1;
+}
+
+.guide-header p {
+  margin: 6px 0 0;
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.3;
+}
+
+.guide-content {
+  display: grid;
+  width: min(920px, 100%);
+  gap: 18px;
+  padding: 18px 16px 28px;
+  margin: 0 auto;
+  overflow: auto;
+}
+
+.guide-section {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #000000;
+}
+
+.guide-section h2 {
+  margin: 0;
+  color: #000000;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.guide-section ul {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 22px;
+  color: #000000;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.add-page-dialog {
+  width: min(360px, calc(100vw - 24px));
+}
+
+.add-page-current {
+  margin: -6px 0 0;
+  color: #000000;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.3;
 }
 
 .app-dialog {
