@@ -1,0 +1,95 @@
+# Toolbars
+
+Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styles.css`.
+
+## Main Toolbar
+
+- Default position: left side of canvas, vertically centered.
+- Default orientation: vertical.
+- Contains document/library, draw, erase, shape, lasso, settings, page navigation, page indicator, and add page controls.
+- Toolbars are draggable.
+- Dragging to top or bottom edge should use horizontal orientation.
+- Dragging to left or right edge should use vertical orientation.
+- Saved localStorage key: `mainToolbarPosition`.
+
+## Brush Preset Toolbar
+
+- Default position: bottom-left edge.
+- Default orientation: horizontal.
+- Visible when draw tool is selected.
+- Contains six user-editable brush presets.
+- Double tap a preset to edit size, opacity, color, and Draw Behind.
+- Saved localStorage key: `presetToolbarPositionBottomLeft`.
+- Brush preset storage key: `brushPresets`.
+
+## Undo/Redo Toolbar
+
+- Default position: top-left.
+- Draggable and edge-oriented like other toolbars.
+- Saved localStorage key: `undoToolbarPositionTopLeft`.
+
+## Fullscreen Toolbar
+
+- Default position: top-right.
+- Has a drag handle and fullscreen toggle button.
+- It may use the same icon in enter and exit states if a clear matching exit icon is unavailable.
+- Saved localStorage key: `fullscreenToolbarPosition`.
+
+## Hide/Show Toolbars Tab
+
+- Default position: top-center.
+- Small trapezoid pull-tab that stays visible while other toolbars are hidden.
+- Has a small top grip for dragging around the screen perimeter.
+- The lower arrow/toggle area toggles toolbar visibility.
+- Movement is edge-pinned and should rotate at corners.
+- Saved localStorage key: `toolbarVisibilityTabPosition`.
+- Older `centerX` saved values are migrated/restored as top-edge positions.
+
+When hiding toolbars, fade out:
+
+- main toolbar
+- brush preset toolbar
+- undo/redo toolbar
+- fullscreen toolbar
+- shape action toolbar
+- lasso action toolbar
+
+Hiding should not change the selected tool. Showing toolbars again should only show the brush preset toolbar when the draw tool is selected.
+
+## Reset Behavior
+
+The Settings modal includes `Reset Toolbars`. This resets toolbar positions only. It must not reset brush presets or other user settings.
+
+Current reset removes:
+
+- `mainToolbarPosition`
+- `presetToolbarPositionBottomLeft`
+- `undoToolbarPositionTopLeft`
+- `fullscreenToolbarPosition`
+- `toolbarVisibilityTabPosition`
+- legacy `presetToolbarPositionBottomRight`
+
+Then it reapplies defaults for all toolbars and the hide/show tab.
+
+## Tooltips
+
+- Tooltips are press-and-hold only.
+- Avoid hover tooltip behavior.
+- Current intended delay is about `375ms`.
+- Tooltips disappear as soon as the hold ends.
+- Placement should avoid overlapping buttons in the same toolbar when possible.
+- Tooltip setup copies `data-tooltip`, `aria-label`, or `title` into `data-tooltip`, then removes native `title` attributes.
+- Long-press tooltip display can block the following click for the same target, preventing an accidental activation after using the tooltip.
+- Pen/touch pointer movement over 8px from the press origin cancels the tooltip.
+
+## Drag Pattern
+
+The four regular toolbars share similar drag behavior:
+
+- calculate the pointer offset within the toolbar on `pointerdown`
+- update orientation while the pointer nears an edge
+- clamp position to the viewport with an 8px margin
+- write `{ left, top, orientation }` to localStorage on drag end
+- reclamp positions on window resize
+
+The hide/show tab uses a separate edge/offset model instead of free `{ left, top }` positioning.

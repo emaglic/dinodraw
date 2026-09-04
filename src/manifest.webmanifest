@@ -1,0 +1,20 @@
+{
+  "name": "DinoDraw",
+  "short_name": "DinoDraw",
+  "description": "A local-first drawing notebook for pen tablets.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

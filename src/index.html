@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>DinoDraw</title>
+    <meta name="application-name" content="DinoDraw">
+    <meta name="apple-mobile-web-app-title" content="DinoDraw">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.41">
+    <link rel="icon" href="./icon.svg" type="image/svg+xml">
+    <link rel="apple-touch-icon" href="./icon.svg">
+    <link rel="stylesheet" href="./styles.css?v=0.8.41">
+  </head>
+  <body>
+    <main class="app-shell">
+      <canvas id="drawing-canvas" aria-label="Drawing canvas"></canvas>
+
+      <div class="toolbar-toggle" data-toolbar-toggle-shell data-edge="top" role="toolbar" aria-label="Toolbar visibility">
+        <button class="toolbar-toggle-drag-handle" type="button" data-toolbar-toggle-drag-handle aria-label="Move toolbar visibility tab" title="Move toolbar visibility tab">
+          ::
+        </button>
+        <button class="toolbar-toggle-button" type="button" data-toolbar-visibility-toggle aria-label="Hide toolbars" title="Hide toolbars">
+          <span data-toolbar-visibility-icon aria-hidden="true">&uarr;</span>
+        </button>
+      </div>
+
+      <div class="toolbar" role="toolbar" aria-label="Drawing tools">
+        <button class="tool-button drag-handle" type="button" data-drag-handle aria-label="Move toolbar" title="Move toolbar">
+          ::
+        </button>
+        <button class="tool-button" type="button" data-open-library aria-label="Documents" title="Documents">
+          <span class="document-icon" aria-hidden="true"></span>
+        </button>
+        <button class="tool-button is-active" type="button" data-tool="draw" aria-label="Draw" aria-pressed="true" title="Draw">
+          &#9998;
+        </button>
+        <button class="tool-button" type="button" data-tool="erase" aria-label="Erase" aria-pressed="false" title="Erase">
+          &#9003;
+        </button>
+        <button class="tool-button" type="button" data-tool="shape" aria-label="Shape" aria-pressed="false" title="Shape">
+          &#9633;
+        </button>
+        <button class="tool-button" type="button" data-tool="lasso" aria-label="Lasso" aria-pressed="false" title="Lasso">
+          <span class="lasso-icon" aria-hidden="true"></span>
+        </button>
+        <button class="tool-button" type="button" data-open-settings aria-label="Settings" title="Settings">
+          &#9881;
+        </button>
+        <div class="toolbar-divider" aria-hidden="true"></div>
+        <button class="tool-button" type="button" data-page-prev aria-label="Previous page" title="Previous page">
+          &lsaquo;
+        </button>
+        <button class="page-indicator" type="button" data-page-indicator aria-label="Pages" title="Pages" aria-live="polite">1/1</button>
+        <button class="tool-button" type="button" data-page-next aria-label="Next page" title="Next page">
+          &rsaquo;
+        </button>
+        <button class="tool-button" type="button" data-page-add aria-label="Add page" title="Add page">
+          +
+        </button>
+      </div>
+
+      <div class="preset-toolbar" data-preset-toolbar role="toolbar" aria-label="Brush presets">
+        <button class="preset-drag-handle" type="button" data-preset-drag-handle aria-label="Move brush presets" title="Move brush presets">
+          ::
+        </button>
+        <button class="preset-button is-active" type="button" data-preset-index="0" aria-label="Brush preset 1">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+        <button class="preset-button" type="button" data-preset-index="1" aria-label="Brush preset 2">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+        <button class="preset-button" type="button" data-preset-index="2" aria-label="Brush preset 3">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+        <button class="preset-button" type="button" data-preset-index="3" aria-label="Brush preset 4">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+        <button class="preset-button" type="button" data-preset-index="4" aria-label="Brush preset 5">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+        <button class="preset-button" type="button" data-preset-index="5" aria-label="Brush preset 6">
+          <span class="preset-swatch"></span>
+          <span class="preset-size"></span>
+        </button>
+      </div>
+
+      <div class="fullscreen-toolbar" data-fullscreen-toolbar role="toolbar" aria-label="Fullscreen">
+        <button class="fullscreen-drag-handle" type="button" data-fullscreen-drag-handle aria-label="Move fullscreen toolbar" title="Move fullscreen toolbar">
+          ::
+        </button>
+        <button class="action-button" type="button" data-fullscreen-toggle aria-label="Enter fullscreen" title="Enter fullscreen">
+          <span class="fullscreen-icon" aria-hidden="true"></span>
+        </button>
+      </div>
+
+      <div class="action-toolbar is-hidden" data-shape-action-toolbar role="toolbar" aria-label="Shape actions">
+        <button class="action-button" type="button" data-shape-settings aria-label="Shape settings" title="Shape settings">
+          &#9881;
+        </button>
+        <button class="action-button" type="button" data-shape-rotate-left aria-label="Rotate shape left" title="Rotate shape left">
+          &#8630;
+        </button>
+        <button class="action-button" type="button" data-shape-rotate-right aria-label="Rotate shape right" title="Rotate shape right">
+          &#8631;
+        </button>
+        <button class="action-button" type="button" data-shape-commit aria-label="Done with shape" title="Done">
+          &#10003;
+        </button>
+        <button class="action-button" type="button" data-shape-delete aria-label="Delete shape" title="Delete shape">
+          x
+        </button>
+      </div>
+
+      <div class="action-toolbar is-hidden" data-lasso-action-toolbar role="toolbar" aria-label="Lasso selection actions">
+        <button class="action-button" type="button" data-lasso-rotate-left aria-label="Rotate selection left" title="Rotate selection left">
+          &#8630;
+        </button>
+        <button class="action-button" type="button" data-lasso-rotate-right aria-label="Rotate selection right" title="Rotate selection right">
+          &#8631;
+        </button>
+        <button class="action-button" type="button" data-lasso-commit aria-label="Done with selection" title="Done">
+          &#10003;
+        </button>
+        <button class="action-button" type="button" data-lasso-delete aria-label="Delete selection" title="Delete selection">
+          x
+        </button>
+      </div>
+
+      <div class="undo-toolbar" data-undo-toolbar role="toolbar" aria-label="Undo and redo">
+        <button class="undo-drag-handle" type="button" data-undo-drag-handle aria-label="Move undo toolbar" title="Move undo toolbar">
+          ::
+        </button>
+        <button class="action-button" type="button" data-undo aria-label="Undo" title="Undo" disabled>
+          &#8630;
+        </button>
+        <button class="action-button" type="button" data-redo aria-label="Redo" title="Redo" disabled>
+          &#8631;
+        </button>
+      </div>
+
+      <div class="save-status" data-save-status aria-live="polite">No document</div>
+      <div class="version-badge" aria-label="Version">v0.8.41</div>
+    </main>
+
+    <section class="document-screen" data-document-screen aria-labelledby="document-title">
+      <div class="document-panel">
+        <div class="document-brand" aria-label="Dino Draw">
+          <img src="./icon.svg" alt="" aria-hidden="true">
+          <div>Dino Draw</div>
+          <small data-brand-version>v0.8.41</small>
+        </div>
+        <header class="document-header">
+          <div>
+            <h1 id="document-title">Documents</h1>
+            <p data-document-subtitle>Local notebooks stored on this device.</p>
+          </div>
+          <button class="icon-button" type="button" data-close-library aria-label="Close documents" title="Close" disabled>
+            x
+          </button>
+        </header>
+
+        <div class="document-start-row">
+          <button class="document-button" type="button" data-import-document>Import</button>
+          <button class="document-button document-button-primary" type="button" data-new-document>New</button>
+          <input class="file-input" type="file" accept=".dinodraw.json,.drawdoc,application/json" data-import-input>
+        </div>
+
+        <div class="document-list" data-document-list></div>
+        <div class="document-menu is-hidden" data-document-action-menu>
+          <button class="page-menu-item" type="button" data-document-rename>
+            Rename
+          </button>
+          <button class="page-menu-item" type="button" data-document-export>
+            Export
+          </button>
+          <button class="page-menu-item" type="button" data-document-save-png>
+            Save PNG
+          </button>
+          <button class="page-menu-item" type="button" data-document-save-pdf>
+            Save PDF
+          </button>
+          <button class="page-menu-item" type="button" data-document-delete>
+            Delete
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <dialog class="page-dialog" id="page-dialog" aria-labelledby="page-title">
+      <form method="dialog" class="page-panel">
+        <header class="settings-header">
+          <h1 id="page-title">Pages</h1>
+          <button class="icon-button" type="submit" aria-label="Close pages" title="Close">
+            x
+          </button>
+        </header>
+        <div class="page-list" data-page-list></div>
+        <div class="page-menu is-hidden" data-page-action-menu>
+          <button class="page-menu-item" type="button" data-page-insert-before>
+            <span class="page-menu-icon" aria-hidden="true">+</span>
+            <span>Insert Page Before</span>
+          </button>
+          <button class="page-menu-item" type="button" data-page-insert-after>
+            <span class="page-menu-icon" aria-hidden="true">+</span>
+            <span>Insert Page After</span>
+          </button>
+          <button class="page-menu-item" type="button" data-page-delete>
+            <span class="page-menu-icon" aria-hidden="true">x</span>
+            <span>Delete Page</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="settings-title">Settings</h1>
+          <button class="icon-button" type="submit" aria-label="Close settings" title="Close">
+            x
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="paper-title">
+          <h2 id="paper-title">Page Paper</h2>
+          <div class="choice-grid" role="radiogroup" aria-labelledby="paper-title">
+            <label>
+              <input type="radio" name="background" value="blank" checked>
+              <span>Blank</span>
+            </label>
+            <label>
+              <input type="radio" name="background" value="ruled">
+              <span>Ruled</span>
+            </label>
+            <label>
+              <input type="radio" name="background" value="graph">
+              <span>Graph</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="document-settings-title">
+          <h2 id="document-settings-title">Document</h2>
+          <div class="document-actions">
+            <button class="document-button document-button-primary" type="button" data-save-document>Save</button>
+            <button class="document-button" type="button" data-export-document>Export</button>
+            <button class="document-button" type="button" data-export-png-zip>Save PNG</button>
+            <button class="document-button" type="button" data-export-pdf>Save PDF</button>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="reset-settings-title">
+          <h2 id="reset-settings-title">Reset</h2>
+          <button class="document-button reset-button" type="button" data-reset-toolbars>Reset Toolbars</button>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog eraser-dialog" id="eraser-dialog" aria-labelledby="eraser-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="eraser-title">Eraser</h1>
+          <button class="icon-button" type="submit" aria-label="Close eraser settings" title="Close">
+            x
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="eraser-size-title">
+          <h2 id="eraser-size-title">Size</h2>
+          <label class="range-row">
+            <span>Size</span>
+            <input type="range" min="6" max="72" value="28" data-eraser-size>
+            <output data-eraser-size-output>28</output>
+          </label>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog class="app-dialog" id="app-dialog" aria-labelledby="app-dialog-title" aria-describedby="app-dialog-message">
+      <form method="dialog" class="app-dialog-panel" data-app-dialog-form>
+        <header class="settings-header">
+          <h1 id="app-dialog-title" data-app-dialog-title>Confirm</h1>
+          <button class="icon-button" type="button" data-app-dialog-cancel aria-label="Close dialog" title="Close">
+            x
+          </button>
+        </header>
+        <p id="app-dialog-message" class="app-dialog-message" data-app-dialog-message></p>
+        <label class="app-dialog-field is-hidden" data-app-dialog-field>
+          <span data-app-dialog-input-label>Name</span>
+          <input type="text" data-app-dialog-input>
+        </label>
+        <div class="app-dialog-actions">
+          <button class="document-button" type="button" data-app-dialog-cancel>Cancel</button>
+          <button class="document-button document-button-primary" type="submit" data-app-dialog-confirm>OK</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog" id="shape-dialog" aria-labelledby="shape-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="shape-title">Shape</h1>
+          <button class="icon-button" type="submit" aria-label="Close shape settings" title="Close">
+            x
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="shape-kind-title">
+          <h2 id="shape-kind-title">Type</h2>
+          <div class="choice-grid" role="radiogroup" aria-labelledby="shape-kind-title">
+            <label>
+              <input type="radio" name="shape-type" value="rectangle" checked>
+              <span>Rect</span>
+            </label>
+            <label>
+              <input type="radio" name="shape-type" value="ellipse">
+              <span>Oval</span>
+            </label>
+            <label>
+              <input type="radio" name="shape-type" value="line">
+              <span>Line</span>
+            </label>
+            <label>
+              <input type="radio" name="shape-type" value="triangle">
+              <span>Tri</span>
+            </label>
+          </div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="shape-border-title">
+          <h2 id="shape-border-title">Border</h2>
+          <label class="toggle-row">
+            <input type="checkbox" data-shape-stroke-enabled checked>
+            <span>Show border</span>
+          </label>
+          <label class="range-row">
+            <span>Width</span>
+            <input type="range" min="1" max="24" value="3" data-shape-stroke-width>
+            <output data-shape-stroke-width-output>3</output>
+          </label>
+          <div class="color-grid" data-shape-stroke-color-grid aria-label="Border color"></div>
+        </section>
+
+        <section class="settings-section" aria-labelledby="shape-fill-title">
+          <h2 id="shape-fill-title">Fill</h2>
+          <label class="toggle-row">
+            <input type="checkbox" data-shape-fill-enabled>
+            <span>Show fill</span>
+          </label>
+          <div class="color-grid" data-shape-fill-color-grid aria-label="Fill color"></div>
+        </section>
+      </form>
+    </dialog>
+
+    <dialog class="settings-dialog" id="preset-dialog" aria-labelledby="preset-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="preset-title">Preset 1</h1>
+          <button class="icon-button" type="submit" aria-label="Close preset settings" title="Close">
+            x
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="preset-brush-title">
+          <h2 id="preset-brush-title">Brush</h2>
+          <label class="range-row">
+            <span>Size</span>
+            <input type="range" min="1" max="40" value="4" data-preset-size>
+            <output data-preset-size-output>4</output>
+          </label>
+          <label class="range-row">
+            <span>Opacity</span>
+            <input type="range" min="10" max="100" value="100" data-preset-opacity>
+            <output data-preset-opacity-output>100%</output>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" data-preset-draw-behind>
+            <span>Draw Behind</span>
+          </label>
+          <div class="color-grid" data-preset-color-grid aria-label="Preset color"></div>
+        </section>
+      </form>
+    </dialog>
+
+    <script>
+      window.addEventListener("error", function (event) {
+        var list = document.querySelector("[data-document-list]");
+        var status = document.querySelector("[data-save-status]");
+        var message = "Script error: " + (event.message || "unknown error");
+
+        if (list) {
+          list.textContent = message;
+        }
+
+        if (status) {
+          status.textContent = "Script error";
+        }
+      });
+
+      window.addEventListener("unhandledrejection", function (event) {
+        var list = document.querySelector("[data-document-list]");
+        var status = document.querySelector("[data-save-status]");
+        var reason = event.reason && event.reason.message
+          ? event.reason.message
+          : "unknown error";
+        var message = "Startup error: " + reason;
+
+        if (list) {
+          list.textContent = message;
+        }
+
+        if (status) {
+          status.textContent = "Startup error";
+        }
+      });
+    </script>
+    <script src="./app.js?v=0.8.41"></script>
+    <script>
+      if ("serviceWorker" in navigator) {
+        window.addEventListener("load", function () {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.41", {
+            updateViaCache: "none"
+          }).catch(function () {});
+        });
+      }
+    </script>
+  </body>
+</html>
