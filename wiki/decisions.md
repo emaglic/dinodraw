@@ -51,3 +51,15 @@ Implication: Do not reintroduce Google Drive sync/upload unless the user explici
 Decision: Use `wiki/` as committed product and engineering memory, while keeping `temp/` ignored.
 
 Rationale: Future agent sessions can load focused subsystem context instead of repeatedly reading one long instruction file. Temporary screenshots and notes can still inform durable wiki updates.
+
+## Separate Scratch Input And Output
+
+Decision: Use `temp/` for user-provided ephemeral input and `output/` for agent-generated ephemeral output.
+
+Rationale: Screenshots and improvement notes from the user should not be committed wholesale, and generated human-consumable reports or archives should also stay out of durable repo history by default.
+
+Implications:
+
+- Ingest durable conclusions from `temp/` into the wiki when useful.
+- Write files into `output/` only when the user explicitly asks for a generated artifact.
+- If generated output contains durable project knowledge, summarize the durable parts into the wiki.

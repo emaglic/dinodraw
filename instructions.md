@@ -8,6 +8,7 @@ This file is the short operating guide for agent sessions. The durable project m
 - Read the feature page for the subsystem you are changing.
 - Treat `src/` as the application source. The rest of the repo is documentation, repo metadata, and agent/project instructions.
 - Treat `temp/` as an ignored scratch inbox for screenshots, notes, and one-off instructions from the user. Do not preserve files from `temp/` unless the user explicitly asks. Extract durable conclusions into the wiki when useful.
+- Treat `output/` as ignored agent-generated scratch output for the user's human consumption. Write there only when the user explicitly asks for a generated file such as a report, archive, or export. If the generated output contains durable project knowledge, summarize that durable knowledge into the wiki too.
 
 ## Project Basics
 

@@ -46,6 +46,8 @@ Agents should read this page first, then only the pages relevant to the task.
 ## Wiki Maintenance
 
 - Only ingest durable information from `temp/`; do not blindly archive scratch files.
+- Write generated files to `output/` only when the user explicitly asks for a human-consumable artifact. Keep `output/` ephemeral and ignored.
+- If an `output/` artifact contains durable findings or decisions, record the durable parts in the relevant wiki page.
 - When a temp source changes project direction, feature behavior, or implementation constraints, update the relevant wiki page and append a short entry to `log.md`.
 - Keep `instructions.md` short. Put subsystem detail in the wiki.
 - Prefer precise source links and code references over broad restatements.

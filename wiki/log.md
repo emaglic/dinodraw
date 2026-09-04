@@ -18,3 +18,8 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - User confirmed `src/src.zip` was an unneeded remnant and deleted it.
 - Removed active wiki warnings about `src/src.zip`.
+
+## [2026-09-04] maintenance | Added `output/` Scratch Convention
+
+- User created `output/` as ignored agent-generated scratch output for human-consumable artifacts.
+- Documented that agents should write to `output/` only on explicit request, and should copy durable findings from generated artifacts back into the wiki when appropriate.

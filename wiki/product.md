@@ -38,6 +38,8 @@ Dino Draw is a static, local-first drawing and notebook web app for pen-first wr
 - Avoid decorative gradients, orbs, hover-only help, and visual effects that do not help drawing.
 - Text and controls must fit on smaller tablet screens without overlap.
 
-## Durable Temp Ingestion
+## Scratch Directory Conventions
 
 The `temp/` directory is an ignored scratch inbox for screenshots, design notes, and improvement instructions. Agents should analyze temp files when the user points to them, then extract durable conclusions into the wiki when they affect product behavior, design direction, BOOX observations, bugs, or implementation constraints.
+
+The `output/` directory is ignored agent-generated scratch output for the user's human consumption. Use it only when the user explicitly asks for a generated file, such as a report, archive, or export. Do not write to `output/` just because the wiki changed. If a generated artifact contains durable project findings, record those durable findings in the wiki.
