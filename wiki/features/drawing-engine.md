@@ -27,14 +27,23 @@ Render order:
 
 New pages should default to the active/previous page background.
 
-`createPage()` builds both layer canvases at the current visible canvas size. `resizeCanvas()` resizes the visible canvas to the viewport and resizes every page layer, drawing the old canvas content into a snapshot first.
+`createPage()` builds both layer canvases at a fixed native page size, usually the visible canvas size at the moment the document/page is created. `resizeCanvas()` resizes only the visible viewport canvas. Page layers keep their native dimensions, are rendered into the viewport with a page offset, and can be panned when the viewport is smaller than the page.
 
 ## Render Pipeline
 
 - `drawBackground()` always fills white first.
-- `renderPage()` resets the visible canvas transform, draws the active page background, then draws `underLayer`, then draws `layer`.
+- `renderPage()` draws a black viewport background outside the page, applies the active page viewport transform, draws the active page background at native page size, then draws `underLayer`, then draws `layer`.
 - `renderWorkspace()` draws the committed page plus temporary overlays for selection, pending shape, and lasso path.
 - `drawPageThumbnail()` and export flattening use the same background, `underLayer`, `layer` order.
+
+## Viewport And Panning
+
+- Page coordinates are native document coordinates; viewport coordinates are mapped through `getPageViewportTransform()`.
+- When the viewport is wider or taller than the native page, the page is centered on that axis.
+- When the native page is larger than the viewport, runtime `panX`/`panY` offsets reveal clipped regions without changing page resolution.
+- Two-finger touch drag pans the page. Wheel/trackpad scrolling also pans for desktop use and testing.
+- Panning is view state only; saved document pages, PNG exports, PDF exports, and thumbnails use native page dimensions.
+- The black background is viewport chrome only. It is not drawn into page layers or exports.
 
 ## Backgrounds
 

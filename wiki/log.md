@@ -90,3 +90,27 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Shortened the Documents intro card to a single sentence.
 - Changed Touch drawing to default on for fresh devices while preserving saved per-device choices.
 - Updated in-app instructions to recommend turning Touch drawing off on pen-first tablets.
+
+## [2026-09-05] fix | Preserved Page Pixels Across Orientation Changes
+
+- Changed viewport resize handling so page backing canvases grow when needed but do not shrink to the rotated viewport.
+- Preserved existing page pixels at 1:1 during canvas growth instead of scaling them into the new orientation.
+- Updated snapshot restore so undo/redo and floating lasso cancellation keep the largest relevant page dimensions.
+
+## [2026-09-05] feature | Added Fixed-Page Viewport Panning
+
+- Changed new pages to keep a native page size set at creation time instead of adopting each viewport resize.
+- Rendered fixed-size pages into the visible viewport with centering on axes where the viewport is larger than the page.
+- Added page-coordinate pointer mapping so drawing, erasing, shapes, images, lasso selection, and overlays align with centered/panned pages.
+- Added two-finger touch panning and wheel/trackpad panning for pages larger than the current viewport.
+- Kept PNG/PDF export and page thumbnails tied to native page dimensions rather than device orientation.
+
+## [2026-09-05] polish | Added Viewport Background Texture
+
+- Added a light dotted background behind fixed-size pages so empty viewport space is visually distinct from the document.
+- Kept the dotted texture outside page layers, thumbnails, PNG exports, and PDF exports.
+
+## [2026-09-05] polish | Switched Off-Page Space To Black
+
+- Replaced the subtle dotted viewport texture with a solid black off-page background for stronger contrast.
+- Kept the black background as viewport chrome only, outside page layers and exports.

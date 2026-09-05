@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.64";
+const APP_VERSION = "v0.8.68";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -174,6 +174,8 @@ const state = {
   strokeTool: "draw",
   isDrawing: false,
   activePointerId: null,
+  activePointerType: "",
+  activeStrokeSnapshot: null,
   lastPoint: null,
   activePageIndex: 0,
   activePresetIndex: 0,
@@ -189,6 +191,8 @@ const state = {
   selectionInteraction: null,
   eraserPreview: null,
   eraserPreviewTimer: null,
+  viewportTouchPointers: new Map(),
+  panGesture: null,
   renderFrame: null,
   tooltipTimer: null,
   tooltipTarget: null,
@@ -548,6 +552,7 @@ function applyDocumentSettings(settings = {}) {
 
 function createDocumentRecord(name) {
   const now = new Date().toISOString();
+  const pageSize = getCurrentViewportSize();
 
   return {
     id: createId(),
@@ -561,8 +566,8 @@ function createDocumentRecord(name) {
     pages: [
       {
         background: "blank",
-        width: canvas.width || window.innerWidth,
-        height: canvas.height || window.innerHeight,
+        width: pageSize.width,
+        height: pageSize.height,
         underDrawing: "",
         drawing: "",
       },
@@ -584,8 +589,8 @@ function serializeCurrentDocument() {
     settings: getDocumentSettings(),
     pages: state.pages.map((page) => ({
       background: page.background,
-      width: page.layer.width,
-      height: page.layer.height,
+      width: getPageWidth(page),
+      height: getPageHeight(page),
       underDrawing: getCanvasDataUrl(page.underLayer),
       drawing: getCanvasDataUrl(page.layer),
     })),
@@ -954,9 +959,23 @@ function downloadBlob(blob, filename) {
 }
 
 async function createPageFromSavedPage(savedPage = {}) {
-  const page = createPage(savedPage.background || "blank");
   const underImage = await loadImage(savedPage.underDrawing);
   const image = await loadImage(savedPage.drawing);
+  const fallbackWidth =
+    (image && image.width) ||
+    (underImage && underImage.width) ||
+    canvas.width ||
+    window.innerWidth;
+  const fallbackHeight =
+    (image && image.height) ||
+    (underImage && underImage.height) ||
+    canvas.height ||
+    window.innerHeight;
+  const page = createPage(
+    savedPage.background || "blank",
+    savedPage.width || fallbackWidth,
+    savedPage.height || fallbackHeight
+  );
 
   if (underImage) {
     page.underContext.drawImage(
@@ -967,8 +986,8 @@ async function createPageFromSavedPage(savedPage = {}) {
       savedPage.height || underImage.height,
       0,
       0,
-      page.underLayer.width,
-      page.underLayer.height
+      getPageWidth(page),
+      getPageHeight(page)
     );
   }
 
@@ -981,8 +1000,8 @@ async function createPageFromSavedPage(savedPage = {}) {
       savedPage.height || image.height,
       0,
       0,
-      page.layer.width,
-      page.layer.height
+      getPageWidth(page),
+      getPageHeight(page)
     );
   }
 
@@ -1638,16 +1657,52 @@ async function importDocumentFile(file) {
   }
 }
 
-function createPage(background = "blank") {
+function getCurrentViewportSize() {
+  return {
+    width: Math.max(1, Math.floor(canvas.width || window.innerWidth || 1)),
+    height: Math.max(1, Math.floor(canvas.height || window.innerHeight || 1)),
+  };
+}
+
+function normalizePageDimension(value, fallback) {
+  const dimension = Math.floor(Number(value || fallback || 1));
+
+  return Math.max(1, dimension);
+}
+
+function getPageWidth(page) {
+  if (!page) {
+    return getCurrentViewportSize().width;
+  }
+
+  return normalizePageDimension(page.width, page.layer.width);
+}
+
+function getPageHeight(page) {
+  if (!page) {
+    return getCurrentViewportSize().height;
+  }
+
+  return normalizePageDimension(page.height, page.layer.height);
+}
+
+function createPage(background = "blank", width, height) {
+  const pageSize = getCurrentViewportSize();
+  const pageWidth = normalizePageDimension(width, pageSize.width);
+  const pageHeight = normalizePageDimension(height, pageSize.height);
   const underLayer = document.createElement("canvas");
   const layer = document.createElement("canvas");
-  underLayer.width = canvas.width || window.innerWidth;
-  underLayer.height = canvas.height || window.innerHeight;
-  layer.width = canvas.width || window.innerWidth;
-  layer.height = canvas.height || window.innerHeight;
+  underLayer.width = pageWidth;
+  underLayer.height = pageHeight;
+  layer.width = pageWidth;
+  layer.height = pageHeight;
 
   return {
     background,
+    width: pageWidth,
+    height: pageHeight,
+    panX: 0,
+    panY: 0,
     underLayer,
     underContext: underLayer.getContext("2d"),
     layer,
@@ -1675,6 +1730,8 @@ function cloneCanvas(source) {
 function createPageSnapshot(page) {
   return {
     background: page.background,
+    width: getPageWidth(page),
+    height: getPageHeight(page),
     underLayer: cloneCanvas(page.underLayer),
     layer: cloneCanvas(page.layer),
   };
@@ -1682,38 +1739,35 @@ function createPageSnapshot(page) {
 
 function restorePageSnapshot(page, snapshot) {
   page.background = snapshot.background;
-  page.underLayer.width = canvas.width;
-  page.underLayer.height = canvas.height;
+  const width = Math.max(
+    getPageWidth(page),
+    snapshot.width || 0,
+    page.layer.width,
+    snapshot.layer.width,
+    snapshot.underLayer ? snapshot.underLayer.width : 0
+  );
+  const height = Math.max(
+    getPageHeight(page),
+    snapshot.height || 0,
+    page.layer.height,
+    snapshot.layer.height,
+    snapshot.underLayer ? snapshot.underLayer.height : 0
+  );
+
+  page.width = width;
+  page.height = height;
+  page.underLayer.width = width;
+  page.underLayer.height = height;
   page.underContext = page.underLayer.getContext("2d");
   page.underContext.clearRect(0, 0, page.underLayer.width, page.underLayer.height);
   if (snapshot.underLayer) {
-    page.underContext.drawImage(
-      snapshot.underLayer,
-      0,
-      0,
-      snapshot.underLayer.width,
-      snapshot.underLayer.height,
-      0,
-      0,
-      page.underLayer.width,
-      page.underLayer.height
-    );
+    page.underContext.drawImage(snapshot.underLayer, 0, 0);
   }
-  page.layer.width = canvas.width;
-  page.layer.height = canvas.height;
+  page.layer.width = width;
+  page.layer.height = height;
   page.context = page.layer.getContext("2d");
   page.context.clearRect(0, 0, page.layer.width, page.layer.height);
-  page.context.drawImage(
-    snapshot.layer,
-    0,
-    0,
-    snapshot.layer.width,
-    snapshot.layer.height,
-    0,
-    0,
-    page.layer.width,
-    page.layer.height
-  );
+  page.context.drawImage(snapshot.layer, 0, 0);
 }
 
 function pushHistorySnapshot(page = getActivePage()) {
@@ -1962,8 +2016,58 @@ function drawBackground(page, targetContext, width, height) {
   }
 }
 
+function drawViewportBackground() {
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.fillStyle = "#000000";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function clampPagePan(page) {
+  if (!page) {
+    return;
+  }
+
+  const maxPanX = Math.max(0, getPageWidth(page) - canvas.width);
+  const maxPanY = Math.max(0, getPageHeight(page) - canvas.height);
+  const panX = Number(page.panX || 0);
+  const panY = Number(page.panY || 0);
+
+  page.panX = Math.min(maxPanX, Math.max(0, isFinite(panX) ? panX : 0));
+  page.panY = Math.min(maxPanY, Math.max(0, isFinite(panY) ? panY : 0));
+}
+
+function getPageViewportTransform(page = getActivePage()) {
+  if (!page) {
+    return { x: 0, y: 0 };
+  }
+
+  clampPagePan(page);
+
+  const pageWidth = getPageWidth(page);
+  const pageHeight = getPageHeight(page);
+
+  return {
+    x:
+      canvas.width > pageWidth
+        ? Math.round((canvas.width - pageWidth) / 2)
+        : -page.panX,
+    y:
+      canvas.height > pageHeight
+        ? Math.round((canvas.height - pageHeight) / 2)
+        : -page.panY,
+  };
+}
+
+function setVisibleContextPageTransform(page = getActivePage()) {
+  const transform = getPageViewportTransform(page);
+
+  context.setTransform(1, 0, 0, 1, transform.x, transform.y);
+}
+
 function renderPage() {
   const page = getActivePage();
+
+  context.setTransform(1, 0, 0, 1, 0, 0);
 
   if (!page) {
     context.fillStyle = "#ffffff";
@@ -1971,8 +2075,9 @@ function renderPage() {
     return;
   }
 
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  drawBackground(page);
+  drawViewportBackground();
+  setVisibleContextPageTransform(page);
+  drawBackground(page, context, getPageWidth(page), getPageHeight(page));
   context.drawImage(page.underLayer, 0, 0);
   context.drawImage(page.layer, 0, 0);
 }
@@ -2815,24 +2920,6 @@ function addEraserPreviewSegment(from, to) {
   scheduleEraserPreviewClear();
 }
 
-function resizeCanvasLayer(layer, width, height) {
-  const snapshot = document.createElement("canvas");
-  snapshot.width = layer.width;
-  snapshot.height = layer.height;
-  snapshot.getContext("2d").drawImage(layer, 0, 0);
-
-  layer.width = width;
-  layer.height = height;
-  layer.getContext("2d").drawImage(snapshot, 0, 0);
-}
-
-function resizeLayer(page, width, height) {
-  resizeCanvasLayer(page.underLayer, width, height);
-  resizeCanvasLayer(page.layer, width, height);
-  page.underContext = page.underLayer.getContext("2d");
-  page.context = page.layer.getContext("2d");
-}
-
 function resizeCanvas() {
   const pixelRatio = canvasPixelRatio;
   const width = Math.floor(window.innerWidth * pixelRatio);
@@ -2841,7 +2928,7 @@ function resizeCanvas() {
   canvas.width = width;
   canvas.height = height;
 
-  state.pages.forEach((page) => resizeLayer(page, width, height));
+  state.pages.forEach(clampPagePan);
   renderWorkspace();
 }
 
@@ -2926,11 +3013,228 @@ function canStartStroke(event) {
 
 function getPoint(event) {
   const rect = canvas.getBoundingClientRect();
+  const transform = getPageViewportTransform();
 
   return {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top,
+    x: event.clientX - rect.left - transform.x,
+    y: event.clientY - rect.top - transform.y,
   };
+}
+
+function isPointInsidePage(point, page = getActivePage()) {
+  return (
+    page &&
+    point.x >= 0 &&
+    point.y >= 0 &&
+    point.x <= getPageWidth(page) &&
+    point.y <= getPageHeight(page)
+  );
+}
+
+function rememberTouchPointer(event) {
+  if (event.pointerType !== "touch") {
+    return;
+  }
+
+  state.viewportTouchPointers.set(event.pointerId, {
+    x: event.clientX,
+    y: event.clientY,
+  });
+}
+
+function forgetTouchPointer(event) {
+  if (event.pointerType !== "touch") {
+    return;
+  }
+
+  state.viewportTouchPointers.delete(event.pointerId);
+}
+
+function getTouchPointerCenter() {
+  const points = Array.from(state.viewportTouchPointers.values());
+
+  if (points.length === 0) {
+    return null;
+  }
+
+  const total = points.reduce(
+    (sum, point) => ({
+      x: sum.x + point.x,
+      y: sum.y + point.y,
+    }),
+    { x: 0, y: 0 }
+  );
+
+  return {
+    x: total.x / points.length,
+    y: total.y / points.length,
+  };
+}
+
+function setPagePan(page, panX, panY) {
+  if (!page) {
+    return;
+  }
+
+  page.panX = panX;
+  page.panY = panY;
+  clampPagePan(page);
+}
+
+function cancelActiveTouchActionForPan() {
+  if (!state.isDrawing || state.activePointerType !== "touch") {
+    return;
+  }
+
+  if (
+    state.activePointerId !== null &&
+    canvas.hasPointerCapture(state.activePointerId)
+  ) {
+    canvas.releasePointerCapture(state.activePointerId);
+  }
+
+  if (state.activeStrokeSnapshot) {
+    restorePageSnapshot(getActivePage(), state.activeStrokeSnapshot);
+  }
+
+  if (
+    state.shapeInteraction &&
+    state.shapeInteraction.mode === "create"
+  ) {
+    state.pendingShape = null;
+  }
+
+  state.isDrawing = false;
+  state.activePointerId = null;
+  state.activePointerType = "";
+  state.activeStrokeSnapshot = null;
+  state.lastPoint = null;
+  state.strokeTool = state.tool;
+  state.imageInteraction = null;
+  state.shapeInteraction = null;
+  state.selectionInteraction = null;
+  state.lassoPath = [];
+  updateActionToolbar();
+  renderWorkspace();
+}
+
+function startViewportPanGesture(event) {
+  const page = getActivePage();
+  const center = getTouchPointerCenter();
+
+  if (!page || !center) {
+    return;
+  }
+
+  cancelActiveTouchActionForPan();
+  clampPagePan(page);
+  state.panGesture = {
+    startCenter: center,
+    startPanX: page.panX || 0,
+    startPanY: page.panY || 0,
+  };
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+}
+
+function handleTouchPointerDownForPan(event) {
+  rememberTouchPointer(event);
+
+  if (event.pointerType !== "touch" || state.viewportTouchPointers.size < 2) {
+    return false;
+  }
+
+  startViewportPanGesture(event);
+  return Boolean(state.panGesture);
+}
+
+function handleTouchPointerMoveForPan(event) {
+  if (event.pointerType !== "touch") {
+    return false;
+  }
+
+  rememberTouchPointer(event);
+
+  if (!state.panGesture) {
+    return false;
+  }
+
+  const page = getActivePage();
+  const center = getTouchPointerCenter();
+
+  if (!page || !center) {
+    return false;
+  }
+
+  setPagePan(
+    page,
+    state.panGesture.startPanX - (center.x - state.panGesture.startCenter.x),
+    state.panGesture.startPanY - (center.y - state.panGesture.startCenter.y)
+  );
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  renderWorkspace();
+  return true;
+}
+
+function handleTouchPointerEndForPan(event) {
+  const wasPanning = Boolean(state.panGesture);
+
+  forgetTouchPointer(event);
+
+  if (!wasPanning) {
+    return false;
+  }
+
+  if (state.viewportTouchPointers.size >= 2) {
+    const page = getActivePage();
+    const center = getTouchPointerCenter();
+
+    if (page && center) {
+      clampPagePan(page);
+      state.panGesture = {
+        startCenter: center,
+        startPanX: page.panX || 0,
+        startPanY: page.panY || 0,
+      };
+    }
+  } else {
+    state.panGesture = null;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  return true;
+}
+
+function handleCanvasWheel(event) {
+  const page = getActivePage();
+
+  if (!page) {
+    return;
+  }
+
+  const startPanX = page.panX || 0;
+  const startPanY = page.panY || 0;
+
+  setPagePan(page, startPanX + event.deltaX, startPanY + event.deltaY);
+
+  if (page.panX === startPanX && page.panY === startPanY) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  renderWorkspace();
 }
 
 function getDistance(from, to) {
@@ -2970,6 +3274,7 @@ function drawLine(from, to) {
   if (preset.drawBehind) {
     renderPage();
   } else {
+    setVisibleContextPageTransform(page);
     context.lineCap = "round";
     context.lineJoin = "round";
     context.strokeStyle = preset.color;
@@ -3085,15 +3390,18 @@ function togglePendingShapeProportionalResize() {
 function getInitialImagePlacement(image) {
   const naturalWidth = image.naturalWidth || image.width || 1;
   const naturalHeight = image.naturalHeight || image.height || 1;
-  const maxWidth = Math.max(1, canvas.width * 0.5);
-  const maxHeight = Math.max(1, canvas.height * 0.5);
+  const page = getActivePage();
+  const pageWidth = getPageWidth(page);
+  const pageHeight = getPageHeight(page);
+  const maxWidth = Math.max(1, pageWidth * 0.5);
+  const maxHeight = Math.max(1, pageHeight * 0.5);
   const scale = Math.min(maxWidth / naturalWidth, maxHeight / naturalHeight, 1);
   const width = Math.max(1, Math.round(naturalWidth * scale));
   const height = Math.max(1, Math.round(naturalHeight * scale));
 
   return {
-    x: Math.round((canvas.width - width) / 2),
-    y: Math.round((canvas.height - height) / 2),
+    x: Math.round((pageWidth - width) / 2),
+    y: Math.round((pageHeight - height) / 2),
     width,
     height,
   };
@@ -3347,6 +3655,13 @@ function startShape(event) {
     return;
   }
 
+  if (!isPointInsidePage(point)) {
+    if (state.pendingShape) {
+      commitPendingShape();
+    }
+    return;
+  }
+
   if (state.pendingShape) {
     commitPendingShape();
   }
@@ -3415,12 +3730,15 @@ function endShape(event) {
 }
 
 function getPathBounds(path) {
+  const page = getActivePage();
+  const pageWidth = getPageWidth(page);
+  const pageHeight = getPageHeight(page);
   const xs = path.map((point) => point.x);
   const ys = path.map((point) => point.y);
   const minX = Math.max(0, Math.floor(Math.min(...xs)));
   const minY = Math.max(0, Math.floor(Math.min(...ys)));
-  const maxX = Math.min(canvas.width, Math.ceil(Math.max(...xs)));
-  const maxY = Math.min(canvas.height, Math.ceil(Math.max(...ys)));
+  const maxX = Math.min(pageWidth, Math.ceil(Math.max(...xs)));
+  const maxY = Math.min(pageHeight, Math.ceil(Math.max(...ys)));
 
   return {
     x: minX,
@@ -3635,6 +3953,13 @@ function startLasso(event) {
     return;
   }
 
+  if (!isPointInsidePage(point)) {
+    if (state.selection) {
+      commitSelection();
+    }
+    return;
+  }
+
   if (state.selection) {
     commitSelection();
   }
@@ -3717,12 +4042,20 @@ function startStroke(event) {
     event.preventDefault();
   }
 
+  const point = getPoint(event);
+
+  if (!isPointInsidePage(point)) {
+    return;
+  }
+
   canvas.setPointerCapture(event.pointerId);
 
   state.strokeTool = getStrokeTool(event);
   state.isDrawing = true;
   state.activePointerId = event.pointerId;
-  state.lastPoint = getPoint(event);
+  state.activePointerType = event.pointerType || "";
+  state.activeStrokeSnapshot = createPageSnapshot(getActivePage());
+  state.lastPoint = point;
   drawLine(state.lastPoint, state.lastPoint);
 }
 
@@ -3783,6 +4116,8 @@ function endStroke(event) {
 
   state.isDrawing = false;
   state.activePointerId = null;
+  state.activePointerType = "";
+  state.activeStrokeSnapshot = null;
   state.lastPoint = null;
   state.strokeTool = state.tool;
 
@@ -3794,6 +4129,10 @@ function endStroke(event) {
 }
 
 function startCanvasAction(event) {
+  if (handleTouchPointerDownForPan(event)) {
+    return;
+  }
+
   if (
     state.pendingImage &&
     !state.isDrawing &&
@@ -3806,6 +4145,7 @@ function startCanvasAction(event) {
       canvas.setPointerCapture(event.pointerId);
       state.isDrawing = true;
       state.activePointerId = event.pointerId;
+      state.activePointerType = event.pointerType || "";
     }
     return;
   }
@@ -3830,6 +4170,7 @@ function startCanvasAction(event) {
   canvas.setPointerCapture(event.pointerId);
   state.isDrawing = true;
   state.activePointerId = event.pointerId;
+  state.activePointerType = event.pointerType || "";
 
   if (state.tool === "shape") {
     startShape(event);
@@ -3841,6 +4182,10 @@ function startCanvasAction(event) {
 }
 
 function continueCanvasAction(event) {
+  if (handleTouchPointerMoveForPan(event)) {
+    return;
+  }
+
   if (
     state.imageInteraction &&
     state.isDrawing &&
@@ -3869,6 +4214,15 @@ function continueCanvasAction(event) {
 }
 
 function endCanvasAction(event) {
+  if (handleTouchPointerEndForPan(event)) {
+    state.isDrawing = false;
+    state.activePointerId = null;
+    state.activePointerType = "";
+    state.activeStrokeSnapshot = null;
+    state.lastPoint = null;
+    return;
+  }
+
   if (
     state.imageInteraction &&
     state.isDrawing &&
@@ -3881,6 +4235,7 @@ function endCanvasAction(event) {
     endImage(event);
     state.isDrawing = false;
     state.activePointerId = null;
+    state.activePointerType = "";
     return;
   }
 
@@ -3907,6 +4262,8 @@ function endCanvasAction(event) {
 
   state.isDrawing = false;
   state.activePointerId = null;
+  state.activePointerType = "";
+  state.activeStrokeSnapshot = null;
 }
 
 function getPageNavigationDirection(event) {
@@ -4096,8 +4453,8 @@ function closePageDialog() {
 }
 
 function drawPageThumbnail(page, thumbnail) {
-  const sourceWidth = page.layer.width || canvas.width || window.innerWidth;
-  const sourceHeight = page.layer.height || canvas.height || window.innerHeight;
+  const sourceWidth = getPageWidth(page);
+  const sourceHeight = getPageHeight(page);
   const previewWidth = 180;
   const previewHeight = Math.max(
     96,
@@ -6144,6 +6501,7 @@ canvas.addEventListener(moveEventName, continueCanvasAction);
 canvas.addEventListener("pointerup", endCanvasAction);
 canvas.addEventListener("pointercancel", endCanvasAction);
 canvas.addEventListener("pointerleave", endCanvasAction);
+canvas.addEventListener("wheel", handleCanvasWheel, false);
 canvas.addEventListener("contextmenu", (event) => event.preventDefault());
 
 window.addEventListener("resize", () => {
