@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.68";
+const APP_VERSION = "v0.8.69";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -241,6 +241,7 @@ const moveEventName =
   "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
 const doubleTapDelay = 360;
 const eraserPreviewDuration = 160;
+const maxPageZoom = 4;
 const tooltipDelay = 375;
 const toolbarPositionStorageKey = "mainToolbarPosition";
 const presetToolbarPositionStorageKey = "presetToolbarPositionBottomLeft";
@@ -1686,6 +1687,28 @@ function getPageHeight(page) {
   return normalizePageDimension(page.height, page.layer.height);
 }
 
+function getMinPageZoom(page) {
+  if (!page) {
+    return 1;
+  }
+
+  return Math.min(1, canvas.height / getPageHeight(page));
+}
+
+function getPageZoom(page) {
+  if (!page) {
+    return 1;
+  }
+
+  const zoom = Number(page.zoom || 1);
+  const minZoom = getMinPageZoom(page);
+
+  return Math.min(
+    maxPageZoom,
+    Math.max(minZoom, isFinite(zoom) ? zoom : 1)
+  );
+}
+
 function createPage(background = "blank", width, height) {
   const pageSize = getCurrentViewportSize();
   const pageWidth = normalizePageDimension(width, pageSize.width);
@@ -1701,6 +1724,7 @@ function createPage(background = "blank", width, height) {
     background,
     width: pageWidth,
     height: pageHeight,
+    zoom: 1,
     panX: 0,
     panY: 0,
     underLayer,
@@ -2027,8 +2051,10 @@ function clampPagePan(page) {
     return;
   }
 
-  const maxPanX = Math.max(0, getPageWidth(page) - canvas.width);
-  const maxPanY = Math.max(0, getPageHeight(page) - canvas.height);
+  page.zoom = getPageZoom(page);
+
+  const maxPanX = Math.max(0, getPageWidth(page) - canvas.width / page.zoom);
+  const maxPanY = Math.max(0, getPageHeight(page) - canvas.height / page.zoom);
   const panX = Number(page.panX || 0);
   const panY = Number(page.panY || 0);
 
@@ -2045,23 +2071,34 @@ function getPageViewportTransform(page = getActivePage()) {
 
   const pageWidth = getPageWidth(page);
   const pageHeight = getPageHeight(page);
+  const zoom = getPageZoom(page);
+  const scaledPageWidth = pageWidth * zoom;
+  const scaledPageHeight = pageHeight * zoom;
 
   return {
+    scale: zoom,
     x:
-      canvas.width > pageWidth
-        ? Math.round((canvas.width - pageWidth) / 2)
-        : -page.panX,
+      canvas.width > scaledPageWidth
+        ? Math.round((canvas.width - scaledPageWidth) / 2)
+        : -page.panX * zoom,
     y:
-      canvas.height > pageHeight
-        ? Math.round((canvas.height - pageHeight) / 2)
-        : -page.panY,
+      canvas.height > scaledPageHeight
+        ? Math.round((canvas.height - scaledPageHeight) / 2)
+        : -page.panY * zoom,
   };
 }
 
 function setVisibleContextPageTransform(page = getActivePage()) {
   const transform = getPageViewportTransform(page);
 
-  context.setTransform(1, 0, 0, 1, transform.x, transform.y);
+  context.setTransform(
+    transform.scale,
+    0,
+    0,
+    transform.scale,
+    transform.x,
+    transform.y
+  );
 }
 
 function renderPage() {
@@ -2752,6 +2789,8 @@ function clearTemporaryCanvasState() {
   state.selection = null;
   state.selectionInteraction = null;
   state.eraserPreview = null;
+  state.viewportTouchPointers.clear();
+  state.panGesture = null;
   window.clearTimeout(state.eraserPreviewTimer);
   updateActionToolbar();
 }
@@ -3016,8 +3055,26 @@ function getPoint(event) {
   const transform = getPageViewportTransform();
 
   return {
-    x: event.clientX - rect.left - transform.x,
-    y: event.clientY - rect.top - transform.y,
+    x: (event.clientX - rect.left - transform.x) / transform.scale,
+    y: (event.clientY - rect.top - transform.y) / transform.scale,
+  };
+}
+
+function getViewportPointFromClientPoint(point) {
+  const rect = canvas.getBoundingClientRect();
+
+  return {
+    x: point.x - rect.left,
+    y: point.y - rect.top,
+  };
+}
+
+function viewportPointToPagePoint(point, page = getActivePage()) {
+  const transform = getPageViewportTransform(page);
+
+  return {
+    x: (point.x - transform.x) / transform.scale,
+    y: (point.y - transform.y) / transform.scale,
   };
 }
 
@@ -3071,6 +3128,16 @@ function getTouchPointerCenter() {
   };
 }
 
+function getTouchPointerDistance() {
+  const points = Array.from(state.viewportTouchPointers.values());
+
+  if (points.length < 2) {
+    return 0;
+  }
+
+  return getDistance(points[0], points[1]);
+}
+
 function setPagePan(page, panX, panY) {
   if (!page) {
     return;
@@ -3079,6 +3146,22 @@ function setPagePan(page, panX, panY) {
   page.panX = panX;
   page.panY = panY;
   clampPagePan(page);
+}
+
+function setPageZoomAroundViewportPoint(page, zoom, viewportPoint) {
+  if (!page) {
+    return;
+  }
+
+  const focusPoint = viewportPointToPagePoint(viewportPoint, page);
+  const nextZoom = Math.min(maxPageZoom, Math.max(getMinPageZoom(page), zoom));
+
+  page.zoom = nextZoom;
+  setPagePan(
+    page,
+    focusPoint.x - viewportPoint.x / nextZoom,
+    focusPoint.y - viewportPoint.y / nextZoom
+  );
 }
 
 function cancelActiveTouchActionForPan() {
@@ -3121,6 +3204,7 @@ function cancelActiveTouchActionForPan() {
 function startViewportPanGesture(event) {
   const page = getActivePage();
   const center = getTouchPointerCenter();
+  const distance = getTouchPointerDistance();
 
   if (!page || !center) {
     return;
@@ -3130,6 +3214,8 @@ function startViewportPanGesture(event) {
   clampPagePan(page);
   state.panGesture = {
     startCenter: center,
+    startDistance: distance,
+    startZoom: getPageZoom(page),
     startPanX: page.panX || 0,
     startPanY: page.panY || 0,
   };
@@ -3163,16 +3249,28 @@ function handleTouchPointerMoveForPan(event) {
 
   const page = getActivePage();
   const center = getTouchPointerCenter();
+  const distance = getTouchPointerDistance();
 
   if (!page || !center) {
     return false;
   }
 
+  const viewportCenter = getViewportPointFromClientPoint(center);
+
+  if (distance > 0 && state.panGesture.startDistance > 0) {
+    const zoom =
+      state.panGesture.startZoom *
+      (distance / state.panGesture.startDistance);
+
+    setPageZoomAroundViewportPoint(page, zoom, viewportCenter);
+  }
+
   setPagePan(
     page,
-    state.panGesture.startPanX - (center.x - state.panGesture.startCenter.x),
-    state.panGesture.startPanY - (center.y - state.panGesture.startCenter.y)
+    page.panX - (center.x - state.panGesture.startCenter.x) / getPageZoom(page),
+    page.panY - (center.y - state.panGesture.startCenter.y) / getPageZoom(page)
   );
+  state.panGesture.startCenter = center;
 
   if (event.cancelable) {
     event.preventDefault();
@@ -3199,6 +3297,8 @@ function handleTouchPointerEndForPan(event) {
       clampPagePan(page);
       state.panGesture = {
         startCenter: center,
+        startDistance: getTouchPointerDistance(),
+        startZoom: getPageZoom(page),
         startPanX: page.panX || 0,
         startPanY: page.panY || 0,
       };
@@ -3221,10 +3321,36 @@ function handleCanvasWheel(event) {
     return;
   }
 
+  if (event.ctrlKey) {
+    const rect = canvas.getBoundingClientRect();
+    const zoomFactor = Math.exp(-event.deltaY * 0.01);
+
+    setPageZoomAroundViewportPoint(
+      page,
+      getPageZoom(page) * zoomFactor,
+      {
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      }
+    );
+
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+
+    renderWorkspace();
+    return;
+  }
+
   const startPanX = page.panX || 0;
   const startPanY = page.panY || 0;
+  const zoom = getPageZoom(page);
 
-  setPagePan(page, startPanX + event.deltaX, startPanY + event.deltaY);
+  setPagePan(
+    page,
+    startPanX + event.deltaX / zoom,
+    startPanY + event.deltaY / zoom
+  );
 
   if (page.panX === startPanX && page.panY === startPanY) {
     return;

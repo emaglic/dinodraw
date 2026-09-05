@@ -114,3 +114,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Replaced the subtle dotted viewport texture with a solid black off-page background for stronger contrast.
 - Kept the black background as viewport chrome only, outside page layers and exports.
+
+## [2026-09-05] feature | Added Pinch Zoom For Fixed Pages
+
+- Added per-page runtime zoom state to the fixed-page viewport transform.
+- Added two-finger pinch zoom around the gesture midpoint while preserving two-finger drag panning.
+- Limited zoom-out so the native page height can shrink to fit the current viewport height, but no farther.
+- Kept zoom as view state only, with exports and thumbnails still using native page dimensions.
