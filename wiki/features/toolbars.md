@@ -92,7 +92,9 @@ The four regular toolbars share similar drag behavior:
 - calculate the pointer offset within the toolbar on `pointerdown`
 - update orientation while the pointer nears an edge
 - clamp position to the viewport with an 8px margin
-- write `{ left, top, orientation }` to localStorage on drag end
-- reclamp positions on window resize
+- write `{ left, top, orientation }` plus responsive anchor metadata to localStorage on drag end
+- preserve left/right/top/bottom edge distance for toolbars placed near an edge when the viewport resizes or rotates
+- preserve center-axis ratio for toolbars placed away from edges
+- reclamp positions on window resize so toolbars remain on screen
 
 The hide/show tab uses a separate edge/offset model instead of free `{ left, top }` positioning.

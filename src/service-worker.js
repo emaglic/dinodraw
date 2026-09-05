@@ -1,10 +1,10 @@
-const CACHE_NAME = "dinodraw-v0.8.69";
+const CACHE_NAME = "dinodraw-v0.8.70";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css?v=0.8.69",
-  "./app.js?v=0.8.69",
-  "./manifest.webmanifest?v=0.8.69",
+  "./styles.css?v=0.8.70",
+  "./app.js?v=0.8.70",
+  "./manifest.webmanifest?v=0.8.70",
   "./icon.svg"
 ];
 

@@ -121,3 +121,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added two-finger pinch zoom around the gesture midpoint while preserving two-finger drag panning.
 - Limited zoom-out so the native page height can shrink to fit the current viewport height, but no farther.
 - Kept zoom as view state only, with exports and thumbnails still using native page dimensions.
+
+## [2026-09-05] polish | Added Responsive Toolbar Anchoring
+
+- Added edge-aware anchor metadata to regular draggable toolbar position records.
+- Preserved right/left/top/bottom distances for toolbars placed near viewport edges across orientation changes.
+- Preserved center ratios for toolbars placed away from edges while still clamping all toolbar positions on screen.
+- Kept legacy `{ left, top, orientation }` saved toolbar positions restorable and migrated on next save.

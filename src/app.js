@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.69";
+const APP_VERSION = "v0.8.70";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -5497,6 +5497,116 @@ function applyToolbarOrientation(element, orientation) {
   element.dataset.orientation = orientation;
 }
 
+function getToolbarAxisAnchor(start, size, viewportSize) {
+  const center = start + size / 2;
+
+  if (center <= viewportSize / 3) {
+    return "start";
+  }
+
+  if (center >= (viewportSize * 2) / 3) {
+    return "end";
+  }
+
+  return "center";
+}
+
+function getToolbarAxisValue(anchor, start, size, viewportSize) {
+  if (anchor === "end") {
+    return viewportSize - start - size;
+  }
+
+  if (anchor === "center") {
+    return (start + size / 2) / viewportSize;
+  }
+
+  return start;
+}
+
+function getToolbarAxisPosition(anchor, value, size, viewportSize, fallback) {
+  if (typeof value !== "number" || !isFinite(value)) {
+    return fallback;
+  }
+
+  if (anchor === "end") {
+    return viewportSize - size - value;
+  }
+
+  if (anchor === "center") {
+    return value * viewportSize - size / 2;
+  }
+
+  return value;
+}
+
+function createToolbarPositionRecord(element, left, top, orientation) {
+  const rect = element.getBoundingClientRect();
+  const anchorX = getToolbarAxisAnchor(left, rect.width, window.innerWidth);
+  const anchorY = getToolbarAxisAnchor(top, rect.height, window.innerHeight);
+
+  return {
+    left,
+    top,
+    orientation,
+    anchorX,
+    anchorY,
+    valueX: getToolbarAxisValue(anchorX, left, rect.width, window.innerWidth),
+    valueY: getToolbarAxisValue(anchorY, top, rect.height, window.innerHeight),
+    viewportWidth: window.innerWidth,
+    viewportHeight: window.innerHeight,
+  };
+}
+
+function readToolbarPosition(storageKey) {
+  let savedPosition = null;
+
+  try {
+    savedPosition = localStorage.getItem(storageKey);
+  } catch {
+    return null;
+  }
+
+  if (!savedPosition) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(savedPosition);
+  } catch {
+    try {
+      localStorage.removeItem(storageKey);
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
+}
+
+function getResponsiveToolbarPosition(position, element) {
+  if (!position) {
+    return null;
+  }
+
+  const rect = element.getBoundingClientRect();
+  const left = getToolbarAxisPosition(
+    position.anchorX,
+    position.valueX,
+    rect.width,
+    window.innerWidth,
+    Number(position.left || 0)
+  );
+  const top = getToolbarAxisPosition(
+    position.anchorY,
+    position.valueY,
+    rect.height,
+    window.innerHeight,
+    Number(position.top || 0)
+  );
+
+  return { left, top };
+}
+
 function clampToolbarPosition(left, top) {
   const rect = toolbar.getBoundingClientRect();
   const margin = 8;
@@ -5530,46 +5640,32 @@ function setToolbarPosition(left, top, shouldSave = false) {
   toolbar.style.bottom = "auto";
   toolbar.style.transform = "none";
 
+  const record = createToolbarPositionRecord(
+    toolbar,
+    position.left,
+    position.top,
+    toolbar.dataset.orientation
+  );
+
   if (shouldSave) {
-    saveToolbarPosition({
-      ...position,
-      orientation: toolbar.dataset.orientation,
-    });
+    saveToolbarPosition(record);
   }
 
-  return {
-    ...position,
-    orientation: toolbar.dataset.orientation,
-  };
+  return record;
 }
 
 function restoreToolbarPosition() {
-  let savedPosition = null;
+  const position = readToolbarPosition(toolbarPositionStorageKey);
 
-  try {
-    savedPosition = localStorage.getItem(toolbarPositionStorageKey);
-  } catch {
+  if (!position) {
     return false;
   }
 
-  if (!savedPosition) {
-    return false;
-  }
+  applyToolbarOrientation(toolbar, position.orientation);
+  const responsivePosition = getResponsiveToolbarPosition(position, toolbar);
 
-  try {
-    const position = JSON.parse(savedPosition);
-    applyToolbarOrientation(toolbar, position.orientation);
-    setToolbarPosition(position.left, position.top);
-    return true;
-  } catch {
-    try {
-      localStorage.removeItem(toolbarPositionStorageKey);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
+  setToolbarPosition(responsivePosition.left, responsivePosition.top, true);
+  return true;
 }
 
 function setDefaultToolbarPosition() {
@@ -5578,10 +5674,20 @@ function setDefaultToolbarPosition() {
   const left = 12;
   const top = (window.innerHeight - rect.height) / 2;
 
-  setToolbarPosition(left, top);
+  setToolbarPosition(left, top, true);
 }
 
 function reclampToolbarPosition() {
+  const savedPosition = readToolbarPosition(toolbarPositionStorageKey);
+
+  if (savedPosition) {
+    applyToolbarOrientation(toolbar, savedPosition.orientation);
+    const position = getResponsiveToolbarPosition(savedPosition, toolbar);
+
+    setToolbarPosition(position.left, position.top, true);
+    return;
+  }
+
   const rect = toolbar.getBoundingClientRect();
 
   setToolbarPosition(rect.left, rect.top, true);
@@ -5627,50 +5733,53 @@ function setPresetToolbarPosition(left, top, shouldSave = false) {
   presetToolbar.style.bottom = "auto";
   presetToolbar.style.transform = "none";
 
+  const record = createToolbarPositionRecord(
+    presetToolbar,
+    position.left,
+    position.top,
+    presetToolbar.dataset.orientation
+  );
+
   if (shouldSave) {
-    savePresetToolbarPosition({
-      ...position,
-      orientation: presetToolbar.dataset.orientation,
-    });
+    savePresetToolbarPosition(record);
   }
 
-  return {
-    ...position,
-    orientation: presetToolbar.dataset.orientation,
-  };
+  return record;
 }
 
 function restorePresetToolbarPosition() {
-  let savedPosition = null;
+  const position = readToolbarPosition(presetToolbarPositionStorageKey);
 
-  try {
-    savedPosition = localStorage.getItem(presetToolbarPositionStorageKey);
-  } catch {
+  if (!position) {
     return false;
   }
 
-  if (!savedPosition) {
-    return false;
-  }
+  applyToolbarOrientation(presetToolbar, position.orientation);
+  const responsivePosition = getResponsiveToolbarPosition(
+    position,
+    presetToolbar
+  );
 
-  try {
-    const position = JSON.parse(savedPosition);
-    applyToolbarOrientation(presetToolbar, position.orientation);
-    setPresetToolbarPosition(position.left, position.top);
-    return true;
-  } catch {
-    try {
-      localStorage.removeItem(presetToolbarPositionStorageKey);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
+  setPresetToolbarPosition(
+    responsivePosition.left,
+    responsivePosition.top,
+    true
+  );
+  return true;
 }
 
 function reclampPresetToolbarPosition() {
   if (presetToolbar.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const savedPosition = readToolbarPosition(presetToolbarPositionStorageKey);
+
+  if (savedPosition) {
+    applyToolbarOrientation(presetToolbar, savedPosition.orientation);
+    const position = getResponsiveToolbarPosition(savedPosition, presetToolbar);
+
+    setPresetToolbarPosition(position.left, position.top, true);
     return;
   }
 
@@ -5685,7 +5794,7 @@ function setDefaultPresetToolbarPosition() {
   const left = 12;
   const top = window.innerHeight - rect.height - 12;
 
-  setPresetToolbarPosition(left, top);
+  setPresetToolbarPosition(left, top, true);
 }
 
 function clampUndoToolbarPosition(left, top) {
@@ -5724,49 +5833,49 @@ function setUndoToolbarPosition(left, top, shouldSave = false) {
   undoToolbar.style.bottom = "auto";
   undoToolbar.style.transform = "none";
 
+  const record = createToolbarPositionRecord(
+    undoToolbar,
+    position.left,
+    position.top,
+    undoToolbar.dataset.orientation
+  );
+
   if (shouldSave) {
-    saveUndoToolbarPosition({
-      ...position,
-      orientation: undoToolbar.dataset.orientation,
-    });
+    saveUndoToolbarPosition(record);
   }
 
-  return {
-    ...position,
-    orientation: undoToolbar.dataset.orientation,
-  };
+  return record;
 }
 
 function restoreUndoToolbarPosition() {
-  let savedPosition = null;
+  const position = readToolbarPosition(undoToolbarPositionStorageKey);
 
-  try {
-    savedPosition = localStorage.getItem(undoToolbarPositionStorageKey);
-  } catch {
+  if (!position) {
     return false;
   }
 
-  if (!savedPosition) {
-    return false;
-  }
+  applyToolbarOrientation(undoToolbar, position.orientation);
+  const responsivePosition = getResponsiveToolbarPosition(position, undoToolbar);
 
-  try {
-    const position = JSON.parse(savedPosition);
-    applyToolbarOrientation(undoToolbar, position.orientation);
-    setUndoToolbarPosition(position.left, position.top);
-    return true;
-  } catch {
-    try {
-      localStorage.removeItem(undoToolbarPositionStorageKey);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
+  setUndoToolbarPosition(
+    responsivePosition.left,
+    responsivePosition.top,
+    true
+  );
+  return true;
 }
 
 function reclampUndoToolbarPosition() {
+  const savedPosition = readToolbarPosition(undoToolbarPositionStorageKey);
+
+  if (savedPosition) {
+    applyToolbarOrientation(undoToolbar, savedPosition.orientation);
+    const position = getResponsiveToolbarPosition(savedPosition, undoToolbar);
+
+    setUndoToolbarPosition(position.left, position.top, true);
+    return;
+  }
+
   const rect = undoToolbar.getBoundingClientRect();
 
   setUndoToolbarPosition(rect.left, rect.top, true);
@@ -5774,7 +5883,7 @@ function reclampUndoToolbarPosition() {
 
 function setDefaultUndoToolbarPosition() {
   applyToolbarOrientation(undoToolbar, "horizontal");
-  setUndoToolbarPosition(12, 12);
+  setUndoToolbarPosition(12, 12, true);
 }
 
 function clampFullscreenToolbarPosition(left, top) {
@@ -5817,49 +5926,55 @@ function setFullscreenToolbarPosition(left, top, shouldSave = false) {
   fullscreenToolbar.style.bottom = "auto";
   fullscreenToolbar.style.transform = "none";
 
+  const record = createToolbarPositionRecord(
+    fullscreenToolbar,
+    position.left,
+    position.top,
+    fullscreenToolbar.dataset.orientation
+  );
+
   if (shouldSave) {
-    saveFullscreenToolbarPosition({
-      ...position,
-      orientation: fullscreenToolbar.dataset.orientation,
-    });
+    saveFullscreenToolbarPosition(record);
   }
 
-  return {
-    ...position,
-    orientation: fullscreenToolbar.dataset.orientation,
-  };
+  return record;
 }
 
 function restoreFullscreenToolbarPosition() {
-  let savedPosition = null;
+  const position = readToolbarPosition(fullscreenToolbarPositionStorageKey);
 
-  try {
-    savedPosition = localStorage.getItem(fullscreenToolbarPositionStorageKey);
-  } catch {
+  if (!position) {
     return false;
   }
 
-  if (!savedPosition) {
-    return false;
-  }
+  applyToolbarOrientation(fullscreenToolbar, position.orientation);
+  const responsivePosition = getResponsiveToolbarPosition(
+    position,
+    fullscreenToolbar
+  );
 
-  try {
-    const position = JSON.parse(savedPosition);
-    applyToolbarOrientation(fullscreenToolbar, position.orientation);
-    setFullscreenToolbarPosition(position.left, position.top);
-    return true;
-  } catch {
-    try {
-      localStorage.removeItem(fullscreenToolbarPositionStorageKey);
-    } catch {
-      return false;
-    }
-  }
-
-  return false;
+  setFullscreenToolbarPosition(
+    responsivePosition.left,
+    responsivePosition.top,
+    true
+  );
+  return true;
 }
 
 function reclampFullscreenToolbarPosition() {
+  const savedPosition = readToolbarPosition(fullscreenToolbarPositionStorageKey);
+
+  if (savedPosition) {
+    applyToolbarOrientation(fullscreenToolbar, savedPosition.orientation);
+    const position = getResponsiveToolbarPosition(
+      savedPosition,
+      fullscreenToolbar
+    );
+
+    setFullscreenToolbarPosition(position.left, position.top, true);
+    return;
+  }
+
   const rect = fullscreenToolbar.getBoundingClientRect();
 
   setFullscreenToolbarPosition(rect.left, rect.top, true);
@@ -5870,7 +5985,7 @@ function setDefaultFullscreenToolbarPosition() {
   const rect = fullscreenToolbar.getBoundingClientRect();
   const left = window.innerWidth - rect.width - 12;
 
-  setFullscreenToolbarPosition(left, 12);
+  setFullscreenToolbarPosition(left, 12, true);
 }
 
 function resetToolbarPositions() {
