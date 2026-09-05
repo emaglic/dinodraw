@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.54">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.64">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.54">
+    <link rel="stylesheet" href="./styles.css?v=0.8.64">
   </head>
   <body>
     <main class="app-shell">
@@ -111,11 +111,12 @@
         <button class="action-button" type="button" data-shape-settings aria-label="Shape settings" title="Shape settings">
           &#9881;
         </button>
-        <button class="action-button" type="button" data-shape-rotate-left aria-label="Rotate shape left" title="Rotate shape left">
-          &#8630;
-        </button>
-        <button class="action-button" type="button" data-shape-rotate-right aria-label="Rotate shape right" title="Rotate shape right">
-          &#8631;
+        <label class="rotation-field" aria-label="Shape rotation">
+          <input type="range" min="0" max="359" step="1" value="0" data-shape-rotation>
+          <output data-shape-rotation-output>0&deg;</output>
+        </label>
+        <button class="action-button proportional-toggle" type="button" data-shape-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+          <span class="aspect-ratio-icon" aria-hidden="true"></span>
         </button>
         <button class="action-button" type="button" data-shape-commit aria-label="Done with shape" title="Done">
           &#10003;
@@ -126,11 +127,12 @@
       </div>
 
       <div class="action-toolbar is-hidden" data-image-action-toolbar role="toolbar" aria-label="Image actions">
-        <button class="action-button" type="button" data-image-rotate-left aria-label="Rotate image left" title="Rotate image left">
-          &#8630;
-        </button>
-        <button class="action-button" type="button" data-image-rotate-right aria-label="Rotate image right" title="Rotate image right">
-          &#8631;
+        <label class="rotation-field" aria-label="Image rotation">
+          <input type="range" min="0" max="359" step="1" value="0" data-image-rotation>
+          <output data-image-rotation-output>0&deg;</output>
+        </label>
+        <button class="action-button proportional-toggle" type="button" data-image-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+          <span class="aspect-ratio-icon" aria-hidden="true"></span>
         </button>
         <button class="action-button" type="button" data-image-commit aria-label="Done with image" title="Done">
           &#10003;
@@ -141,11 +143,12 @@
       </div>
 
       <div class="action-toolbar is-hidden" data-lasso-action-toolbar role="toolbar" aria-label="Lasso selection actions">
-        <button class="action-button" type="button" data-lasso-rotate-left aria-label="Rotate selection left" title="Rotate selection left">
-          &#8630;
-        </button>
-        <button class="action-button" type="button" data-lasso-rotate-right aria-label="Rotate selection right" title="Rotate selection right">
-          &#8631;
+        <label class="rotation-field" aria-label="Selection rotation">
+          <input type="range" min="0" max="359" step="1" value="0" data-lasso-rotation>
+          <output data-lasso-rotation-output>0&deg;</output>
+        </label>
+        <button class="action-button proportional-toggle" type="button" data-lasso-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+          <span class="aspect-ratio-icon" aria-hidden="true"></span>
         </button>
         <button class="action-button" type="button" data-lasso-commit aria-label="Done with selection" title="Done">
           &#10003;
@@ -168,7 +171,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.54</div>
+      <div class="version-badge" aria-label="Version">v0.8.64</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -176,7 +179,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.54</small>
+          <small data-brand-version>v0.8.64</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -591,11 +594,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.54"></script>
+    <script src="./app.js?v=0.8.64"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.54", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.64", {
             updateViaCache: "none"
           }).catch(function () {});
         });

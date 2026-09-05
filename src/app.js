@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.54";
+const APP_VERSION = "v0.8.64";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -83,16 +83,31 @@ const shapeActionToolbar = document.querySelector("[data-shape-action-toolbar]")
 const imageActionToolbar = document.querySelector("[data-image-action-toolbar]");
 const lassoActionToolbar = document.querySelector("[data-lasso-action-toolbar]");
 const shapeSettingsButton = document.querySelector("[data-shape-settings]");
-const shapeRotateLeftButton = document.querySelector("[data-shape-rotate-left]");
-const shapeRotateRightButton = document.querySelector("[data-shape-rotate-right]");
+const shapeRotationInput = document.querySelector("[data-shape-rotation]");
+const shapeRotationOutput = document.querySelector(
+  "[data-shape-rotation-output]"
+);
+const shapeProportionalResizeButton = document.querySelector(
+  "[data-shape-proportional-resize]"
+);
 const shapeCommitButton = document.querySelector("[data-shape-commit]");
 const shapeDeleteButton = document.querySelector("[data-shape-delete]");
-const imageRotateLeftButton = document.querySelector("[data-image-rotate-left]");
-const imageRotateRightButton = document.querySelector("[data-image-rotate-right]");
+const imageRotationInput = document.querySelector("[data-image-rotation]");
+const imageRotationOutput = document.querySelector(
+  "[data-image-rotation-output]"
+);
+const imageProportionalResizeButton = document.querySelector(
+  "[data-image-proportional-resize]"
+);
 const imageCommitButton = document.querySelector("[data-image-commit]");
 const imageDeleteButton = document.querySelector("[data-image-delete]");
-const lassoRotateLeftButton = document.querySelector("[data-lasso-rotate-left]");
-const lassoRotateRightButton = document.querySelector("[data-lasso-rotate-right]");
+const lassoRotationInput = document.querySelector("[data-lasso-rotation]");
+const lassoRotationOutput = document.querySelector(
+  "[data-lasso-rotation-output]"
+);
+const lassoProportionalResizeButton = document.querySelector(
+  "[data-lasso-proportional-resize]"
+);
 const lassoCommitButton = document.querySelector("[data-lasso-commit]");
 const lassoDeleteButton = document.querySelector("[data-lasso-delete]");
 const undoToolbar = document.querySelector("[data-undo-toolbar]");
@@ -2020,31 +2035,156 @@ function getShapeBounds(shape) {
   return { left, top, width, height };
 }
 
-function getShapeHandle(shape) {
-  const bounds = getShapeBounds(shape);
+function normalizeRotation(rotation) {
+  const fullTurn = Math.PI * 2;
+  let normalized = rotation % fullTurn;
+
+  if (normalized < 0) {
+    normalized += fullTurn;
+  }
+
+  return normalized;
+}
+
+function degreesToRadians(degrees) {
+  return normalizeRotation((degrees * Math.PI) / 180);
+}
+
+function radiansToDisplayDegrees(rotation) {
+  return Math.round((normalizeRotation(rotation) * 180) / Math.PI) % 360;
+}
+
+function syncRotationInput(input, output, rotation) {
+  const degrees = radiansToDisplayDegrees(rotation || 0);
+
+  if (!input || document.activeElement === input) {
+    if (output) {
+      output.textContent = `${degrees}\u00b0`;
+    }
+    return;
+  }
+
+  input.value = String(degrees);
+
+  if (output) {
+    output.textContent = `${degrees}\u00b0`;
+  }
+}
+
+function syncRotationInputs() {
+  syncRotationInput(
+    shapeRotationInput,
+    shapeRotationOutput,
+    state.pendingShape ? state.pendingShape.rotation : 0
+  );
+  syncRotationInput(
+    imageRotationInput,
+    imageRotationOutput,
+    state.pendingImage ? state.pendingImage.rotation : 0
+  );
+  syncRotationInput(
+    lassoRotationInput,
+    lassoRotationOutput,
+    state.selection ? state.selection.rotation : 0
+  );
+}
+
+function syncProportionalResizeButton(button, isLocked) {
+  const label = isLocked
+    ? "Proportional resize locked"
+    : "Free resize unlocked";
+
+  if (!button) {
+    return;
+  }
+
+  button.setAttribute("aria-label", label);
+  button.setAttribute("aria-pressed", String(isLocked));
+  button.dataset.tooltip = label;
+}
+
+function syncProportionalResizeButtons() {
+  syncProportionalResizeButton(
+    shapeProportionalResizeButton,
+    !state.pendingShape || state.pendingShape.proportionalResize !== false
+  );
+  syncProportionalResizeButton(
+    imageProportionalResizeButton,
+    !state.pendingImage || state.pendingImage.proportionalResize !== false
+  );
+  syncProportionalResizeButton(
+    lassoProportionalResizeButton,
+    !state.selection || state.selection.proportionalResize !== false
+  );
+}
+
+function normalizeRotationInput(input, output, rotation) {
+  if (!input) {
+    return;
+  }
+
+  const degrees = radiansToDisplayDegrees(rotation || 0);
+
+  input.value = String(degrees);
+
+  if (output) {
+    output.textContent = `${degrees}\u00b0`;
+  }
+}
+
+function setRotationFromSlider(input, output, setter) {
+  const degrees = Number(input.value);
+
+  if (!isFinite(degrees)) {
+    return;
+  }
+
+  setter(degreesToRadians(degrees));
+
+  if (output) {
+    output.textContent = `${Math.round(degrees)}\u00b0`;
+  }
+}
+
+function setRotationSliderValueFromPointer(input, event) {
+  const rect = input.getBoundingClientRect();
+  const min = Number(input.min || 0);
+  const max = Number(input.max || 100);
+  const step = Number(input.step || 1);
+  const ratio = rect.width > 0
+    ? Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width))
+    : 0;
+  const rawValue = min + (max - min) * ratio;
+  const steppedValue = Math.round(rawValue / step) * step;
+
+  input.value = String(Math.min(max, Math.max(min, steppedValue)));
+}
+
+function getBoxCenter(box) {
+  return {
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+  };
+}
+
+function getBoxHandlePoint(box, point) {
+  return getRotatedPoint(point, getBoxCenter(box), box.rotation || 0);
+}
+
+function getResizeHandle(box) {
+  const point = getBoxHandlePoint(box, {
+    x: box.x + box.width,
+    y: box.y + box.height,
+  });
 
   return {
-    x: bounds.left + bounds.width,
-    y: bounds.top + bounds.height,
+    x: point.x,
+    y: point.y,
     size: 18,
   };
 }
 
-function drawPendingShapeOverlay() {
-  if (!state.pendingShape) {
-    return;
-  }
-
-  const bounds = getShapeBounds(state.pendingShape);
-  const handle = getShapeHandle(state.pendingShape);
-
-  drawShape(context, state.pendingShape);
-  context.save();
-  context.setLineDash([8, 6]);
-  context.strokeStyle = "#000000";
-  context.lineWidth = 2;
-  context.strokeRect(bounds.left, bounds.top, bounds.width, bounds.height);
-  context.setLineDash([]);
+function drawResizeHandle(handle) {
   context.fillStyle = "#ffffff";
   context.strokeStyle = "#000000";
   context.lineWidth = 2;
@@ -2060,32 +2200,141 @@ function drawPendingShapeOverlay() {
     handle.size,
     handle.size
   );
+}
+
+function drawBoxOverlay(box, hasResizeHandle) {
+  const center = getBoxCenter(box);
+  const resizeHandle = hasResizeHandle ? getResizeHandle(box) : null;
+
+  context.save();
+  context.translate(center.x, center.y);
+  context.rotate(box.rotation || 0);
+  context.setLineDash([8, 6]);
+  context.strokeStyle = "#000000";
+  context.lineWidth = 2;
+  context.strokeRect(-box.width / 2, -box.height / 2, box.width, box.height);
+  context.restore();
+
+  context.save();
+  if (resizeHandle) {
+    drawResizeHandle(resizeHandle);
+  }
   context.restore();
 }
 
-function getImageCenter(imageItem) {
+function isResizeHandleHit(point, box) {
+  const handle = getResizeHandle(box);
+
+  return getDistance(point, handle) <= handle.size;
+}
+
+function isRotatedBoxHit(point, box) {
+  const localPoint = getRotatedPoint(
+    point,
+    getBoxCenter(box),
+    -(box.rotation || 0)
+  );
+
+  return (
+    localPoint.x >= box.x &&
+    localPoint.x <= box.x + box.width &&
+    localPoint.y >= box.y &&
+    localPoint.y <= box.y + box.height
+  );
+}
+
+function getRotatedResizeMetrics(point, box) {
+  const rotation = box.rotation || 0;
+  const center = getBoxCenter(box);
+  const anchor = getRotatedPoint({ x: box.x, y: box.y }, center, rotation);
+  const axisX = { x: Math.cos(rotation), y: Math.sin(rotation) };
+  const axisY = { x: -Math.sin(rotation), y: Math.cos(rotation) };
+  const pointerDelta = {
+    x: point.x - anchor.x,
+    y: point.y - anchor.y,
+  };
+
   return {
-    x: imageItem.x + imageItem.width / 2,
-    y: imageItem.y + imageItem.height / 2,
+    anchor,
+    axisX,
+    axisY,
+    widthAlongAxis: pointerDelta.x * axisX.x + pointerDelta.y * axisX.y,
+    heightAlongAxis: pointerDelta.x * axisY.x + pointerDelta.y * axisY.y,
   };
 }
 
-function getImageHandle(imageItem) {
-  const center = getImageCenter(imageItem);
-  const handlePoint = getRotatedPoint(
-    {
-      x: imageItem.x + imageItem.width,
-      y: imageItem.y + imageItem.height,
-    },
-    center,
-    imageItem.rotation
-  );
+function getResizedBoxFromMetrics(metrics, width, height) {
+  const center = {
+    x:
+      metrics.anchor.x +
+      (metrics.axisX.x * width) / 2 +
+      (metrics.axisY.x * height) / 2,
+    y:
+      metrics.anchor.y +
+      (metrics.axisX.y * width) / 2 +
+      (metrics.axisY.y * height) / 2,
+  };
 
   return {
-    x: handlePoint.x,
-    y: handlePoint.y,
-    size: 18,
+    x: center.x - width / 2,
+    y: center.y - height / 2,
+    width,
+    height,
   };
+}
+
+function getProportionalRotatedResize(point, box) {
+  const metrics = getRotatedResizeMetrics(point, box);
+  const minSize = 24;
+  const minScale = Math.max(minSize / box.width, minSize / box.height);
+  const requestedScale = Math.max(
+    metrics.widthAlongAxis / box.width,
+    metrics.heightAlongAxis / box.height
+  );
+  const scale = Math.max(minScale, requestedScale);
+  const width = Math.round(box.width * scale);
+  const height = Math.round(box.height * scale);
+
+  return getResizedBoxFromMetrics(metrics, width, height);
+}
+
+function getFreeformRotatedResize(point, box) {
+  const metrics = getRotatedResizeMetrics(point, box);
+  const minSize = 12;
+  const width = Math.max(minSize, Math.round(metrics.widthAlongAxis));
+  const height = Math.max(minSize, Math.round(metrics.heightAlongAxis));
+
+  return getResizedBoxFromMetrics(metrics, width, height);
+}
+
+function getRotatedResize(point, box, isProportional) {
+  return isProportional
+    ? getProportionalRotatedResize(point, box)
+    : getFreeformRotatedResize(point, box);
+}
+
+function drawPendingShapeOverlay() {
+  if (!state.pendingShape) {
+    return;
+  }
+
+  const bounds = getShapeBounds(state.pendingShape);
+
+  drawShape(context, state.pendingShape);
+  drawBoxOverlay(
+    {
+      x: bounds.left,
+      y: bounds.top,
+      width: bounds.width,
+      height: bounds.height,
+      rotation: state.pendingShape.rotation,
+    },
+    true
+  );
+}
+
+function getImageCenter(imageItem) {
+  return getBoxCenter(imageItem);
 }
 
 function drawCanvasImage(targetContext, imageItem) {
@@ -2114,42 +2363,9 @@ function drawPendingImageOverlay() {
   }
 
   const imageItem = state.pendingImage;
-  const handle = getImageHandle(imageItem);
 
   drawCanvasImage(context, imageItem);
-  context.save();
-  context.translate(
-    imageItem.x + imageItem.width / 2,
-    imageItem.y + imageItem.height / 2
-  );
-  context.rotate(imageItem.rotation);
-  context.setLineDash([8, 6]);
-  context.strokeStyle = "#000000";
-  context.lineWidth = 2;
-  context.strokeRect(
-    -imageItem.width / 2,
-    -imageItem.height / 2,
-    imageItem.width,
-    imageItem.height
-  );
-  context.restore();
-  context.save();
-  context.fillStyle = "#ffffff";
-  context.strokeStyle = "#000000";
-  context.lineWidth = 2;
-  context.fillRect(
-    handle.x - handle.size / 2,
-    handle.y - handle.size / 2,
-    handle.size,
-    handle.size
-  );
-  context.strokeRect(
-    handle.x - handle.size / 2,
-    handle.y - handle.size / 2,
-    handle.size,
-    handle.size
-  );
-  context.restore();
+  drawBoxOverlay(imageItem, true);
 }
 
 function drawLassoPathOverlay() {
@@ -2172,30 +2388,43 @@ function drawLassoPathOverlay() {
   context.restore();
 }
 
+function drawSelectionContent(targetContext, selection, sourceCanvas) {
+  if (!sourceCanvas) {
+    return;
+  }
+
+  const center = getBoxCenter(selection);
+
+  targetContext.save();
+  targetContext.translate(center.x, center.y);
+  targetContext.rotate(selection.rotation || 0);
+  targetContext.drawImage(
+    sourceCanvas,
+    -selection.width / 2,
+    -selection.height / 2,
+    selection.width,
+    selection.height
+  );
+  targetContext.restore();
+}
+
 function drawSelectionOverlay() {
   if (!state.selection) {
     return;
   }
 
-  context.save();
-  if (state.selection.underCanvas) {
-    context.drawImage(
-      state.selection.underCanvas,
-      state.selection.x,
-      state.selection.y
-    );
-  }
-  context.drawImage(state.selection.canvas, state.selection.x, state.selection.y);
-  context.setLineDash([8, 6]);
-  context.strokeStyle = "#000000";
-  context.lineWidth = 2;
-  context.strokeRect(
-    state.selection.x,
-    state.selection.y,
-    state.selection.width,
-    state.selection.height
+  drawSelectionContent(context, state.selection, state.selection.underCanvas);
+  drawSelectionContent(context, state.selection, state.selection.canvas);
+  drawBoxOverlay(
+    {
+      x: state.selection.x,
+      y: state.selection.y,
+      width: state.selection.width,
+      height: state.selection.height,
+      rotation: state.selection.rotation,
+    },
+    true
   );
-  context.restore();
 }
 
 function renderWorkspace() {
@@ -2214,6 +2443,8 @@ function updateActionToolbar() {
   shapeActionToolbar.classList.toggle("is-hidden", !hasShape);
   imageActionToolbar.classList.toggle("is-hidden", !hasImage);
   lassoActionToolbar.classList.toggle("is-hidden", !hasSelection);
+  syncRotationInputs();
+  syncProportionalResizeButtons();
 }
 
 function updateToolbarVisibility() {
@@ -2770,6 +3001,7 @@ function createShape(startPoint, endPoint) {
     strokeWidth: shapeConfig.strokeWidth,
     fillEnabled: shapeConfig.fillEnabled,
     fillColor: shapeConfig.fillColor,
+    proportionalResize: true,
   };
 }
 
@@ -2779,6 +3011,35 @@ function getSnappedLineSize(width, height) {
   }
 
   return { width: 0, height };
+}
+
+function getShapeResizeBox(shape, point) {
+  const bounds = getShapeBounds(shape);
+  const box = {
+    x: bounds.left,
+    y: bounds.top,
+    width: bounds.width,
+    height: bounds.height,
+    rotation: shape.rotation,
+  };
+  const metrics = getRotatedResizeMetrics(point, box);
+
+  if (shape.type !== "line") {
+    return getRotatedResize(point, box, shape.proportionalResize !== false);
+  }
+
+  const lineSize = getSnappedLineSize(
+    metrics.widthAlongAxis,
+    metrics.heightAlongAxis
+  );
+  const width = lineSize.width === 0
+    ? 0
+    : Math.max(12, Math.round(Math.abs(lineSize.width)));
+  const height = lineSize.height === 0
+    ? 0
+    : Math.max(12, Math.round(Math.abs(lineSize.height)));
+
+  return getResizedBoxFromMetrics(metrics, width, height);
 }
 
 function commitPendingShape() {
@@ -2801,13 +3062,24 @@ function deletePendingShape() {
   renderWorkspace();
 }
 
-function rotatePendingShape(amount) {
+function setPendingShapeRotation(rotation) {
   if (!state.pendingShape) {
     return;
   }
 
-  state.pendingShape.rotation += amount;
+  state.pendingShape.rotation = normalizeRotation(rotation);
+  syncRotationInputs();
   renderWorkspace();
+}
+
+function togglePendingShapeProportionalResize() {
+  if (!state.pendingShape) {
+    return;
+  }
+
+  state.pendingShape.proportionalResize =
+    state.pendingShape.proportionalResize === false;
+  updateActionToolbar();
 }
 
 function getInitialImagePlacement(image) {
@@ -2845,6 +3117,7 @@ function addPendingImage(image) {
     width: placement.width,
     height: placement.height,
     rotation: 0,
+    proportionalResize: true,
   };
   state.imageInteraction = null;
   updateActionToolbar();
@@ -2872,13 +3145,24 @@ function deletePendingImage() {
   renderWorkspace();
 }
 
-function rotatePendingImage(amount) {
+function setPendingImageRotation(rotation) {
   if (!state.pendingImage) {
     return;
   }
 
-  state.pendingImage.rotation += amount;
+  state.pendingImage.rotation = normalizeRotation(rotation);
+  syncRotationInputs();
   renderWorkspace();
+}
+
+function togglePendingImageProportionalResize() {
+  if (!state.pendingImage) {
+    return;
+  }
+
+  state.pendingImage.proportionalResize =
+    state.pendingImage.proportionalResize === false;
+  updateActionToolbar();
 }
 
 function getImageHit(point) {
@@ -2887,61 +3171,25 @@ function getImageHit(point) {
   }
 
   const imageItem = state.pendingImage;
-  const center = getImageCenter(imageItem);
-  const localPoint = getRotatedPoint(point, center, -imageItem.rotation);
-  const handle = getImageHandle(imageItem);
-  const hitHandle = getDistance(point, handle) <= handle.size;
-  const hitBody =
-    localPoint.x >= imageItem.x &&
-    localPoint.x <= imageItem.x + imageItem.width &&
-    localPoint.y >= imageItem.y &&
-    localPoint.y <= imageItem.y + imageItem.height;
 
-  if (hitHandle) {
+  if (isResizeHandleHit(point, imageItem)) {
     return "resize";
   }
 
-  return hitBody ? "move" : null;
+  return isRotatedBoxHit(point, imageItem) ? "move" : null;
 }
 
 function resizePendingImageToPoint(point) {
-  const interaction = state.imageInteraction;
-  const startImage = interaction.startImage;
-  const rotation = startImage.rotation;
-  const startCenter = getImageCenter(startImage);
-  const anchor = getRotatedPoint(
-    { x: startImage.x, y: startImage.y },
-    startCenter,
-    rotation
+  const box = getRotatedResize(
+    point,
+    state.imageInteraction.startImage,
+    state.imageInteraction.startImage.proportionalResize !== false
   );
-  const axisX = { x: Math.cos(rotation), y: Math.sin(rotation) };
-  const axisY = { x: -Math.sin(rotation), y: Math.cos(rotation) };
-  const pointerDelta = {
-    x: point.x - anchor.x,
-    y: point.y - anchor.y,
-  };
-  const widthAlongAxis =
-    pointerDelta.x * axisX.x + pointerDelta.y * axisX.y;
-  const heightAlongAxis =
-    pointerDelta.x * axisY.x + pointerDelta.y * axisY.y;
-  const minSize = 24;
-  const minScale = Math.max(minSize / startImage.width, minSize / startImage.height);
-  const requestedScale = Math.max(
-    widthAlongAxis / startImage.width,
-    heightAlongAxis / startImage.height
-  );
-  const scale = Math.max(minScale, requestedScale);
-  const width = Math.round(startImage.width * scale);
-  const height = Math.round(startImage.height * scale);
-  const center = {
-    x: anchor.x + axisX.x * width / 2 + axisY.x * height / 2,
-    y: anchor.y + axisX.y * width / 2 + axisY.y * height / 2,
-  };
 
-  state.pendingImage.x = center.x - width / 2;
-  state.pendingImage.y = center.y - height / 2;
-  state.pendingImage.width = width;
-  state.pendingImage.height = height;
+  state.pendingImage.x = box.x;
+  state.pendingImage.y = box.y;
+  state.pendingImage.width = box.width;
+  state.pendingImage.height = box.height;
 }
 
 function startImage(event) {
@@ -3010,18 +3258,15 @@ function getShapeHit(point) {
   }
 
   const bounds = getShapeBounds(state.pendingShape);
-  const handle = getShapeHandle(state.pendingShape);
-  const handleRadius = handle.size;
-  const hitHandle =
-    Math.abs(point.x - handle.x) <= handleRadius &&
-    Math.abs(point.y - handle.y) <= handleRadius;
-  const hitBody =
-    point.x >= bounds.left &&
-    point.x <= bounds.left + bounds.width &&
-    point.y >= bounds.top &&
-    point.y <= bounds.top + bounds.height;
+  const box = {
+    x: bounds.left,
+    y: bounds.top,
+    width: bounds.width,
+    height: bounds.height,
+    rotation: state.pendingShape.rotation,
+  };
 
-  if (hitHandle) {
+  if (isResizeHandleHit(point, box)) {
     return "resize";
   }
 
@@ -3029,7 +3274,7 @@ function getShapeHit(point) {
     return getLineHit(point, state.pendingShape) ? "move" : null;
   }
 
-  return hitBody ? "move" : null;
+  return isRotatedBoxHit(point, box) ? "move" : null;
 }
 
 function getRotatedPoint(point, center, rotation) {
@@ -3133,6 +3378,13 @@ function continueShape(event) {
   if (state.shapeInteraction.mode === "move") {
     state.pendingShape.x = startShape.x + deltaX;
     state.pendingShape.y = startShape.y + deltaY;
+  } else if (state.shapeInteraction.mode === "resize") {
+    const box = getShapeResizeBox(startShape, point);
+
+    state.pendingShape.x = box.x;
+    state.pendingShape.y = box.y;
+    state.pendingShape.width = box.width;
+    state.pendingShape.height = box.height;
   } else {
     const width = startShape.width + deltaX;
     const height = startShape.height + deltaY;
@@ -3265,6 +3517,8 @@ function finalizeLassoSelection() {
     y: bounds.y,
     width: bounds.width,
     height: bounds.height,
+    rotation: 0,
+    proportionalResize: true,
     beforeSnapshot,
   };
   state.lassoPath = [];
@@ -3279,17 +3533,15 @@ function commitSelection() {
 
   const didMoveSelection = Boolean(state.selection.beforeSnapshot);
 
-  if (state.selection.underCanvas) {
-    getActivePage().underContext.drawImage(
-      state.selection.underCanvas,
-      state.selection.x,
-      state.selection.y
-    );
-  }
-  getActivePage().context.drawImage(
-    state.selection.canvas,
-    state.selection.x,
-    state.selection.y
+  drawSelectionContent(
+    getActivePage().underContext,
+    state.selection,
+    state.selection.underCanvas
+  );
+  drawSelectionContent(
+    getActivePage().context,
+    state.selection,
+    state.selection.canvas
   );
   state.selection = null;
   state.selectionInteraction = null;
@@ -3312,71 +3564,71 @@ function deleteSelection() {
   renderWorkspace();
 }
 
-function rotateSelection(amount) {
+function setSelectionRotation(rotation) {
   if (!state.selection) {
     return;
   }
 
-  const source = state.selection.canvas;
-  const underSource = state.selection.underCanvas;
-  const sin = Math.abs(Math.sin(amount));
-  const cos = Math.abs(Math.cos(amount));
-  const width = Math.ceil(source.width * cos + source.height * sin);
-  const height = Math.ceil(source.width * sin + source.height * cos);
-  const rotatedCanvas = document.createElement("canvas");
-  const rotatedContext = rotatedCanvas.getContext("2d");
-  const rotatedUnderCanvas = document.createElement("canvas");
-  const rotatedUnderContext = rotatedUnderCanvas.getContext("2d");
-
-  rotatedCanvas.width = width;
-  rotatedCanvas.height = height;
-  rotatedUnderCanvas.width = width;
-  rotatedUnderCanvas.height = height;
-  if (underSource) {
-    rotatedUnderContext.translate(width / 2, height / 2);
-    rotatedUnderContext.rotate(amount);
-    rotatedUnderContext.drawImage(
-      underSource,
-      -underSource.width / 2,
-      -underSource.height / 2
-    );
-  }
-  rotatedContext.translate(width / 2, height / 2);
-  rotatedContext.rotate(amount);
-  rotatedContext.drawImage(source, -source.width / 2, -source.height / 2);
-
-  state.selection.x += (state.selection.width - width) / 2;
-  state.selection.y += (state.selection.height - height) / 2;
-  state.selection.width = width;
-  state.selection.height = height;
-  state.selection.underCanvas = rotatedUnderCanvas;
-  state.selection.canvas = rotatedCanvas;
+  state.selection.rotation = normalizeRotation(rotation);
+  syncRotationInputs();
   updateActionToolbar();
   renderWorkspace();
 }
 
-function getSelectionHit(point) {
+function toggleSelectionProportionalResize() {
   if (!state.selection) {
-    return false;
+    return;
   }
 
-  return (
-    point.x >= state.selection.x &&
-    point.x <= state.selection.x + state.selection.width &&
-    point.y >= state.selection.y &&
-    point.y <= state.selection.y + state.selection.height
+  state.selection.proportionalResize =
+    state.selection.proportionalResize === false;
+  updateActionToolbar();
+}
+
+function resizeSelectionToPoint(point) {
+  const box = getRotatedResize(
+    point,
+    state.selectionInteraction.startSelection,
+    state.selectionInteraction.startSelection.proportionalResize !== false
   );
+
+  state.selection.x = box.x;
+  state.selection.y = box.y;
+  state.selection.width = box.width;
+  state.selection.height = box.height;
+}
+
+function getSelectionHit(point) {
+  if (!state.selection) {
+    return null;
+  }
+
+  const box = {
+    x: state.selection.x,
+    y: state.selection.y,
+    width: state.selection.width,
+    height: state.selection.height,
+    rotation: state.selection.rotation,
+  };
+
+  if (isResizeHandleHit(point, box)) {
+    return "resize";
+  }
+
+  return isRotatedBoxHit(point, box) ? "move" : null;
 }
 
 function startLasso(event) {
   const point = getPoint(event);
+  const hit = getSelectionHit(point);
 
   if (event.cancelable) {
     event.preventDefault();
   }
 
-  if (getSelectionHit(point)) {
+  if (hit) {
     state.selectionInteraction = {
+      mode: hit,
       startPoint: point,
       startSelection: { ...state.selection },
     };
@@ -3399,14 +3651,18 @@ function continueLasso(event) {
   }
 
   if (state.selectionInteraction && state.selection) {
-    state.selection.x =
-      state.selectionInteraction.startSelection.x +
-      point.x -
-      state.selectionInteraction.startPoint.x;
-    state.selection.y =
-      state.selectionInteraction.startSelection.y +
-      point.y -
-      state.selectionInteraction.startPoint.y;
+    if (state.selectionInteraction.mode === "resize") {
+      resizeSelectionToPoint(point);
+    } else {
+      state.selection.x =
+        state.selectionInteraction.startSelection.x +
+        point.x -
+        state.selectionInteraction.startPoint.x;
+      state.selection.y =
+        state.selectionInteraction.startSelection.y +
+        point.y -
+        state.selectionInteraction.startPoint.y;
+    }
     renderWorkspace();
     return;
   }
@@ -5448,6 +5704,98 @@ function addToolButtonInteractions(button) {
   });
 }
 
+function addRotationInputInteractions(input, output, getRotation, setRotation) {
+  let isDragging = false;
+  const update = () => setRotationFromSlider(input, output, setRotation);
+  const endDrag = (event, shouldUpdateFromPointer) => {
+    if (!isDragging) {
+      return;
+    }
+
+    isDragging = false;
+
+    if (input.hasPointerCapture && input.hasPointerCapture(event.pointerId)) {
+      input.releasePointerCapture(event.pointerId);
+    }
+
+    if (shouldUpdateFromPointer) {
+      setRotationSliderValueFromPointer(input, event);
+      update();
+    }
+
+    normalizeRotationInput(input, output, getRotation());
+  };
+
+  input.addEventListener("input", update);
+  input.addEventListener("change", update);
+  input.addEventListener("pointerdown", (event) => {
+    event.stopPropagation();
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+    hideToolbarTooltip();
+
+    if (input.setPointerCapture) {
+      input.setPointerCapture(event.pointerId);
+    }
+
+    isDragging = true;
+    setRotationSliderValueFromPointer(input, event);
+    update();
+  });
+  input.addEventListener("pointermove", (event) => {
+    if (!isDragging) {
+      return;
+    }
+
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+
+    setRotationSliderValueFromPointer(input, event);
+    update();
+  });
+  input.addEventListener("pointerup", (event) => {
+    endDrag(event, true);
+  });
+  input.addEventListener("pointercancel", (event) => {
+    endDrag(event, false);
+  });
+  input.addEventListener("blur", () =>
+    normalizeRotationInput(input, output, getRotation())
+  );
+}
+
+function addProportionalResizeToggleInteraction(button, toggle) {
+  let handledPointerToggle = false;
+
+  button.addEventListener("pointerup", (event) => {
+    if (button.disabled) {
+      return;
+    }
+
+    handledPointerToggle = true;
+    window.setTimeout(() => {
+      handledPointerToggle = false;
+    }, 0);
+    event.preventDefault();
+    event.stopPropagation();
+    hideToolbarTooltip();
+    toggle();
+  }, true);
+  button.addEventListener("click", (event) => {
+    if (handledPointerToggle) {
+      handledPointerToggle = false;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
+    hideToolbarTooltip();
+    toggle();
+  });
+}
+
 async function initializeApp() {
   ensureVersionBadge();
   restorePresets();
@@ -5501,6 +5849,24 @@ async function initializeApp() {
 toolButtons.forEach(addToolButtonInteractions);
 
 presetButtons.forEach(addPresetButtonInteractions);
+addRotationInputInteractions(
+  shapeRotationInput,
+  shapeRotationOutput,
+  () => (state.pendingShape ? state.pendingShape.rotation : 0),
+  setPendingShapeRotation
+);
+addRotationInputInteractions(
+  imageRotationInput,
+  imageRotationOutput,
+  () => (state.pendingImage ? state.pendingImage.rotation : 0),
+  setPendingImageRotation
+);
+addRotationInputInteractions(
+  lassoRotationInput,
+  lassoRotationOutput,
+  () => (state.selection ? state.selection.rotation : 0),
+  setSelectionRotation
+);
 openSettingsButton.addEventListener("click", openSettings);
 addImageButton.addEventListener("click", openAddImageDialog);
 resetToolbarsButton.addEventListener("click", resetToolbarPositions);
@@ -5652,27 +6018,21 @@ redoButton.addEventListener("click", redo);
 toolbarVisibilityButton.addEventListener("click", toggleToolbarVisibility);
 fullscreenButton.addEventListener("click", toggleFullscreen);
 shapeSettingsButton.addEventListener("click", openShapeSettings);
-shapeRotateLeftButton.addEventListener("click", () =>
-  rotatePendingShape(-Math.PI / 12)
-);
-shapeRotateRightButton.addEventListener("click", () =>
-  rotatePendingShape(Math.PI / 12)
+addProportionalResizeToggleInteraction(
+  shapeProportionalResizeButton,
+  togglePendingShapeProportionalResize
 );
 shapeCommitButton.addEventListener("click", commitPendingShape);
 shapeDeleteButton.addEventListener("click", deletePendingShape);
-imageRotateLeftButton.addEventListener("click", () =>
-  rotatePendingImage(-Math.PI / 12)
-);
-imageRotateRightButton.addEventListener("click", () =>
-  rotatePendingImage(Math.PI / 12)
+addProportionalResizeToggleInteraction(
+  imageProportionalResizeButton,
+  togglePendingImageProportionalResize
 );
 imageCommitButton.addEventListener("click", commitPendingImage);
 imageDeleteButton.addEventListener("click", deletePendingImage);
-lassoRotateLeftButton.addEventListener("click", () =>
-  rotateSelection(-Math.PI / 12)
-);
-lassoRotateRightButton.addEventListener("click", () =>
-  rotateSelection(Math.PI / 12)
+addProportionalResizeToggleInteraction(
+  lassoProportionalResizeButton,
+  toggleSelectionProportionalResize
 );
 lassoCommitButton.addEventListener("click", commitSelection);
 lassoDeleteButton.addEventListener("click", deleteSelection);

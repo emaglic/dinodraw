@@ -63,3 +63,15 @@ Implications:
 - Ingest durable conclusions from `temp/` into the wiki when useful.
 - Write files into `output/` only when the user explicitly asks for a generated artifact.
 - If generated output contains durable project knowledge, summarize the durable parts into the wiki.
+
+## Revisit Material Symbols For Toolbar Icons
+
+Decision: Revisit replacing the current hand-built/Unicode toolbar icons with Google's Material Symbols.
+
+Rationale: Material Symbols would let the user choose icon names from the Google icons page and have agents map those names directly into Dino Draw controls.
+
+Implementation notes:
+
+- Prefer a local/self-hosted package such as `material-symbols` or `@material-symbols/font-400` so icon rendering continues to work offline.
+- Keep the first pass focused on toolbar icons and temporary action-toolbar controls.
+- Avoid changing tool behavior while swapping icons.

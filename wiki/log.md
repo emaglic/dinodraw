@@ -79,6 +79,12 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Darkened and widened the intro-card diagonal texture so it remains visible on BOOX/e-ink rendering.
 
+## [2026-09-04] decision | Revisit Material Symbols Icons
+
+- Recorded a future direction to replace hand-built/Unicode toolbar icons with Google Material Symbols.
+- Noted that the user can provide icon names from the Google icons page for agents to map into controls.
+- Captured the preference for a local/self-hosted package so Dino Draw remains offline-friendly.
+
 ## [2026-09-04] polish | Shortened Intro Copy And Defaulted Touch On
 
 - Shortened the Documents intro card to a single sentence.

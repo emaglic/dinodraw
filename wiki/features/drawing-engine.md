@@ -93,7 +93,9 @@ Implementation notes:
 - Switching away from shape mode commits a pending shape.
 - Rectangles, ellipses, triangles, and lines share `drawShapePath()`.
 - Lines snap to horizontal or vertical while being created/resized based on dominant pointer movement.
-- Shape rotations use 15-degree increments from the action toolbar.
+- Pending shapes can be resized from the corner handle, rotated with the 0-359 degree slider, and switched between proportional and freeform resizing.
+- Rotated shape resizing uses the visible handle and opposite visual corner, matching image and lasso selection resizing.
+- The action toolbar displays the current normalized degree value beside the slider.
 
 ## Images
 
@@ -104,9 +106,19 @@ Implementation notes:
 - Add Image opens a modal with device file import and clipboard import.
 - Clipboard import uses browser clipboard image access when available and can show a small preview.
 - New images start centered and fit within 50% of the canvas width and 50% of the canvas height without upscaling.
-- Pending images can be moved, proportionally resized from the corner handle, rotated in 15-degree increments, confirmed, or deleted.
+- Pending images can be moved, resized from the corner handle, rotated with the 0-359 degree slider, and switched between proportional and freeform resizing.
 - Clicking outside a pending image commits it to the page.
 - After commit, images are baked into the canvas pixels and can be manipulated later with lasso selection.
+
+## Lasso Selection Rotation
+
+Floating lasso selections can be moved, resized from the corner handle, switched between proportional and freeform resizing, or rotated before commit.
+
+Implementation notes:
+
+- Lasso rotation is stored as a live `rotation` value on the floating selection.
+- The selected rasters are rendered rotated for preview and baked into the page layers only on commit.
+- The action toolbar displays the current normalized degree value beside the 0-359 degree slider.
 
 ## History
 

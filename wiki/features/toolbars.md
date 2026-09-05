@@ -55,6 +55,8 @@ When hiding toolbars, fade out:
 - lasso action toolbar
 - image action toolbar
 
+Shape, image, and lasso action toolbars include a 0-359 degree rotation slider with a compact degree readout plus a proportional resize lock toggle.
+
 Hiding should not change the selected tool. Showing toolbars again should only show the brush preset toolbar when the draw tool is selected.
 
 ## Reset Behavior
