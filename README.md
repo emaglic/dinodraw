@@ -78,7 +78,7 @@ For the best offline experience, use Dino Draw from an HTTPS site or from localh
 - Drag the top grip on the pull-tab to move the hide/show button around the screen edges.
 - Dragging a toolbar to the top or bottom edge makes it horizontal.
 - Dragging a toolbar to the left or right edge makes it vertical.
-- If toolbar positions become inconvenient, use `Reset Toolbars` in Settings.
+- If toolbar positions become inconvenient, use `Reset Toolbar Positions` in Settings.
 - Press and hold toolbar buttons briefly to show tooltips.
 
 ## Privacy

@@ -128,3 +128,19 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Preserved right/left/top/bottom distances for toolbars placed near viewport edges across orientation changes.
 - Preserved center ratios for toolbars placed away from edges while still clamping all toolbar positions on screen.
 - Kept legacy `{ left, top, orientation }` saved toolbar positions restorable and migrated on next save.
+
+## [2026-09-05] feature | Added Toolbar Visibility Settings
+
+- Added Settings checkboxes for Main toolbar, Brush presets, Undo and redo, and Fullscreen toolbar visibility.
+- Kept Main toolbar permanently enabled because it provides Settings access.
+- Changed the edge show/hide tab to affect only enabled regular toolbars.
+- Kept temporary shape, image, and lasso action toolbars outside the setting and controlled by their active workflow.
+
+## [2026-09-05] polish | Moved Toolbar Position Reset
+
+- Moved the toolbar position reset button into the Settings Toolbars section.
+- Renamed the button to `Reset Toolbar Positions` to clarify it does not change toolbar visibility settings.
+
+## [2026-09-05] polish | Clarified Touch Drawing Setting
+
+- Added short helper text under the Touch drawing checkbox explaining that pen users may turn it off to prevent palm input from drawing.

@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.70";
+const APP_VERSION = "v0.8.74";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -43,6 +43,9 @@ const appDialogCancelButtons = Array.from(
 const openSettingsButton = document.querySelector("[data-open-settings]");
 const addImageButton = document.querySelector("[data-add-image]");
 const resetToolbarsButton = document.querySelector("[data-reset-toolbars]");
+const toolbarVisibilityInputs = Array.from(
+  document.querySelectorAll("[data-toolbar-visibility]")
+);
 const documentScreen = document.querySelector("[data-document-screen]");
 const documentSubtitle = document.querySelector("[data-document-subtitle]");
 const documentList = document.querySelector("[data-document-list]");
@@ -220,6 +223,12 @@ const state = {
   documentIntroDismissed: false,
   globalSettings: {
     touchDrawingEnabled: true,
+    toolbarVisibility: {
+      main: true,
+      presets: true,
+      undo: true,
+      fullscreen: true,
+    },
   },
 };
 
@@ -1838,18 +1847,40 @@ function normalizeGlobalSettings(settings = {}) {
     settings,
     "touchDrawingEnabled"
   );
+  const toolbarVisibility = settings.toolbarVisibility || {};
 
   return {
     touchDrawingEnabled: hasTouchDrawingSetting
       ? Boolean(settings.touchDrawingEnabled)
       : true,
+    toolbarVisibility: {
+      main: true,
+      presets: toolbarVisibility.presets !== false,
+      undo: toolbarVisibility.undo !== false,
+      fullscreen: toolbarVisibility.fullscreen !== false,
+    },
   };
+}
+
+function isRegularToolbarEnabled(key) {
+  if (key === "main") {
+    return true;
+  }
+
+  return Boolean(state.globalSettings.toolbarVisibility[key]);
 }
 
 function syncGlobalSettingsControls() {
   if (touchDrawingInput) {
     touchDrawingInput.checked = Boolean(state.globalSettings.touchDrawingEnabled);
   }
+
+  toolbarVisibilityInputs.forEach((input) => {
+    const key = input.dataset.toolbarVisibility;
+
+    input.checked = isRegularToolbarEnabled(key);
+    input.disabled = key === "main";
+  });
 
   if (documentIntro) {
     documentIntro.classList.toggle(
@@ -1899,6 +1930,7 @@ function updateGlobalSettings(settings = {}) {
   });
   saveGlobalSettings();
   syncGlobalSettingsControls();
+  updateToolbarVisibility();
 }
 
 function presetsMatch(preset, comparison) {
@@ -2591,8 +2623,24 @@ function updateActionToolbar() {
 
 function updateToolbarVisibility() {
   const label = state.toolbarsHidden ? "Show toolbars" : "Hide toolbars";
+  const showEnabledToolbars = !state.toolbarsHidden;
 
   appShell.classList.toggle("are-toolbars-hidden", state.toolbarsHidden);
+  toolbar.classList.toggle("is-disabled-by-settings", false);
+  presetToolbar.classList.toggle(
+    "is-hidden",
+    state.tool !== "draw" ||
+      !showEnabledToolbars ||
+      !isRegularToolbarEnabled("presets")
+  );
+  undoToolbar.classList.toggle(
+    "is-disabled-by-settings",
+    !showEnabledToolbars || !isRegularToolbarEnabled("undo")
+  );
+  fullscreenToolbar.classList.toggle(
+    "is-disabled-by-settings",
+    !showEnabledToolbars || !isRegularToolbarEnabled("fullscreen")
+  );
   toolbarVisibilityButton.setAttribute("aria-label", label);
   toolbarVisibilityButton.dataset.tooltip = label;
   toolbarVisibilityButton.setAttribute(
@@ -2986,7 +3034,6 @@ function setTool(tool) {
 
   state.tool = tool;
   state.strokeTool = tool;
-  presetToolbar.classList.toggle("is-hidden", tool !== "draw");
   updateToolbarVisibility();
 
   if (tool === "draw") {
@@ -5664,7 +5711,7 @@ function restoreToolbarPosition() {
   applyToolbarOrientation(toolbar, position.orientation);
   const responsivePosition = getResponsiveToolbarPosition(position, toolbar);
 
-  setToolbarPosition(responsivePosition.left, responsivePosition.top, true);
+  setToolbarPosition(responsivePosition.left, responsivePosition.top);
   return true;
 }
 
@@ -5762,8 +5809,7 @@ function restorePresetToolbarPosition() {
 
   setPresetToolbarPosition(
     responsivePosition.left,
-    responsivePosition.top,
-    true
+    responsivePosition.top
   );
   return true;
 }
@@ -5859,8 +5905,7 @@ function restoreUndoToolbarPosition() {
 
   setUndoToolbarPosition(
     responsivePosition.left,
-    responsivePosition.top,
-    true
+    responsivePosition.top
   );
   return true;
 }
@@ -5955,8 +6000,7 @@ function restoreFullscreenToolbarPosition() {
 
   setFullscreenToolbarPosition(
     responsivePosition.left,
-    responsivePosition.top,
-    true
+    responsivePosition.top
   );
   return true;
 }
@@ -6732,6 +6776,28 @@ if (touchDrawingInput) {
     );
   });
 }
+toolbarVisibilityInputs.forEach((input) => {
+  input.addEventListener("change", () => {
+    const key = input.dataset.toolbarVisibility;
+
+    if (key === "main") {
+      input.checked = true;
+      return;
+    }
+
+    updateGlobalSettings({
+      toolbarVisibility: {
+        ...state.globalSettings.toolbarVisibility,
+        [key]: input.checked,
+      },
+    });
+    if (input.checked) {
+      reclampPresetToolbarPosition();
+      reclampUndoToolbarPosition();
+      reclampFullscreenToolbarPosition();
+    }
+  });
+});
 dragHandle.addEventListener("pointerdown", startToolbarDrag);
 presetDragHandle.addEventListener("pointerdown", startPresetToolbarDrag);
 undoDragHandle.addEventListener("pointerdown", startUndoToolbarDrag);

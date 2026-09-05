@@ -153,7 +153,6 @@ button {
 
 .app-shell.are-toolbars-hidden .toolbar,
 .app-shell.are-toolbars-hidden .preset-toolbar,
-.app-shell.are-toolbars-hidden .action-toolbar,
 .app-shell.are-toolbars-hidden .undo-toolbar,
 .app-shell.are-toolbars-hidden .fullscreen-toolbar {
   visibility: hidden;
@@ -162,6 +161,15 @@ button {
   transition:
     opacity 120ms ease,
     visibility 0s linear 120ms;
+}
+
+.toolbar.is-disabled-by-settings,
+.preset-toolbar.is-disabled-by-settings,
+.undo-toolbar.is-disabled-by-settings,
+.fullscreen-toolbar.is-disabled-by-settings {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .toolbar {
@@ -939,6 +947,14 @@ button {
 
 .reset-button {
   width: 100%;
+}
+
+.settings-help-text {
+  margin: -2px 0 0;
+  color: #333333;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
 }
 
 .document-list {

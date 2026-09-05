@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.70">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.74">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.70">
+    <link rel="stylesheet" href="./styles.css?v=0.8.74">
   </head>
   <body>
     <main class="app-shell">
@@ -171,7 +171,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.70</div>
+      <div class="version-badge" aria-label="Version">v0.8.74</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -179,7 +179,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.70</small>
+          <small data-brand-version>v0.8.74</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -277,7 +277,7 @@
             <h2 id="guide-device-title">Device Settings</h2>
             <ul>
               <li>Touch drawing is on by default so finger-only devices can draw right away.</li>
-              <li>Turn Touch drawing off from Settings when using a pen-first tablet to reduce palm marks.</li>
+              <li>Turn Touch drawing off from Settings when using a pen-first tablet to prevent palm input from drawing.</li>
               <li>Touch drawing is saved on this device, not inside each document.</li>
               <li>Pen erasers, secondary buttons, and supported pen side buttons temporarily erase while drawing.</li>
             </ul>
@@ -298,8 +298,9 @@
             <ul>
               <li>Drag a toolbar handle to move a toolbar.</li>
               <li>Move a toolbar near an edge to change its orientation.</li>
-              <li>Use the tab at the screen edge to hide or show toolbars.</li>
-              <li>Reset Toolbars restores the default toolbar positions.</li>
+              <li>Use the tab at the screen edge to hide or show enabled toolbars.</li>
+              <li>Settings controls which optional toolbars are enabled.</li>
+              <li>Reset Toolbar Positions restores the default toolbar positions.</li>
             </ul>
           </section>
         </div>
@@ -417,6 +418,28 @@
             <input type="checkbox" data-touch-drawing-enabled>
             <span>Touch drawing</span>
           </label>
+          <p class="settings-help-text">Turn this off when using a pen to prevent your palm from being treated as drawing input.</p>
+        </section>
+
+        <section class="settings-section" aria-labelledby="toolbar-settings-title">
+          <h2 id="toolbar-settings-title">Toolbars</h2>
+          <label class="toggle-row">
+            <input type="checkbox" data-toolbar-visibility="main" checked disabled>
+            <span>Main toolbar</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" data-toolbar-visibility="presets" checked>
+            <span>Brush presets</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" data-toolbar-visibility="undo" checked>
+            <span>Undo and redo</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" data-toolbar-visibility="fullscreen" checked>
+            <span>Fullscreen</span>
+          </label>
+          <button class="document-button reset-button" type="button" data-reset-toolbars>Reset Toolbar Positions</button>
         </section>
 
         <section class="settings-section" aria-labelledby="document-settings-title">
@@ -427,11 +450,6 @@
             <button class="document-button" type="button" data-export-png-zip>Save PNG</button>
             <button class="document-button" type="button" data-export-pdf>Save PDF</button>
           </div>
-        </section>
-
-        <section class="settings-section" aria-labelledby="reset-settings-title">
-          <h2 id="reset-settings-title">Reset</h2>
-          <button class="document-button reset-button" type="button" data-reset-toolbars>Reset Toolbars</button>
         </section>
       </form>
     </dialog>
@@ -594,11 +612,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.70"></script>
+    <script src="./app.js?v=0.8.74"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.70", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.74", {
             updateViaCache: "none"
           }).catch(function () {});
         });

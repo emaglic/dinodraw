@@ -11,6 +11,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Dragging to top or bottom edge should use horizontal orientation.
 - Dragging to left or right edge should use vertical orientation.
 - Saved localStorage key: `mainToolbarPosition`.
+- Main toolbar visibility is always enabled because it provides access to Settings.
 
 ## Brush Preset Toolbar
 
@@ -34,6 +35,14 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Has a drag handle and fullscreen toggle button.
 - It may use the same icon in enter and exit states if a clear matching exit icon is unavailable.
 - Saved localStorage key: `fullscreenToolbarPosition`.
+
+## Toolbar Visibility Settings
+
+- Settings includes toolbar visibility checkboxes for Main toolbar, Brush presets, Undo and redo, and Fullscreen.
+- Main toolbar is checked and disabled so it cannot be hidden from the enabled-toolbar set.
+- Optional regular toolbar visibility is stored in global localStorage settings, not inside each document.
+- The edge show/hide tab hides or shows only the regular toolbars enabled in Settings.
+- Temporary action toolbars for shape, image, and lasso are not listed and remain controlled by their active tool state.
 
 ## Hide/Show Toolbars Tab
 
@@ -59,9 +68,9 @@ Shape, image, and lasso action toolbars include a 0-359 degree rotation slider w
 
 Hiding should not change the selected tool. Showing toolbars again should only show the brush preset toolbar when the draw tool is selected.
 
-## Reset Behavior
+## Reset Position Behavior
 
-The Settings modal includes `Reset Toolbars`. This resets toolbar positions only. It must not reset brush presets or other user settings.
+The Settings modal Toolbars section includes `Reset Toolbar Positions`. This resets toolbar positions only. It must not reset toolbar visibility, brush presets, or other user settings.
 
 Current reset removes:
 
@@ -72,7 +81,7 @@ Current reset removes:
 - `toolbarVisibilityTabPosition`
 - legacy `presetToolbarPositionBottomRight`
 
-Then it reapplies defaults for all toolbars and the hide/show tab.
+Then it reapplies default positions for all toolbars and the hide/show tab.
 
 ## Tooltips
 
@@ -97,4 +106,4 @@ The four regular toolbars share similar drag behavior:
 - preserve center-axis ratio for toolbars placed away from edges
 - reclamp positions on window resize so toolbars remain on screen
 
-The hide/show tab uses a separate edge/offset model instead of free `{ left, top }` positioning.
+The hide/show tab uses a separate edge/offset model instead of free `{ left, top }` positioning and is not affected by toolbar visibility settings.
