@@ -6,7 +6,7 @@ The drawing engine lives mostly in `src/app.js`, with canvas markup in `src/inde
 
 - Canvas pixel ratio is intentionally kept at `1` for e-ink performance.
 - The main canvas context uses performance-oriented options where supported, including `alpha: false` and `desynchronized: true`.
-- Input prefers `pointerrawupdate` when available, with `pointermove` as fallback.
+- Input uses `pointermove`; `pointerrawupdate` can deliver too many events for e-ink browser rendering after BOOX/browser updates.
 - Drawing latency on BOOX is more important than decorative rendering.
 - The main visible canvas is a composited display surface. Per-page drawing data lives on offscreen page canvases.
 
@@ -35,6 +35,7 @@ New pages should default to the active/previous page background.
 - `renderPage()` draws a black viewport background outside the page, applies the active page viewport transform, draws the active page background at native page size, then draws `underLayer`, then draws `layer`.
 - `renderWorkspace()` draws the committed page plus temporary overlays for selection, pending shape, and lasso path.
 - `drawPageThumbnail()` and export flattening use the same background, `underLayer`, `layer` order.
+- Draw Behind strokes commit to `underLayer` immediately, but their live preview rebuilds only the stroke's dirty rectangle in final render order. Avoid full-page `renderPage()` calls for every pen segment.
 
 ## Viewport, Panning, And Zoom
 
@@ -68,6 +69,8 @@ Current defaults:
 ## Draw Behind
 
 Draw Behind uses `underLayer`, allowing highlighter-style marks to sit below normal handwriting. Exports, thumbnails, lasso behavior, and eraser behavior must include this layer.
+
+Live Draw Behind rendering should stay region-based while the pointer is moving. Full-page recomposition is acceptable at the end of the stroke, but doing it on every pointer segment can freeze BOOX/e-ink browsers.
 
 ## Eraser
 
@@ -152,6 +155,8 @@ Current code ignores non-primary pointers for drawing, shape, and lasso starts. 
 - Draw and erase tools use stroke handling.
 - Shape and lasso tools require primary left-button style input.
 - Pointer capture is used during active drawing/shape/lasso actions.
+- Stroke handling caches the canvas bounds for the duration of a stroke so coalesced events do not repeatedly read layout.
+- Very small stroke movements are skipped to avoid processing dense pointer samples that do not visibly change the line.
 - Right/secondary button, pen eraser button codes, and pen barrel/auxiliary button codes are interpreted as temporary erasing via `getStrokeTool()`.
 
 ## Page Key Navigation

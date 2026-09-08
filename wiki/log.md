@@ -144,3 +144,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 ## [2026-09-05] polish | Clarified Touch Drawing Setting
 
 - Added short helper text under the Touch drawing checkbox explaining that pen users may turn it off to prevent palm input from drawing.
+
+## [2026-09-08] perf | Reduced BOOX Draw-Behind Repaints
+
+- Changed stroke movement back to `pointermove` because raw pointer updates can overwhelm e-ink browser rendering after device/browser updates.
+- Cached canvas bounds during active strokes to avoid repeated layout reads for coalesced pen events.
+- Changed live Draw Behind preview from full-page recomposition per segment to dirty-rectangle repainting in final render order.
+- Added a small stroke movement threshold to skip pointer samples that do not visibly change the line.

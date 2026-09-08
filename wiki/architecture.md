@@ -69,7 +69,7 @@ Important global objects:
 Important constants:
 
 - `canvasPixelRatio = 1` for e-ink performance.
-- `moveEventName` uses `pointerrawupdate` if available, otherwise `pointermove`.
+- `moveEventName` is `pointermove`; raw pointer updates can overwhelm e-ink browser rendering.
 - `historyLimit = 30`.
 - `exportFormat = "dinodraw-document"`.
 - `legacyExportFormat = "boox-drawing-document"`.
@@ -102,6 +102,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.74`.
+Current app version: `v0.8.75`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

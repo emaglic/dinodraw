@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.74";
+const APP_VERSION = "v0.8.75";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -180,6 +180,7 @@ const state = {
   activePointerType: "",
   activeStrokeSnapshot: null,
   lastPoint: null,
+  canvasRect: null,
   activePageIndex: 0,
   activePresetIndex: 0,
   editingPresetIndex: 0,
@@ -246,8 +247,7 @@ const shapeConfig = {
 };
 
 const canvasPixelRatio = 1;
-const moveEventName =
-  "onpointerrawupdate" in window ? "pointerrawupdate" : "pointermove";
+const moveEventName = "pointermove";
 const doubleTapDelay = 360;
 const eraserPreviewDuration = 160;
 const maxPageZoom = 4;
@@ -2151,6 +2151,93 @@ function renderPage() {
   context.drawImage(page.layer, 0, 0);
 }
 
+function drawBackgroundRegion(page, dirtyRect) {
+  const right = dirtyRect.x + dirtyRect.width;
+  const bottom = dirtyRect.y + dirtyRect.height;
+
+  context.fillStyle = "#ffffff";
+  context.fillRect(dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
+
+  if (page.background === "ruled") {
+    const lineCount = 24;
+    const step = getPageHeight(page) / (lineCount + 1);
+
+    context.strokeStyle = "#777777";
+    context.lineWidth = 2;
+    context.beginPath();
+
+    for (let index = 1; index <= lineCount; index += 1) {
+      const y = Math.round(step * index) + 0.5;
+
+      if (y >= dirtyRect.y && y <= bottom) {
+        context.moveTo(dirtyRect.x, y);
+        context.lineTo(right, y);
+      }
+    }
+
+    context.stroke();
+  }
+
+  if (page.background === "graph") {
+    const smallStep = 32;
+    const largeStep = smallStep * 4;
+    const startX = Math.floor(dirtyRect.x / smallStep) * smallStep;
+    const startY = Math.floor(dirtyRect.y / smallStep) * smallStep;
+
+    for (let x = startX; x <= right; x += smallStep) {
+      context.strokeStyle = x % largeStep === 0 ? "#555555" : "#999999";
+      context.lineWidth = x % largeStep === 0 ? 2 : 1;
+      context.beginPath();
+      context.moveTo(Math.round(x) + 0.5, dirtyRect.y);
+      context.lineTo(Math.round(x) + 0.5, bottom);
+      context.stroke();
+    }
+
+    for (let y = startY; y <= bottom; y += smallStep) {
+      context.strokeStyle = y % largeStep === 0 ? "#555555" : "#999999";
+      context.lineWidth = y % largeStep === 0 ? 2 : 1;
+      context.beginPath();
+      context.moveTo(dirtyRect.x, Math.round(y) + 0.5);
+      context.lineTo(right, Math.round(y) + 0.5);
+      context.stroke();
+    }
+  }
+}
+
+function renderPageRegion(page, dirtyRect) {
+  if (!page) {
+    return;
+  }
+
+  context.setTransform(1, 0, 0, 1, 0, 0);
+  context.globalAlpha = 1;
+  context.globalCompositeOperation = "source-over";
+  setVisibleContextPageTransform(page);
+  drawBackgroundRegion(page, dirtyRect);
+  context.drawImage(
+    page.underLayer,
+    dirtyRect.x,
+    dirtyRect.y,
+    dirtyRect.width,
+    dirtyRect.height,
+    dirtyRect.x,
+    dirtyRect.y,
+    dirtyRect.width,
+    dirtyRect.height
+  );
+  context.drawImage(
+    page.layer,
+    dirtyRect.x,
+    dirtyRect.y,
+    dirtyRect.width,
+    dirtyRect.height,
+    dirtyRect.x,
+    dirtyRect.y,
+    dirtyRect.width,
+    dirtyRect.height
+  );
+}
+
 function drawShapePath(targetContext, shape) {
   const width = Math.abs(shape.width);
   const height = Math.abs(shape.height);
@@ -3098,7 +3185,7 @@ function canStartStroke(event) {
 }
 
 function getPoint(event) {
-  const rect = canvas.getBoundingClientRect();
+  const rect = state.canvasRect || canvas.getBoundingClientRect();
   const transform = getPageViewportTransform();
 
   return {
@@ -3239,6 +3326,7 @@ function cancelActiveTouchActionForPan() {
   state.activePointerType = "";
   state.activeStrokeSnapshot = null;
   state.lastPoint = null;
+  state.canvasRect = null;
   state.strokeTool = state.tool;
   state.imageInteraction = null;
   state.shapeInteraction = null;
@@ -3414,6 +3502,80 @@ function getDistance(from, to) {
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
+function getLineDirtyRect(page, from, to, lineWidth) {
+  const pageWidth = getPageWidth(page);
+  const pageHeight = getPageHeight(page);
+  const padding = Math.ceil(lineWidth / 2) + 3;
+  const left = Math.min(
+    pageWidth,
+    Math.max(0, Math.floor(Math.min(from.x, to.x) - padding))
+  );
+  const top = Math.min(
+    pageHeight,
+    Math.max(0, Math.floor(Math.min(from.y, to.y) - padding))
+  );
+  const right = Math.max(
+    0,
+    Math.min(
+      pageWidth,
+      Math.ceil(Math.max(from.x, to.x) + padding)
+    )
+  );
+  const bottom = Math.max(
+    0,
+    Math.min(
+      pageHeight,
+      Math.ceil(Math.max(from.y, to.y) + padding)
+    )
+  );
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    x: left,
+    y: top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function drawStrokeSegment(targetContext, from, to, options) {
+  targetContext.lineCap = "round";
+  targetContext.lineJoin = "round";
+  targetContext.lineWidth = options.size;
+  targetContext.globalAlpha = options.opacity;
+  targetContext.globalCompositeOperation = options.compositeOperation;
+  targetContext.strokeStyle = options.color;
+  targetContext.beginPath();
+  targetContext.moveTo(from.x, from.y);
+  targetContext.lineTo(to.x, to.y);
+  targetContext.stroke();
+  targetContext.globalAlpha = 1;
+  targetContext.globalCompositeOperation = "source-over";
+}
+
+function drawBehindPreviewSegment(page, from, to, preset) {
+  const dirtyRect = getLineDirtyRect(page, from, to, preset.size);
+
+  if (!dirtyRect) {
+    return;
+  }
+
+  renderPageRegion(page, dirtyRect);
+}
+
+function getMinimumStrokeDistance() {
+  if (state.strokeTool === "erase") {
+    return Math.max(2, brush.eraseSize / 8);
+  }
+
+  const preset = getActivePreset();
+
+  return Math.max(1, preset.size / 12);
+}
+
 function drawLine(from, to) {
   const page = getActivePage();
   const preset = getActivePreset();
@@ -3423,20 +3585,12 @@ function drawLine(from, to) {
     : [preset.drawBehind ? page.underContext : page.context];
 
   targetContexts.forEach((layerContext) => {
-    layerContext.lineCap = "round";
-    layerContext.lineJoin = "round";
-    layerContext.lineWidth = isErasing ? brush.eraseSize : preset.size;
-    layerContext.globalAlpha = isErasing ? 1 : preset.opacity;
-    layerContext.globalCompositeOperation = isErasing
-      ? "destination-out"
-      : "source-over";
-    layerContext.strokeStyle = preset.color;
-    layerContext.beginPath();
-    layerContext.moveTo(from.x, from.y);
-    layerContext.lineTo(to.x, to.y);
-    layerContext.stroke();
-    layerContext.globalAlpha = 1;
-    layerContext.globalCompositeOperation = "source-over";
+    drawStrokeSegment(layerContext, from, to, {
+      color: preset.color,
+      size: isErasing ? brush.eraseSize : preset.size,
+      opacity: isErasing ? 1 : preset.opacity,
+      compositeOperation: isErasing ? "destination-out" : "source-over",
+    });
   });
 
   if (isErasing) {
@@ -3445,19 +3599,15 @@ function drawLine(from, to) {
   }
 
   if (preset.drawBehind) {
-    renderPage();
+    drawBehindPreviewSegment(page, from, to, preset);
   } else {
     setVisibleContextPageTransform(page);
-    context.lineCap = "round";
-    context.lineJoin = "round";
-    context.strokeStyle = preset.color;
-    context.lineWidth = preset.size;
-    context.globalAlpha = preset.opacity;
-    context.beginPath();
-    context.moveTo(from.x, from.y);
-    context.lineTo(to.x, to.y);
-    context.stroke();
-    context.globalAlpha = 1;
+    drawStrokeSegment(context, from, to, {
+      color: preset.color,
+      size: preset.size,
+      opacity: preset.opacity,
+      compositeOperation: "source-over",
+    });
   }
 }
 
@@ -4228,6 +4378,7 @@ function startStroke(event) {
   state.activePointerId = event.pointerId;
   state.activePointerType = event.pointerType || "";
   state.activeStrokeSnapshot = createPageSnapshot(getActivePage());
+  state.canvasRect = canvas.getBoundingClientRect();
   state.lastPoint = point;
   drawLine(state.lastPoint, state.lastPoint);
 }
@@ -4259,11 +4410,7 @@ function continueStroke(event) {
   points.forEach((pointEvent) => {
     const nextPoint = getPoint(pointEvent);
 
-    if (
-      state.strokeTool === "erase" &&
-      getDistance(state.lastPoint, nextPoint) <
-        Math.max(2, brush.eraseSize / 8)
-    ) {
+    if (getDistance(state.lastPoint, nextPoint) < getMinimumStrokeDistance()) {
       return;
     }
 
@@ -4292,6 +4439,7 @@ function endStroke(event) {
   state.activePointerType = "";
   state.activeStrokeSnapshot = null;
   state.lastPoint = null;
+  state.canvasRect = null;
   state.strokeTool = state.tool;
 
   if (finishedTool !== "erase") {
