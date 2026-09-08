@@ -9,6 +9,7 @@ The drawing engine lives mostly in `src/app.js`, with canvas markup in `src/inde
 - Input uses `pointermove`; `pointerrawupdate` can deliver too many events for e-ink browser rendering after BOOX/browser updates.
 - Drawing latency on BOOX is more important than decorative rendering.
 - The main visible canvas is a composited display surface. Per-page drawing data lives on offscreen page canvases.
+- Live pen feedback is drawn directly onto the already-rendered main canvas. A separate transparent canvas remains hidden because some e-ink browser/firmware combinations can composite transparent canvases as opaque blank layers. Brush strokes keep their accepted page-space points while moving, then replay one permanent stroke to the target page layer on pointer up.
 
 ## Page Model
 
@@ -35,7 +36,7 @@ New pages should default to the active/previous page background.
 - `renderPage()` draws a black viewport background outside the page, applies the active page viewport transform, draws the active page background at native page size, then draws `underLayer`, then draws `layer`.
 - `renderWorkspace()` draws the committed page plus temporary overlays for selection, pending shape, and lasso path.
 - `drawPageThumbnail()` and export flattening use the same background, `underLayer`, `layer` order.
-- Draw Behind strokes commit to `underLayer` immediately, but their live preview rebuilds only the stroke's dirty rectangle in final render order. Avoid full-page `renderPage()` calls for every pen segment.
+- Draw Behind strokes preview on the main visible canvas while the pointer is down, then replay one committed stroke to `underLayer` with an identity page-layer transform. The page is recomposed once when the stroke ends. Avoid full-page `renderPage()` calls for every pen segment.
 
 ## Viewport, Panning, And Zoom
 
@@ -70,7 +71,7 @@ Current defaults:
 
 Draw Behind uses `underLayer`, allowing highlighter-style marks to sit below normal handwriting. Exports, thumbnails, lasso behavior, and eraser behavior must include this layer.
 
-Live Draw Behind rendering should stay region-based while the pointer is moving. Full-page recomposition is acceptable at the end of the stroke, but doing it on every pointer segment can freeze BOOX/e-ink browsers.
+Live Draw Behind rendering should stay on the temporary overlay while the pointer is moving. Full-page recomposition is acceptable at the end of the stroke, but doing it on every pointer segment can freeze BOOX/e-ink browsers.
 
 ## Eraser
 
@@ -88,6 +89,7 @@ Lasso selection must operate on both drawing layers at once. Moving, rotating, c
 
 Implementation notes:
 
+- Live lasso drawing appends only the latest visible segment while the pointer is moving. Avoid calling `renderWorkspace()` for every lasso point because that redraws the full accumulated path and gets slower as the path grows.
 - `finalizeLassoSelection()` creates a mask from the lasso path.
 - It extracts matching image data from `underLayer` and `layer` into separate selection canvases.
 - It clears the selected shape from both page contexts with `destination-out`.
@@ -156,8 +158,14 @@ Current code ignores non-primary pointers for drawing, shape, and lasso starts. 
 - Shape and lasso tools require primary left-button style input.
 - Pointer capture is used during active drawing/shape/lasso actions.
 - Stroke handling caches the canvas bounds for the duration of a stroke so coalesced events do not repeatedly read layout.
+- Stroke handling caches the page viewport transform for the duration of a stroke so fixed-page zoom/pan math is not recalculated for every pen sample.
+- Stroke and lasso movement consume only the latest coalesced pointer event. Replaying the full coalesced backlog can make BOOX/e-ink latency increase the longer a continuous gesture runs.
+- Live stroke and lasso movement are lightly time-throttled to favor low visible latency over preserving every dense hardware sample on BOOX/e-ink browsers.
+- Shape, image, and lasso-selection transforms are throttled more aggressively than ink, then catch up to the final pointer position on pointer up.
+- Image and lasso-selection resizing draw a downsampled preview bitmap while the resize handle is active; full-resolution content is redrawn at final size on pointer up.
 - Very small stroke movements are skipped to avoid processing dense pointer samples that do not visibly change the line.
 - Right/secondary button, pen eraser button codes, and pen barrel/auxiliary button codes are interpreted as temporary erasing via `getStrokeTool()`.
+- Touch strokes keep a temporary snapshot so a one-finger mark can be canceled into a two-finger pan. Pen strokes should not create that snapshot at stroke start.
 
 ## Page Key Navigation
 

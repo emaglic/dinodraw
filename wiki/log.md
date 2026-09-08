@@ -151,3 +151,68 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Cached canvas bounds during active strokes to avoid repeated layout reads for coalesced pen events.
 - Changed live Draw Behind preview from full-page recomposition per segment to dirty-rectangle repainting in final render order.
 - Added a small stroke movement threshold to skip pointer samples that do not visibly change the line.
+
+## [2026-09-08] perf | Reduced Continuous Stroke Backlog
+
+- Changed stroke movement to use only the latest coalesced pointer event, avoiding an increasing backlog during long continuous strokes.
+- Cached the active page viewport transform during strokes so fixed-page pan/zoom math is not recalculated for every pen sample.
+- Limited pre-stroke snapshot creation to touch strokes, where it is needed for two-finger pan cancellation, instead of cloning page layers for every pen stroke.
+
+## [2026-09-08] perf | Made Live Lasso Drawing Incremental
+
+- Changed lasso movement to use only the latest coalesced pointer event.
+- Changed live lasso preview to draw only the newest segment instead of calling `renderWorkspace()` and redrawing the full accumulated path on every move.
+- Reused cached canvas bounds and viewport transforms during lasso and shape gestures.
+- Added light timestamp throttling for live stroke and lasso movement, with final-point catch-up on gesture end.
+
+## [2026-09-08] perf | Added Live Drawing Overlay
+
+- Added a transparent `#live-canvas` overlay for pen-down brush and lasso feedback.
+- Changed non-eraser brush strokes to draw live segments only on the overlay, then commit the complete stroke to the document layer on pointer up.
+- Restored dashed live lasso feedback with incremental dash-offset tracking instead of redrawing the whole lasso path per move.
+
+## [2026-09-08] fix | Baked Live Overlay Strokes On Pen Up
+
+- Changed live brush commit to draw the transparent overlay bitmap back into the target page layer using the inverse page viewport transform.
+- Removed retained live stroke point accumulation from the commit path so long strokes keep constant-size live state.
+
+## [2026-09-08] fix | Persisted Live Overlay Brush Strokes
+
+- Changed brush drawing so each accepted non-eraser segment writes to the target page layer during movement and also previews on `#live-canvas`.
+- Removed the overlay bitmap bake as the persistence mechanism; pointer up now clears the overlay and recomposes from the already-updated page layer.
+
+## [2026-09-08] fix | Stabilized Permanent Stroke Writes
+
+- Changed permanent brush and eraser segment writes to save the target page context, reset it to identity page-pixel coordinates, then restore it after drawing.
+- Reset line dash state for stroke segments and preserved the live overlay transform with save/restore so dashed lasso state cannot bleed into brush commits.
+- Kept live overlay feedback separate from page-layer persistence so pointer-up clearing only removes the temporary preview.
+
+## [2026-09-08] fix | Replayed Live Brush Strokes On Commit
+
+- Changed non-eraser brush movement to keep page-space stroke points while drawing only the low-latency live overlay.
+- Replayed the retained stroke path into the permanent page layer on pointer up, using identity page-layer coordinates.
+- Preserved the eraser's immediate page-layer writes because erasing needs committed pixels to disappear during the gesture.
+
+## [2026-09-08] fix | Hid Idle Live Canvas Overlay
+
+- Changed `#live-canvas` to be hidden by default and shown only while live brush or lasso feedback is actively drawing.
+- This avoids relying on transparent canvas compositing while idle, which can hide the committed drawing canvas on BOOX/e-ink browser firmware.
+- This also restores visibility for pending images and their handles, which are drawn on the main canvas underneath the live overlay.
+
+## [2026-09-08] fix | Moved Live Feedback Off Overlay
+
+- Changed live brush and lasso feedback to draw directly on the already-rendered main canvas instead of displaying `#live-canvas`.
+- Kept the permanent stroke replay on pointer up so the main canvas can be recomposed from page layers and remove any temporary live-only pixels.
+- Left `#live-canvas` hidden so BOOX/e-ink browsers cannot cover the existing page while a transparent overlay is active.
+
+## [2026-09-08] perf | Reduced Resize Interaction Repaints
+
+- Added heavier pointer throttling for shape, pending-image, and lasso-selection transform interactions.
+- Applied the final pointer position on pointer up so throttled movement stays accurate after the drag ends.
+- Skipped bitmap drawing for pending images and lasso selections while resize handles are active, drawing only the outline and handle until the resize finishes.
+
+## [2026-09-08] perf | Added Lightweight Resize Previews
+
+- Added downsampled resize preview canvases for pending images and lasso selections when a resize interaction starts.
+- Drew the lightweight preview during resize so selected content remains visible while avoiding repeated full-resolution bitmap resampling.
+- Kept final pointer-up rendering on the original full-resolution image or selection canvases.

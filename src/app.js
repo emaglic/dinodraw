@@ -1,7 +1,12 @@
-const APP_VERSION = "v0.8.75";
+const APP_VERSION = "v0.8.86";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
+  desynchronized: true,
+});
+const liveCanvas = document.querySelector("#live-canvas");
+const liveContext = liveCanvas.getContext("2d", {
+  alpha: true,
   desynchronized: true,
 });
 const appShell = document.querySelector(".app-shell");
@@ -181,6 +186,12 @@ const state = {
   activeStrokeSnapshot: null,
   lastPoint: null,
   canvasRect: null,
+  canvasTransform: null,
+  lastLiveInputTimestamp: 0,
+  hasLiveStroke: false,
+  liveStrokePreset: null,
+  liveStrokePoints: [],
+  liveLassoDashLength: 0,
   activePageIndex: 0,
   activePresetIndex: 0,
   editingPresetIndex: 0,
@@ -250,6 +261,9 @@ const canvasPixelRatio = 1;
 const moveEventName = "pointermove";
 const doubleTapDelay = 360;
 const eraserPreviewDuration = 160;
+const liveInputMinInterval = 24;
+const transformInputMinInterval = 56;
+const transformPreviewMaxDimension = 480;
 const maxPageZoom = 4;
 const tooltipDelay = 375;
 const toolbarPositionStorageKey = "mainToolbarPosition";
@@ -2133,6 +2147,27 @@ function setVisibleContextPageTransform(page = getActivePage()) {
   );
 }
 
+function setLiveContextPageTransform(page = getActivePage()) {
+  const transform = getPageViewportTransform(page);
+
+  liveContext.setTransform(
+    transform.scale,
+    0,
+    0,
+    transform.scale,
+    transform.x,
+    transform.y
+  );
+}
+
+function clearLiveCanvas() {
+  liveContext.setTransform(1, 0, 0, 1, 0, 0);
+  liveContext.clearRect(0, 0, liveCanvas.width, liveCanvas.height);
+  liveContext.globalAlpha = 1;
+  liveContext.globalCompositeOperation = "source-over";
+  liveCanvas.classList.remove("is-active");
+}
+
 function renderPage() {
   const page = getActivePage();
 
@@ -2149,93 +2184,6 @@ function renderPage() {
   drawBackground(page, context, getPageWidth(page), getPageHeight(page));
   context.drawImage(page.underLayer, 0, 0);
   context.drawImage(page.layer, 0, 0);
-}
-
-function drawBackgroundRegion(page, dirtyRect) {
-  const right = dirtyRect.x + dirtyRect.width;
-  const bottom = dirtyRect.y + dirtyRect.height;
-
-  context.fillStyle = "#ffffff";
-  context.fillRect(dirtyRect.x, dirtyRect.y, dirtyRect.width, dirtyRect.height);
-
-  if (page.background === "ruled") {
-    const lineCount = 24;
-    const step = getPageHeight(page) / (lineCount + 1);
-
-    context.strokeStyle = "#777777";
-    context.lineWidth = 2;
-    context.beginPath();
-
-    for (let index = 1; index <= lineCount; index += 1) {
-      const y = Math.round(step * index) + 0.5;
-
-      if (y >= dirtyRect.y && y <= bottom) {
-        context.moveTo(dirtyRect.x, y);
-        context.lineTo(right, y);
-      }
-    }
-
-    context.stroke();
-  }
-
-  if (page.background === "graph") {
-    const smallStep = 32;
-    const largeStep = smallStep * 4;
-    const startX = Math.floor(dirtyRect.x / smallStep) * smallStep;
-    const startY = Math.floor(dirtyRect.y / smallStep) * smallStep;
-
-    for (let x = startX; x <= right; x += smallStep) {
-      context.strokeStyle = x % largeStep === 0 ? "#555555" : "#999999";
-      context.lineWidth = x % largeStep === 0 ? 2 : 1;
-      context.beginPath();
-      context.moveTo(Math.round(x) + 0.5, dirtyRect.y);
-      context.lineTo(Math.round(x) + 0.5, bottom);
-      context.stroke();
-    }
-
-    for (let y = startY; y <= bottom; y += smallStep) {
-      context.strokeStyle = y % largeStep === 0 ? "#555555" : "#999999";
-      context.lineWidth = y % largeStep === 0 ? 2 : 1;
-      context.beginPath();
-      context.moveTo(dirtyRect.x, Math.round(y) + 0.5);
-      context.lineTo(right, Math.round(y) + 0.5);
-      context.stroke();
-    }
-  }
-}
-
-function renderPageRegion(page, dirtyRect) {
-  if (!page) {
-    return;
-  }
-
-  context.setTransform(1, 0, 0, 1, 0, 0);
-  context.globalAlpha = 1;
-  context.globalCompositeOperation = "source-over";
-  setVisibleContextPageTransform(page);
-  drawBackgroundRegion(page, dirtyRect);
-  context.drawImage(
-    page.underLayer,
-    dirtyRect.x,
-    dirtyRect.y,
-    dirtyRect.width,
-    dirtyRect.height,
-    dirtyRect.x,
-    dirtyRect.y,
-    dirtyRect.width,
-    dirtyRect.height
-  );
-  context.drawImage(
-    page.layer,
-    dirtyRect.x,
-    dirtyRect.y,
-    dirtyRect.width,
-    dirtyRect.height,
-    dirtyRect.x,
-    dirtyRect.y,
-    dirtyRect.width,
-    dirtyRect.height
-  );
 }
 
 function drawShapePath(targetContext, shape) {
@@ -2598,6 +2546,53 @@ function getImageCenter(imageItem) {
   return getBoxCenter(imageItem);
 }
 
+function createTransformPreviewCanvas(source, sourceWidth, sourceHeight) {
+  const width = Math.max(1, Math.round(sourceWidth || source.width || 1));
+  const height = Math.max(1, Math.round(sourceHeight || source.height || 1));
+  const scale = Math.min(
+    1,
+    transformPreviewMaxDimension / Math.max(width, height)
+  );
+  const preview = document.createElement("canvas");
+  const previewContext = preview.getContext("2d");
+
+  preview.width = Math.max(1, Math.round(width * scale));
+  preview.height = Math.max(1, Math.round(height * scale));
+  previewContext.drawImage(source, 0, 0, preview.width, preview.height);
+
+  return preview;
+}
+
+function createSelectionPreviewCanvas(selection) {
+  const width = Math.max(
+    1,
+    selection.underCanvas ? selection.underCanvas.width : 0,
+    selection.canvas ? selection.canvas.width : 0,
+    Math.round(selection.width || 1)
+  );
+  const height = Math.max(
+    1,
+    selection.underCanvas ? selection.underCanvas.height : 0,
+    selection.canvas ? selection.canvas.height : 0,
+    Math.round(selection.height || 1)
+  );
+  const merged = document.createElement("canvas");
+  const mergedContext = merged.getContext("2d");
+
+  merged.width = width;
+  merged.height = height;
+
+  if (selection.underCanvas) {
+    mergedContext.drawImage(selection.underCanvas, 0, 0, width, height);
+  }
+
+  if (selection.canvas) {
+    mergedContext.drawImage(selection.canvas, 0, 0, width, height);
+  }
+
+  return createTransformPreviewCanvas(merged, width, height);
+}
+
 function drawCanvasImage(targetContext, imageItem) {
   if (!imageItem || !imageItem.image) {
     return;
@@ -2624,8 +2619,17 @@ function drawPendingImageOverlay() {
   }
 
   const imageItem = state.pendingImage;
+  const isResizingImage =
+    state.imageInteraction && state.imageInteraction.mode === "resize";
+  const previewImage = isResizingImage
+    ? state.imageInteraction.previewCanvas
+    : null;
 
-  drawCanvasImage(context, imageItem);
+  if (previewImage) {
+    drawCanvasImage(context, { ...imageItem, image: previewImage });
+  } else if (!isResizingImage) {
+    drawCanvasImage(context, imageItem);
+  }
   drawBoxOverlay(imageItem, true);
 }
 
@@ -2647,6 +2651,22 @@ function drawLassoPathOverlay() {
 
   context.stroke();
   context.restore();
+}
+
+function drawLassoPreviewSegment(from, to) {
+  context.save();
+  setVisibleContextPageTransform();
+  context.setLineDash([7, 5]);
+  context.lineDashOffset = -state.liveLassoDashLength;
+  context.strokeStyle = "#000000";
+  context.lineWidth = 2;
+  context.beginPath();
+  context.moveTo(from.x, from.y);
+  context.lineTo(to.x, to.y);
+  context.stroke();
+  context.restore();
+  state.liveLassoDashLength =
+    (state.liveLassoDashLength + getDistance(from, to)) % 12;
 }
 
 function drawSelectionContent(targetContext, selection, sourceCanvas) {
@@ -2674,8 +2694,19 @@ function drawSelectionOverlay() {
     return;
   }
 
-  drawSelectionContent(context, state.selection, state.selection.underCanvas);
-  drawSelectionContent(context, state.selection, state.selection.canvas);
+  const isResizingSelection =
+    state.selectionInteraction &&
+    state.selectionInteraction.mode === "resize";
+  const previewCanvas = isResizingSelection
+    ? state.selectionInteraction.previewCanvas
+    : null;
+
+  if (previewCanvas) {
+    drawSelectionContent(context, state.selection, previewCanvas);
+  } else if (!isResizingSelection) {
+    drawSelectionContent(context, state.selection, state.selection.underCanvas);
+    drawSelectionContent(context, state.selection, state.selection.canvas);
+  }
   drawBoxOverlay(
     {
       x: state.selection.x,
@@ -2923,6 +2954,11 @@ function clearTemporaryCanvasState() {
   state.lassoPath = [];
   state.selection = null;
   state.selectionInteraction = null;
+  state.hasLiveStroke = false;
+  state.liveStrokePreset = null;
+  state.liveStrokePoints = [];
+  state.liveLassoDashLength = 0;
+  clearLiveCanvas();
   state.eraserPreview = null;
   state.viewportTouchPointers.clear();
   state.panGesture = null;
@@ -3101,8 +3137,11 @@ function resizeCanvas() {
 
   canvas.width = width;
   canvas.height = height;
+  liveCanvas.width = width;
+  liveCanvas.height = height;
 
   state.pages.forEach(clampPagePan);
+  clearLiveCanvas();
   renderWorkspace();
 }
 
@@ -3186,7 +3225,7 @@ function canStartStroke(event) {
 
 function getPoint(event) {
   const rect = state.canvasRect || canvas.getBoundingClientRect();
-  const transform = getPageViewportTransform();
+  const transform = state.canvasTransform || getPageViewportTransform();
 
   return {
     x: (event.clientX - rect.left - transform.x) / transform.scale,
@@ -3327,11 +3366,18 @@ function cancelActiveTouchActionForPan() {
   state.activeStrokeSnapshot = null;
   state.lastPoint = null;
   state.canvasRect = null;
+  state.canvasTransform = null;
+  state.lastLiveInputTimestamp = 0;
+  state.hasLiveStroke = false;
+  state.liveStrokePreset = null;
+  state.liveStrokePoints = [];
   state.strokeTool = state.tool;
   state.imageInteraction = null;
   state.shapeInteraction = null;
   state.selectionInteraction = null;
   state.lassoPath = [];
+  state.liveLassoDashLength = 0;
+  clearLiveCanvas();
   updateActionToolbar();
   renderWorkspace();
 }
@@ -3502,46 +3548,11 @@ function getDistance(from, to) {
   return Math.hypot(to.x - from.x, to.y - from.y);
 }
 
-function getLineDirtyRect(page, from, to, lineWidth) {
-  const pageWidth = getPageWidth(page);
-  const pageHeight = getPageHeight(page);
-  const padding = Math.ceil(lineWidth / 2) + 3;
-  const left = Math.min(
-    pageWidth,
-    Math.max(0, Math.floor(Math.min(from.x, to.x) - padding))
-  );
-  const top = Math.min(
-    pageHeight,
-    Math.max(0, Math.floor(Math.min(from.y, to.y) - padding))
-  );
-  const right = Math.max(
-    0,
-    Math.min(
-      pageWidth,
-      Math.ceil(Math.max(from.x, to.x) + padding)
-    )
-  );
-  const bottom = Math.max(
-    0,
-    Math.min(
-      pageHeight,
-      Math.ceil(Math.max(from.y, to.y) + padding)
-    )
-  );
-
-  if (right <= left || bottom <= top) {
-    return null;
-  }
-
-  return {
-    x: left,
-    y: top,
-    width: right - left,
-    height: bottom - top,
-  };
-}
-
 function drawStrokeSegment(targetContext, from, to, options) {
+  if (targetContext.setLineDash) {
+    targetContext.setLineDash([]);
+  }
+  targetContext.lineDashOffset = 0;
   targetContext.lineCap = "round";
   targetContext.lineJoin = "round";
   targetContext.lineWidth = options.size;
@@ -3550,20 +3561,65 @@ function drawStrokeSegment(targetContext, from, to, options) {
   targetContext.strokeStyle = options.color;
   targetContext.beginPath();
   targetContext.moveTo(from.x, from.y);
-  targetContext.lineTo(to.x, to.y);
+  if (from.x === to.x && from.y === to.y) {
+    targetContext.lineTo(to.x + 0.01, to.y + 0.01);
+  } else {
+    targetContext.lineTo(to.x, to.y);
+  }
   targetContext.stroke();
   targetContext.globalAlpha = 1;
   targetContext.globalCompositeOperation = "source-over";
 }
 
-function drawBehindPreviewSegment(page, from, to, preset) {
-  const dirtyRect = getLineDirtyRect(page, from, to, preset.size);
+function drawPageStrokeSegment(targetContext, from, to, options) {
+  targetContext.save();
+  targetContext.setTransform(1, 0, 0, 1, 0, 0);
+  drawStrokeSegment(targetContext, from, to, options);
+  targetContext.restore();
+}
 
-  if (!dirtyRect) {
+function drawPageStrokePath(targetContext, points, options) {
+  if (points.length === 0) {
     return;
   }
 
-  renderPageRegion(page, dirtyRect);
+  targetContext.save();
+  targetContext.setTransform(1, 0, 0, 1, 0, 0);
+  if (targetContext.setLineDash) {
+    targetContext.setLineDash([]);
+  }
+  targetContext.lineDashOffset = 0;
+  targetContext.lineCap = "round";
+  targetContext.lineJoin = "round";
+  targetContext.lineWidth = options.size;
+  targetContext.globalAlpha = options.opacity;
+  targetContext.globalCompositeOperation = options.compositeOperation;
+  targetContext.strokeStyle = options.color;
+  targetContext.beginPath();
+  targetContext.moveTo(points[0].x, points[0].y);
+
+  if (points.length === 1) {
+    targetContext.lineTo(points[0].x + 0.01, points[0].y + 0.01);
+  } else {
+    points.slice(1).forEach((point) => {
+      targetContext.lineTo(point.x, point.y);
+    });
+  }
+
+  targetContext.stroke();
+  targetContext.restore();
+}
+
+function drawLiveStrokeSegment(from, to, preset) {
+  context.save();
+  setVisibleContextPageTransform();
+  drawStrokeSegment(context, from, to, {
+    color: preset.color,
+    size: preset.size,
+    opacity: preset.opacity,
+    compositeOperation: "source-over",
+  });
+  context.restore();
 }
 
 function getMinimumStrokeDistance() {
@@ -3576,16 +3632,75 @@ function getMinimumStrokeDistance() {
   return Math.max(1, preset.size / 12);
 }
 
+function getLatestCoalescedPointerEvent(event) {
+  const coalescedEvents = event.getCoalescedEvents
+    ? event.getCoalescedEvents()
+    : [];
+
+  if (coalescedEvents.length === 0) {
+    return event;
+  }
+
+  return coalescedEvents[coalescedEvents.length - 1];
+}
+
+function getStrokePointEvents(event) {
+  return [getLatestCoalescedPointerEvent(event)];
+}
+
+function getPointerEventTimestamp(event) {
+  const timestamp = Number(event.timeStamp);
+
+  return isFinite(timestamp) ? timestamp : Date.now();
+}
+
+function shouldSkipInputEvent(event, minInterval) {
+  const timestamp = getPointerEventTimestamp(event);
+
+  if (
+    state.lastLiveInputTimestamp > 0 &&
+    timestamp - state.lastLiveInputTimestamp < minInterval
+  ) {
+    return true;
+  }
+
+  state.lastLiveInputTimestamp = timestamp;
+  return false;
+}
+
+function shouldSkipLiveInputEvent(event) {
+  return shouldSkipInputEvent(event, liveInputMinInterval);
+}
+
+function shouldSkipTransformInputEvent(event) {
+  return shouldSkipInputEvent(event, transformInputMinInterval);
+}
+
 function drawLine(from, to) {
   const page = getActivePage();
   const preset = getActivePreset();
   const isErasing = state.strokeTool === "erase";
-  const targetContexts = isErasing
-    ? [page.underContext, page.context]
-    : [preset.drawBehind ? page.underContext : page.context];
+
+  if (!isErasing) {
+    const strokePreset = state.liveStrokePreset || preset;
+    const lastLivePoint =
+      state.liveStrokePoints[state.liveStrokePoints.length - 1];
+
+    if (
+      !lastLivePoint ||
+      lastLivePoint.x !== to.x ||
+      lastLivePoint.y !== to.y
+    ) {
+      state.liveStrokePoints.push(to);
+    }
+    drawLiveStrokeSegment(from, to, strokePreset);
+    return;
+  }
+
+  const targetContexts = [page.underContext, page.context];
 
   targetContexts.forEach((layerContext) => {
-    drawStrokeSegment(layerContext, from, to, {
+    drawPageStrokeSegment(layerContext, from, to, {
       color: preset.color,
       size: isErasing ? brush.eraseSize : preset.size,
       opacity: isErasing ? 1 : preset.opacity,
@@ -3597,18 +3712,29 @@ function drawLine(from, to) {
     addEraserPreviewSegment(from, to);
     return;
   }
+}
 
-  if (preset.drawBehind) {
-    drawBehindPreviewSegment(page, from, to, preset);
-  } else {
-    setVisibleContextPageTransform(page);
-    drawStrokeSegment(context, from, to, {
-      color: preset.color,
-      size: preset.size,
-      opacity: preset.opacity,
-      compositeOperation: "source-over",
-    });
+function commitLiveStrokeToPage(page = getActivePage()) {
+  if (
+    !page ||
+    !state.liveStrokePreset ||
+    state.liveStrokePoints.length === 0
+  ) {
+    return false;
   }
+
+  const targetContext = state.liveStrokePreset.drawBehind
+    ? page.underContext
+    : page.context;
+
+  drawPageStrokePath(targetContext, state.liveStrokePoints, {
+    color: state.liveStrokePreset.color,
+    size: state.liveStrokePreset.size,
+    opacity: state.liveStrokePreset.opacity,
+    compositeOperation: "source-over",
+  });
+
+  return true;
 }
 
 function createShape(startPoint, endPoint) {
@@ -3823,6 +3949,19 @@ function resizePendingImageToPoint(point) {
   state.pendingImage.height = box.height;
 }
 
+function updatePendingImageInteraction(point) {
+  const deltaX = point.x - state.imageInteraction.startPoint.x;
+  const deltaY = point.y - state.imageInteraction.startPoint.y;
+  const startImage = state.imageInteraction.startImage;
+
+  if (state.imageInteraction.mode === "move") {
+    state.pendingImage.x = startImage.x + deltaX;
+    state.pendingImage.y = startImage.y + deltaY;
+  } else {
+    resizePendingImageToPoint(point);
+  }
+}
+
 function startImage(event) {
   const point = getPoint(event);
   const hit = getImageHit(point);
@@ -3840,6 +3979,16 @@ function startImage(event) {
     mode: hit,
     startPoint: point,
     startImage: { ...state.pendingImage },
+    previewCanvas:
+      hit === "resize"
+        ? createTransformPreviewCanvas(
+            state.pendingImage.image,
+            state.pendingImage.image.naturalWidth ||
+              state.pendingImage.image.width,
+            state.pendingImage.image.naturalHeight ||
+              state.pendingImage.image.height
+          )
+        : null,
   };
 
   return true;
@@ -3854,18 +4003,13 @@ function continueImage(event) {
     event.preventDefault();
   }
 
-  const point = getPoint(event);
-  const deltaX = point.x - state.imageInteraction.startPoint.x;
-  const deltaY = point.y - state.imageInteraction.startPoint.y;
-  const startImage = state.imageInteraction.startImage;
+  const latestEvent = getLatestCoalescedPointerEvent(event);
 
-  if (state.imageInteraction.mode === "move") {
-    state.pendingImage.x = startImage.x + deltaX;
-    state.pendingImage.y = startImage.y + deltaY;
-  } else {
-    resizePendingImageToPoint(point);
+  if (shouldSkipTransformInputEvent(latestEvent)) {
+    return;
   }
 
+  updatePendingImageInteraction(getPoint(latestEvent));
   renderWorkspace();
 }
 
@@ -3878,6 +4022,7 @@ function endImage(event) {
     event.preventDefault();
   }
 
+  updatePendingImageInteraction(getPoint(event));
   state.imageInteraction = null;
   updateActionToolbar();
   renderWorkspace();
@@ -3999,16 +4144,7 @@ function startShape(event) {
   renderWorkspace();
 }
 
-function continueShape(event) {
-  if (!state.shapeInteraction || !state.pendingShape) {
-    return;
-  }
-
-  if (event.cancelable) {
-    event.preventDefault();
-  }
-
-  const point = getPoint(event);
+function updateShapeInteraction(point) {
   const deltaX = point.x - state.shapeInteraction.startPoint.x;
   const deltaY = point.y - state.shapeInteraction.startPoint.y;
   const startShape = state.shapeInteraction.startShape;
@@ -4034,7 +4170,24 @@ function continueShape(event) {
     state.pendingShape.width = lineSize ? lineSize.width : width;
     state.pendingShape.height = lineSize ? lineSize.height : height;
   }
+}
 
+function continueShape(event) {
+  if (!state.shapeInteraction || !state.pendingShape) {
+    return;
+  }
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  const latestEvent = getLatestCoalescedPointerEvent(event);
+
+  if (shouldSkipTransformInputEvent(latestEvent)) {
+    return;
+  }
+
+  updateShapeInteraction(getPoint(latestEvent));
   renderWorkspace();
 }
 
@@ -4047,6 +4200,7 @@ function endShape(event) {
     event.preventDefault();
   }
 
+  updateShapeInteraction(getPoint(event));
   state.shapeInteraction = null;
   updateActionToolbar();
   renderWorkspace();
@@ -4239,6 +4393,22 @@ function resizeSelectionToPoint(point) {
   state.selection.height = box.height;
 }
 
+function updateSelectionInteraction(point) {
+  if (state.selectionInteraction.mode === "resize") {
+    resizeSelectionToPoint(point);
+    return;
+  }
+
+  state.selection.x =
+    state.selectionInteraction.startSelection.x +
+    point.x -
+    state.selectionInteraction.startPoint.x;
+  state.selection.y =
+    state.selectionInteraction.startSelection.y +
+    point.y -
+    state.selectionInteraction.startPoint.y;
+}
+
 function getSelectionHit(point) {
   if (!state.selection) {
     return null;
@@ -4272,6 +4442,8 @@ function startLasso(event) {
       mode: hit,
       startPoint: point,
       startSelection: { ...state.selection },
+      previewCanvas:
+        hit === "resize" ? createSelectionPreviewCanvas(state.selection) : null,
     };
     return;
   }
@@ -4287,30 +4459,26 @@ function startLasso(event) {
     commitSelection();
   }
 
+  clearLiveCanvas();
+  state.liveLassoDashLength = 0;
   state.lassoPath = [point];
   renderWorkspace();
 }
 
 function continueLasso(event) {
-  const point = getPoint(event);
+  const latestEvent = getLatestCoalescedPointerEvent(event);
+  const point = getPoint(latestEvent);
 
   if (event.cancelable) {
     event.preventDefault();
   }
 
   if (state.selectionInteraction && state.selection) {
-    if (state.selectionInteraction.mode === "resize") {
-      resizeSelectionToPoint(point);
-    } else {
-      state.selection.x =
-        state.selectionInteraction.startSelection.x +
-        point.x -
-        state.selectionInteraction.startPoint.x;
-      state.selection.y =
-        state.selectionInteraction.startSelection.y +
-        point.y -
-        state.selectionInteraction.startPoint.y;
+    if (shouldSkipTransformInputEvent(latestEvent)) {
+      return;
     }
+
+    updateSelectionInteraction(point);
     renderWorkspace();
     return;
   }
@@ -4319,11 +4487,15 @@ function continueLasso(event) {
     return;
   }
 
+  if (shouldSkipLiveInputEvent(latestEvent)) {
+    return;
+  }
+
   const lastPoint = state.lassoPath[state.lassoPath.length - 1];
 
   if (getDistance(lastPoint, point) >= 3) {
     state.lassoPath.push(point);
-    renderWorkspace();
+    drawLassoPreviewSegment(lastPoint, point);
   }
 }
 
@@ -4333,13 +4505,28 @@ function endLasso(event) {
   }
 
   if (state.selectionInteraction) {
+    updateSelectionInteraction(getPoint(event));
     state.selectionInteraction = null;
     updateActionToolbar();
     renderWorkspace();
     return;
   }
 
+  if (state.lassoPath.length > 0) {
+    const point = getPoint(event);
+
+    if (isPointInsidePage(point)) {
+      const lastPoint = state.lassoPath[state.lassoPath.length - 1];
+
+      if (getDistance(lastPoint, point) >= 3) {
+        state.lassoPath.push(point);
+      }
+    }
+  }
+
   finalizeLassoSelection();
+  clearLiveCanvas();
+  state.liveLassoDashLength = 0;
 }
 
 function shouldIgnoreCanvasPointer(event) {
@@ -4365,9 +4552,14 @@ function startStroke(event) {
     event.preventDefault();
   }
 
+  state.canvasRect = canvas.getBoundingClientRect();
+  state.canvasTransform = getPageViewportTransform();
+
   const point = getPoint(event);
 
   if (!isPointInsidePage(point)) {
+    state.canvasRect = null;
+    state.canvasTransform = null;
     return;
   }
 
@@ -4377,8 +4569,15 @@ function startStroke(event) {
   state.isDrawing = true;
   state.activePointerId = event.pointerId;
   state.activePointerType = event.pointerType || "";
-  state.activeStrokeSnapshot = createPageSnapshot(getActivePage());
-  state.canvasRect = canvas.getBoundingClientRect();
+  state.activeStrokeSnapshot =
+    state.activePointerType === "touch"
+      ? createPageSnapshot(getActivePage())
+      : null;
+  state.liveStrokePreset =
+    state.strokeTool === "erase" ? null : { ...getActivePreset() };
+  state.hasLiveStroke = state.strokeTool !== "erase";
+  state.liveStrokePoints = state.strokeTool === "erase" ? [] : [point];
+  state.lastLiveInputTimestamp = getPointerEventTimestamp(event);
   state.lastPoint = point;
   drawLine(state.lastPoint, state.lastPoint);
 }
@@ -4398,16 +4597,22 @@ function continueStroke(event) {
 
   state.strokeTool = getStrokeTool(event);
 
-  const coalescedEvents = event.getCoalescedEvents
-    ? event.getCoalescedEvents()
-    : [];
-  let points = coalescedEvents.length > 0 ? coalescedEvents : [event];
-
-  if (state.strokeTool === "erase" && coalescedEvents.length > 0) {
-    points = [coalescedEvents[coalescedEvents.length - 1]];
+  if (state.strokeTool === "erase" && state.hasLiveStroke) {
+    commitLiveStrokeToPage();
+    state.hasLiveStroke = false;
+    state.liveStrokePreset = null;
+    state.liveStrokePoints = [];
+    clearLiveCanvas();
+    renderPage();
   }
 
+  const points = getStrokePointEvents(event);
+
   points.forEach((pointEvent) => {
+    if (shouldSkipLiveInputEvent(pointEvent)) {
+      return;
+    }
+
     const nextPoint = getPoint(pointEvent);
 
     if (getDistance(state.lastPoint, nextPoint) < getMinimumStrokeDistance()) {
@@ -4415,6 +4620,9 @@ function continueStroke(event) {
     }
 
     drawLine(state.lastPoint, nextPoint);
+    if (state.strokeTool !== "erase") {
+      state.hasLiveStroke = true;
+    }
     state.lastPoint = nextPoint;
   });
 }
@@ -4433,6 +4641,22 @@ function endStroke(event) {
   }
 
   const finishedTool = state.strokeTool;
+  const finalPoint = getPoint(event);
+
+  if (
+    state.lastPoint &&
+    isPointInsidePage(finalPoint) &&
+    getDistance(state.lastPoint, finalPoint) >= getMinimumStrokeDistance()
+  ) {
+    drawLine(state.lastPoint, finalPoint);
+    if (finishedTool !== "erase") {
+      state.hasLiveStroke = true;
+    }
+  }
+
+  if (finishedTool !== "erase") {
+    commitLiveStrokeToPage();
+  }
 
   state.isDrawing = false;
   state.activePointerId = null;
@@ -4440,9 +4664,15 @@ function endStroke(event) {
   state.activeStrokeSnapshot = null;
   state.lastPoint = null;
   state.canvasRect = null;
+  state.canvasTransform = null;
+  state.lastLiveInputTimestamp = 0;
+  state.hasLiveStroke = false;
+  state.liveStrokePreset = null;
+  state.liveStrokePoints = [];
   state.strokeTool = state.tool;
 
   if (finishedTool !== "erase") {
+    clearLiveCanvas();
     renderPage();
   }
 
@@ -4488,10 +4718,14 @@ function startCanvasAction(event) {
     event.preventDefault();
   }
 
+  state.canvasRect = canvas.getBoundingClientRect();
+  state.canvasTransform = getPageViewportTransform();
+
   canvas.setPointerCapture(event.pointerId);
   state.isDrawing = true;
   state.activePointerId = event.pointerId;
   state.activePointerType = event.pointerType || "";
+  state.lastLiveInputTimestamp = getPointerEventTimestamp(event);
 
   if (state.tool === "shape") {
     startShape(event);
@@ -4541,6 +4775,9 @@ function endCanvasAction(event) {
     state.activePointerType = "";
     state.activeStrokeSnapshot = null;
     state.lastPoint = null;
+    state.canvasRect = null;
+    state.canvasTransform = null;
+    state.lastLiveInputTimestamp = 0;
     return;
   }
 
@@ -4585,6 +4822,9 @@ function endCanvasAction(event) {
   state.activePointerId = null;
   state.activePointerType = "";
   state.activeStrokeSnapshot = null;
+  state.canvasRect = null;
+  state.canvasTransform = null;
+  state.lastLiveInputTimestamp = 0;
 }
 
 function getPageNavigationDirection(event) {
