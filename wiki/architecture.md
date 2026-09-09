@@ -35,9 +35,10 @@ Dino Draw is a static web app implemented with plain HTML, CSS, and vanilla Java
 
 - Historical IndexedDB database name: `booxDrawingDocuments`.
 - Do not rename the database unless a migration is implemented.
-- Current database version: `1`.
-- Current object store: `documents`.
-- Documents are listed by last opened date, most recent first.
+- Current database version: `2`.
+- Current object stores: `documents` and `folders`.
+- Documents are listed by last opened date, most recent first within the current folder.
+- Missing document `folderId` values resolve to Root for compatibility with existing saved documents.
 
 ## Rendering Model
 
@@ -56,13 +57,13 @@ Eraser and lasso operations should affect both drawing layers together. Backgrou
 
 ## Runtime State
 
-Most app state lives in `state` in `src/app.js`, including active document, pages, tool selection, presets, history, selection state, toolbar visibility, and modal/menu state.
+Most app state lives in `state` in `src/app.js`, including active document, current folder, pages, tool selection, presets, history, selection state, toolbar visibility, and modal/menu state.
 
 Device-specific global preferences and toolbar positions use local browser storage where appropriate.
 
 Important global objects:
 
-- `state`: active tool, active pointer, active page, presets, pending shape, lasso path, selection, tooltip state, app dialog state, documents, save queue, toolbar visibility, and global settings.
+- `state`: active tool, active pointer, active page, current folder, presets, pending shape, lasso path, selection, tooltip state, app/move dialog state, documents, folders, save queue, toolbar visibility, and global settings.
 - `brush`: currently stores `eraseSize`.
 - `shapeConfig`: shape type, stroke/fill settings, colors, and stroke width.
 
@@ -102,6 +103,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.86`.
+Current app version: `v0.8.91`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

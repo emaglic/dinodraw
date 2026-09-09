@@ -216,3 +216,31 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added downsampled resize preview canvases for pending images and lasso selections when a resize interaction starts.
 - Drew the lightweight preview during resize so selected content remains visible while avoiding repeated full-resolution bitmap resampling.
 - Kept final pointer-up rendering on the original full-resolution image or selection canvases.
+
+## [2026-09-09] feature | Added Document Folders
+
+- Added nested document folders to the Documents landing screen from `temp/landing-page.md`.
+- Bumped IndexedDB to version `2` and added a `folders` object store while keeping existing documents in Root through missing-`folderId` compatibility.
+- Documented that `folderId` is local library organization and is stripped from DinoDraw JSON exports.
+
+## [2026-09-09] polish | Refined Folder Landing Page
+
+- Changed the Documents heading to show the current folder name and added a separate parent-folder back arrow.
+- Renamed folder-scoped actions to New Drawing, New Folder, and Import Doc.
+- Added folder/document row icons and pointer drag-to-move support for dropping rows onto folders, breadcrumbs, Root, or the parent target.
+
+## [2026-09-09] fix | Restored Document List Scrolling
+
+- Changed library drag-to-move so it activates only after a short press-and-hold and cancels on early swipe movement.
+- Restored normal vertical scrolling for document rows.
+- Changed the landing header to show a large `Documents` heading with the smaller current folder name beside the back arrow, and removed the folder helper text.
+
+## [2026-09-09] polish | Aligned Folder Heading Row
+
+- Changed the current folder label to a smaller heading element.
+- Switched the location row to flex so the back arrow and folder name stay on the same line.
+
+## [2026-09-09] fix | Stabilized Vertical Library Dragging
+
+- Changed library row gestures to capture the pointer immediately and manually scroll the document panel when movement starts before the long-press delay.
+- Kept straight vertical movement as drag movement after the long-press delay, avoiding browser vertical-pan cancellation.

@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.86";
+const APP_VERSION = "v0.8.91";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -52,15 +52,23 @@ const toolbarVisibilityInputs = Array.from(
   document.querySelectorAll("[data-toolbar-visibility]")
 );
 const documentScreen = document.querySelector("[data-document-screen]");
+const documentTitle = document.querySelector("[data-document-title]");
 const documentSubtitle = document.querySelector("[data-document-subtitle]");
+const documentBreadcrumbs = document.querySelector("[data-document-breadcrumbs]");
 const documentList = document.querySelector("[data-document-list]");
 const documentPanel = document.querySelector(".document-panel");
+const folderBackButton = document.querySelector("[data-folder-back]");
 const documentActionMenu = document.querySelector("[data-document-action-menu]");
 const documentRenameButton = document.querySelector("[data-document-rename]");
+const documentMoveButton = document.querySelector("[data-document-move]");
 const documentExportButton = document.querySelector("[data-document-export]");
 const documentSavePngButton = document.querySelector("[data-document-save-png]");
 const documentSavePdfButton = document.querySelector("[data-document-save-pdf]");
 const documentDeleteButton = document.querySelector("[data-document-delete]");
+const folderActionMenu = document.querySelector("[data-folder-action-menu]");
+const folderRenameButton = document.querySelector("[data-folder-rename]");
+const folderMoveButton = document.querySelector("[data-folder-move]");
+const folderDeleteButton = document.querySelector("[data-folder-delete]");
 const openLibraryButton = document.querySelector("[data-open-library]");
 const closeLibraryButton = document.querySelector("[data-close-library]");
 const openGuideButtons = Array.from(document.querySelectorAll("[data-open-guide]"));
@@ -70,6 +78,7 @@ const dismissDocumentIntroButton = document.querySelector(
   "[data-dismiss-document-intro]"
 );
 const newDocumentButton = document.querySelector("[data-new-document]");
+const newFolderButton = document.querySelector("[data-new-folder]");
 const saveDocumentButtons = Array.from(
   document.querySelectorAll("[data-save-document]")
 );
@@ -87,6 +96,14 @@ const importDocumentButtons = Array.from(
 );
 const importDocumentInput = document.querySelector("[data-import-input]");
 const saveStatus = document.querySelector("[data-save-status]");
+const moveDialog = document.querySelector("#move-dialog");
+const moveDialogForm = document.querySelector("[data-move-dialog-form]");
+const moveDialogTitle = document.querySelector("[data-move-dialog-title]");
+const moveDialogMessage = document.querySelector("[data-move-dialog-message]");
+const moveDialogSelect = document.querySelector("[data-move-dialog-select]");
+const moveDialogCancelButtons = Array.from(
+  document.querySelectorAll("[data-move-dialog-cancel]")
+);
 const shapeActionToolbar = document.querySelector("[data-shape-action-toolbar]");
 const imageActionToolbar = document.querySelector("[data-image-action-toolbar]");
 const lassoActionToolbar = document.querySelector("[data-lasso-action-toolbar]");
@@ -218,6 +235,10 @@ const state = {
   appDialogResolve: null,
   appDialogMode: "confirm",
   appDialogResult: null,
+  moveDialogResolve: null,
+  moveDialogResult: undefined,
+  libraryDrag: null,
+  libraryDragSuppressClick: false,
   pages: [],
   presets: [],
   documentId: null,
@@ -225,7 +246,10 @@ const state = {
   documentCreatedAt: null,
   documentUpdatedAt: null,
   documentLastOpenedAt: null,
+  documentFolderId: null,
   documents: [],
+  folders: [],
+  currentFolderId: null,
   saveTimer: null,
   savePromise: null,
   isLoadingDocument: false,
@@ -266,6 +290,8 @@ const transformInputMinInterval = 56;
 const transformPreviewMaxDimension = 480;
 const maxPageZoom = 4;
 const tooltipDelay = 375;
+const libraryDragDelay = 360;
+const libraryDragMoveTolerance = 8;
 const toolbarPositionStorageKey = "mainToolbarPosition";
 const presetToolbarPositionStorageKey = "presetToolbarPositionBottomLeft";
 const undoToolbarPositionStorageKey = "undoToolbarPositionTopLeft";
@@ -273,8 +299,9 @@ const fullscreenToolbarPositionStorageKey = "fullscreenToolbarPosition";
 const toolbarTogglePositionStorageKey = "toolbarVisibilityTabPosition";
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
 const databaseName = "booxDrawingDocuments";
-const databaseVersion = 1;
+const databaseVersion = 2;
 const documentStoreName = "documents";
+const folderStoreName = "folders";
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
@@ -342,6 +369,10 @@ function openDatabase() {
       if (!db.objectStoreNames.contains(documentStoreName)) {
         db.createObjectStore(documentStoreName, { keyPath: "id" });
       }
+
+      if (!db.objectStoreNames.contains(folderStoreName)) {
+        db.createObjectStore(folderStoreName, { keyPath: "id" });
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -353,6 +384,12 @@ function openDatabase() {
 function getDocumentStore(mode) {
   return openDatabase().then(
     (db) => db.transaction(documentStoreName, mode).objectStore(documentStoreName)
+  );
+}
+
+function getFolderStore(mode) {
+  return openDatabase().then(
+    (db) => db.transaction(folderStoreName, mode).objectStore(folderStoreName)
   );
 }
 
@@ -377,8 +414,37 @@ async function getAllDocuments() {
   });
 }
 
+async function getAllFolders() {
+  const store = await getFolderStore("readonly");
+
+  return new Promise((resolve, reject) => {
+    const request = store.getAll();
+
+    request.onsuccess = () => {
+      const folders = request.result || [];
+
+      folders.sort((a, b) =>
+        String(a.name || "").localeCompare(String(b.name || ""))
+      );
+      resolve(folders);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
 async function getDocument(id) {
   const store = await getDocumentStore("readonly");
+
+  return new Promise((resolve, reject) => {
+    const request = store.get(id);
+
+    request.onsuccess = () => resolve(request.result || null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getFolder(id) {
+  const store = await getFolderStore("readonly");
 
   return new Promise((resolve, reject) => {
     const request = store.get(id);
@@ -399,6 +465,17 @@ async function putDocument(record) {
   });
 }
 
+async function putFolder(record) {
+  const store = await getFolderStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.put(record);
+
+    request.onsuccess = () => resolve(record);
+    request.onerror = () => reject(request.error);
+  });
+}
+
 async function deleteDocumentRecord(id) {
   const store = await getDocumentStore("readwrite");
 
@@ -408,6 +485,133 @@ async function deleteDocumentRecord(id) {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+}
+
+async function deleteFolderRecord(id) {
+  const store = await getFolderStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.delete(id);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+function normalizeFolderId(value) {
+  return value && typeof value === "string" ? value : null;
+}
+
+function getFolderById(id) {
+  const folderId = normalizeFolderId(id);
+
+  if (!folderId) {
+    return null;
+  }
+
+  return state.folders.find((folder) => folder.id === folderId) || null;
+}
+
+function resolveExistingFolderId(id) {
+  const folderId = normalizeFolderId(id);
+
+  return getFolderById(folderId) ? folderId : null;
+}
+
+function getFolderPath(folderId) {
+  const path = [];
+  const seen = new Set();
+  let currentId = resolveExistingFolderId(folderId);
+
+  while (currentId && !seen.has(currentId)) {
+    const folder = getFolderById(currentId);
+
+    if (!folder) {
+      break;
+    }
+
+    seen.add(currentId);
+    path.unshift(folder);
+    currentId = resolveExistingFolderId(folder.parentId);
+  }
+
+  return path;
+}
+
+function getFolderPathLabel(folderId) {
+  const path = getFolderPath(folderId);
+
+  if (path.length === 0) {
+    return "Root";
+  }
+
+  return `Root / ${path.map((folder) => folder.name || "Untitled folder").join(" / ")}`;
+}
+
+function countDirectFolderItems(folderId) {
+  const parentId = normalizeFolderId(folderId);
+  const folderCount = state.folders.filter(
+    (folder) => resolveExistingFolderId(folder.parentId) === parentId
+  ).length;
+  const documentCount = state.documents.filter(
+    (record) => resolveExistingFolderId(record.folderId) === parentId
+  ).length;
+
+  return folderCount + documentCount;
+}
+
+function getDescendantFolderIds(folderId) {
+  const excluded = new Set();
+  const queue = [folderId];
+
+  while (queue.length > 0) {
+    const currentId = queue.shift();
+
+    state.folders.forEach((folder) => {
+      if (
+        normalizeFolderId(folder.parentId) === currentId &&
+        !excluded.has(folder.id)
+      ) {
+        excluded.add(folder.id);
+        queue.push(folder.id);
+      }
+    });
+  }
+
+  return excluded;
+}
+
+function getMoveDestinationOptions(excludedFolderId) {
+  const excludedIds = excludedFolderId
+    ? getDescendantFolderIds(excludedFolderId)
+    : new Set();
+
+  if (excludedFolderId) {
+    excludedIds.add(excludedFolderId);
+  }
+
+  const folderOptions = state.folders
+    .filter((folder) => !excludedIds.has(folder.id))
+    .map((folder) => ({
+      id: folder.id,
+      label: getFolderPathLabel(folder.id),
+    }));
+
+  folderOptions.sort((a, b) => a.label.localeCompare(b.label));
+
+  return [{ id: null, label: "Root" }].concat(folderOptions);
+}
+
+function createFolderRecord(name, parentId) {
+  const now = new Date().toISOString();
+
+  return {
+    id: createId(),
+    name,
+    parentId: resolveExistingFolderId(parentId),
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 function formatDateLabel(value) {
@@ -513,6 +717,50 @@ function showTextDialog(title, message, inputValue) {
   });
 }
 
+function closeMoveDialog(result) {
+  state.moveDialogResult = result;
+
+  if (moveDialog.open && moveDialog.close) {
+    moveDialog.close();
+    return;
+  }
+
+  moveDialog.removeAttribute("open");
+
+  if (state.moveDialogResolve) {
+    state.moveDialogResolve(result);
+    state.moveDialogResolve = null;
+  }
+}
+
+function showMoveDialog(title, message, options, selectedFolderId) {
+  return new Promise((resolve) => {
+    state.moveDialogResolve = resolve;
+    state.moveDialogResult = undefined;
+    moveDialogTitle.textContent = title;
+    moveDialogMessage.textContent = message;
+    moveDialogSelect.textContent = "";
+
+    options.forEach((folderOption) => {
+      const option = document.createElement("option");
+
+      option.value = folderOption.id || "";
+      option.textContent = folderOption.label;
+      moveDialogSelect.appendChild(option);
+    });
+
+    moveDialogSelect.value = selectedFolderId || "";
+
+    if (moveDialog.showModal) {
+      moveDialog.showModal();
+    } else {
+      moveDialog.setAttribute("open", "");
+    }
+
+    moveDialogSelect.focus();
+  });
+}
+
 function sanitizeFileName(name) {
   return (
     name
@@ -574,13 +822,14 @@ function applyDocumentSettings(settings = {}) {
   syncShapeDialog();
 }
 
-function createDocumentRecord(name) {
+function createDocumentRecord(name, folderId = state.currentFolderId) {
   const now = new Date().toISOString();
   const pageSize = getCurrentViewportSize();
 
   return {
     id: createId(),
     name,
+    folderId: resolveExistingFolderId(folderId),
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -605,6 +854,7 @@ function serializeCurrentDocument() {
   return {
     id: state.documentId,
     name: state.documentName || "Untitled",
+    folderId: resolveExistingFolderId(state.documentFolderId),
     createdAt: state.documentCreatedAt || now,
     updatedAt: now,
     lastOpenedAt: state.documentLastOpenedAt || now,
@@ -619,6 +869,14 @@ function serializeCurrentDocument() {
       drawing: getCanvasDataUrl(page.layer),
     })),
   };
+}
+
+function getPortableDocumentRecord(record) {
+  const portableRecord = { ...record };
+
+  delete portableRecord.folderId;
+
+  return portableRecord;
 }
 
 function loadImage(dataUrl) {
@@ -1037,8 +1295,18 @@ function setSaveStatus(message) {
 }
 
 function updateDocumentSubtitle() {
+  const currentFolder = getFolderById(state.currentFolderId);
+  const folderName = currentFolder ? currentFolder.name || "Untitled folder" : "Root";
+  const parentId = currentFolder
+    ? resolveExistingFolderId(currentFolder.parentId)
+    : null;
+
+  documentTitle.textContent = "Documents";
+  documentSubtitle.textContent = folderName;
+  folderBackButton.disabled = !currentFolder;
+  folderBackButton.dataset.dropFolderId = parentId || "";
+
   if (!state.documentId) {
-    documentSubtitle.textContent = "Local notebooks stored on this device.";
     closeLibraryButton.disabled = true;
     saveDocumentButtons.forEach((button) => {
       button.disabled = true;
@@ -1056,7 +1324,6 @@ function updateDocumentSubtitle() {
     return;
   }
 
-  documentSubtitle.textContent = `Current: ${state.documentName}`;
   closeLibraryButton.disabled = false;
   saveDocumentButtons.forEach((button) => {
     button.disabled = false;
@@ -1074,6 +1341,7 @@ function updateDocumentSubtitle() {
 
 function showDocumentScreen() {
   documentScreen.classList.remove("is-hidden");
+  updateDocumentSubtitle();
   renderDocumentList();
 }
 
@@ -1089,12 +1357,14 @@ function hideDocumentScreen() {
 function closeDocumentMenus() {
   documentActionMenu.classList.add("is-hidden");
   documentActionMenu.removeAttribute("data-document-id");
+  folderActionMenu.classList.add("is-hidden");
+  folderActionMenu.removeAttribute("data-folder-id");
 }
 
-function positionDocumentActionMenu(anchor) {
+function positionRecordActionMenu(menu, anchor) {
   const margin = 8;
   const anchorRect = anchor.getBoundingClientRect();
-  const menuRect = documentActionMenu.getBoundingClientRect();
+  const menuRect = menu.getBoundingClientRect();
   const rightAlignedLeft = anchorRect.right - menuRect.width;
   const leftAlignedLeft = anchorRect.left;
   const belowTop = anchorRect.bottom + margin;
@@ -1106,11 +1376,11 @@ function positionDocumentActionMenu(anchor) {
       ? belowTop
       : aboveTop;
 
-  documentActionMenu.style.left = `${Math.max(
+  menu.style.left = `${Math.max(
     margin,
     Math.min(left, window.innerWidth - menuRect.width - margin)
   )}px`;
-  documentActionMenu.style.top = `${Math.max(
+  menu.style.top = `${Math.max(
     margin,
     Math.min(top, window.innerHeight - menuRect.height - margin)
   )}px`;
@@ -1126,31 +1396,453 @@ function openDocumentActionMenu(id, anchor) {
     return;
   }
 
+  closeDocumentMenus();
   documentActionMenu.dataset.documentId = id;
   documentActionMenu.classList.remove("is-hidden");
   documentActionMenu.style.left = "-9999px";
   documentActionMenu.style.top = "-9999px";
-  positionDocumentActionMenu(anchor);
+  positionRecordActionMenu(documentActionMenu, anchor);
+}
+
+function openFolderActionMenu(id, anchor) {
+  const isOpenForFolder =
+    !folderActionMenu.classList.contains("is-hidden") &&
+    folderActionMenu.dataset.folderId === id;
+
+  if (isOpenForFolder) {
+    closeDocumentMenus();
+    return;
+  }
+
+  closeDocumentMenus();
+  folderActionMenu.dataset.folderId = id;
+  folderActionMenu.classList.remove("is-hidden");
+  folderActionMenu.style.left = "-9999px";
+  folderActionMenu.style.top = "-9999px";
+  positionRecordActionMenu(folderActionMenu, anchor);
+}
+
+function setCurrentFolder(folderId) {
+  state.currentFolderId = resolveExistingFolderId(folderId);
+  updateDocumentSubtitle();
+  renderDocumentList();
+}
+
+function renderDocumentBreadcrumbs() {
+  if (!documentBreadcrumbs) {
+    return;
+  }
+
+  const path = getFolderPath(state.currentFolderId);
+  const crumbs = [{ id: null, name: "Root" }].concat(path);
+
+  documentBreadcrumbs.textContent = "";
+
+  crumbs.forEach((crumb, index) => {
+    const button = document.createElement("button");
+
+    button.className = "document-breadcrumb-button";
+    button.type = "button";
+    button.textContent = crumb.name || "Untitled folder";
+    button.dataset.dropFolderId = crumb.id || "";
+
+    if (index === crumbs.length - 1) {
+      button.disabled = true;
+      button.setAttribute("aria-current", "page");
+    } else {
+      button.addEventListener("click", () => setCurrentFolder(crumb.id));
+    }
+
+    documentBreadcrumbs.appendChild(button);
+  });
+}
+
+function getCurrentLibraryFolderId(itemType, id) {
+  if (itemType === "folder") {
+    const folder = getFolderById(id);
+
+    return folder ? resolveExistingFolderId(folder.parentId) : null;
+  }
+
+  const record = state.documents.find((documentRecord) => documentRecord.id === id);
+
+  return record ? resolveExistingFolderId(record.folderId) : null;
+}
+
+function canDropLibraryItem(itemType, id, folderId) {
+  const destinationId = resolveExistingFolderId(folderId);
+  const currentFolderId = getCurrentLibraryFolderId(itemType, id);
+
+  if (currentFolderId === destinationId) {
+    return false;
+  }
+
+  if (itemType === "folder") {
+    if (destinationId === id) {
+      return false;
+    }
+
+    if (getDescendantFolderIds(id).has(destinationId)) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function clearLibraryDropTarget() {
+  if (state.libraryDrag && state.libraryDrag.dropTargetElement) {
+    state.libraryDrag.dropTargetElement.classList.remove("is-drop-target");
+    state.libraryDrag.dropTargetElement = null;
+  }
+}
+
+function updateLibraryDropTarget(clientX, clientY) {
+  const drag = state.libraryDrag;
+
+  if (!drag) {
+    return;
+  }
+
+  const target = document.elementFromPoint(clientX, clientY);
+  const dropElement = target
+    ? target.closest("[data-drop-folder-id]")
+    : null;
+  const destinationId = dropElement
+    ? resolveExistingFolderId(dropElement.dataset.dropFolderId)
+    : null;
+  const canDrop = dropElement
+    ? canDropLibraryItem(drag.itemType, drag.itemId, destinationId)
+    : false;
+
+  if (!canDrop) {
+    clearLibraryDropTarget();
+    drag.dropFolderId = undefined;
+    return;
+  }
+
+  if (drag.dropTargetElement !== dropElement) {
+    clearLibraryDropTarget();
+    drag.dropTargetElement = dropElement;
+    drag.dropTargetElement.classList.add("is-drop-target");
+  }
+
+  drag.dropFolderId = destinationId;
+}
+
+function moveLibraryItemToFolder(itemType, id, destinationId) {
+  return (async () => {
+    await flushDocumentSave();
+
+    if (itemType === "folder") {
+      const folder = await getFolder(id);
+
+      if (!folder || !canDropLibraryItem(itemType, id, destinationId)) {
+        return false;
+      }
+
+      folder.parentId = resolveExistingFolderId(destinationId);
+      folder.updatedAt = new Date().toISOString();
+      await putFolder(folder);
+    } else {
+      const record = await getDocument(id);
+
+      if (!record || !canDropLibraryItem(itemType, id, destinationId)) {
+        return false;
+      }
+
+      record.folderId = resolveExistingFolderId(destinationId);
+      record.updatedAt = new Date().toISOString();
+      await putDocument(record);
+
+      if (state.documentId === id) {
+        state.documentFolderId = record.folderId;
+        state.documentUpdatedAt = record.updatedAt;
+      }
+    }
+
+    await refreshDocuments();
+    setSaveStatus("Moved");
+    return true;
+  })();
+}
+
+function createLibraryDragGhost(row) {
+  const ghost = row.cloneNode(true);
+  const actions = ghost.querySelector(".document-row-actions");
+
+  if (actions) {
+    actions.remove();
+  }
+
+  ghost.className = `${row.className} document-drag-ghost`;
+  ghost.removeAttribute("data-library-type");
+  ghost.removeAttribute("data-library-id");
+  ghost.removeAttribute("data-drop-folder-id");
+  document.body.appendChild(ghost);
+
+  return ghost;
+}
+
+function positionLibraryDragGhost(ghost, clientX, clientY) {
+  ghost.style.left = `${clientX + 12}px`;
+  ghost.style.top = `${clientY + 12}px`;
+}
+
+function addLibraryDragInteractions(row) {
+  row.addEventListener("pointerdown", (event) => {
+    if (event.button !== undefined && event.button !== 0) {
+      return;
+    }
+
+    if (event.target.closest("button, input, select, a")) {
+      return;
+    }
+
+    closeDocumentMenus();
+
+    const drag = {
+      itemType: row.dataset.libraryType,
+      itemId: row.dataset.libraryId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      lastY: event.clientY,
+      longPressTimer: null,
+      isPressReady: false,
+      isScrolling: false,
+      isDragging: false,
+      row,
+      ghost: null,
+      dropTargetElement: null,
+      dropFolderId: undefined,
+    };
+
+    state.libraryDrag = drag;
+
+    if (row.setPointerCapture) {
+      try {
+        row.setPointerCapture(event.pointerId);
+      } catch (error) {}
+    }
+
+    function startDrag(clientX, clientY) {
+      if (!state.libraryDrag || drag.isScrolling || drag.isDragging) {
+        return;
+      }
+
+      drag.isPressReady = true;
+      drag.isDragging = true;
+      drag.row.classList.add("is-dragging");
+      drag.ghost = createLibraryDragGhost(row);
+      state.libraryDragSuppressClick = true;
+      positionLibraryDragGhost(drag.ghost, clientX, clientY);
+      updateLibraryDropTarget(clientX, clientY);
+    }
+
+    drag.longPressTimer = window.setTimeout(() => {
+      startDrag(drag.startX, drag.startY);
+    }, libraryDragDelay);
+
+    function cancelPendingPress() {
+      if (drag.longPressTimer) {
+        window.clearTimeout(drag.longPressTimer);
+        drag.longPressTimer = null;
+      }
+    }
+
+    function moveDrag(moveEvent) {
+      if (!state.libraryDrag || moveEvent.pointerId !== drag.pointerId) {
+        return;
+      }
+
+      const deltaX = moveEvent.clientX - drag.startX;
+      const deltaY = moveEvent.clientY - drag.startY;
+
+      if (!drag.isDragging) {
+        if (moveEvent.cancelable) {
+          moveEvent.preventDefault();
+        }
+
+        if (
+          Math.sqrt(deltaX * deltaX + deltaY * deltaY) >
+          libraryDragMoveTolerance
+        ) {
+          cancelPendingPress();
+          drag.isScrolling = true;
+        }
+
+        if (drag.isScrolling) {
+          documentPanel.scrollTop -= moveEvent.clientY - drag.lastY;
+          drag.lastY = moveEvent.clientY;
+        }
+
+        return;
+      }
+
+      if (moveEvent.cancelable) {
+        moveEvent.preventDefault();
+      }
+
+      positionLibraryDragGhost(drag.ghost, moveEvent.clientX, moveEvent.clientY);
+      updateLibraryDropTarget(moveEvent.clientX, moveEvent.clientY);
+    }
+
+    function endDrag(endEvent) {
+      if (endEvent && endEvent.pointerId !== drag.pointerId) {
+        return;
+      }
+
+      window.removeEventListener("pointermove", moveDrag);
+      window.removeEventListener("pointerup", endDrag);
+      window.removeEventListener("pointercancel", cancelDrag);
+      window.removeEventListener("blur", cancelDrag);
+      cancelPendingPress();
+
+      if (row.releasePointerCapture) {
+        try {
+          row.releasePointerCapture(drag.pointerId);
+        } catch (error) {}
+      }
+
+      const shouldDrop = drag.isDragging && drag.dropFolderId !== undefined;
+      const itemType = drag.itemType;
+      const itemId = drag.itemId;
+      const destinationId = drag.dropFolderId;
+
+      clearLibraryDropTarget();
+      drag.row.classList.remove("is-dragging");
+
+      if (drag.ghost) {
+        drag.ghost.remove();
+      }
+
+      state.libraryDrag = null;
+
+      if (drag.isDragging) {
+        window.setTimeout(() => {
+          state.libraryDragSuppressClick = false;
+        }, 0);
+      } else {
+        state.libraryDragSuppressClick = false;
+      }
+
+      if (shouldDrop) {
+        moveLibraryItemToFolder(itemType, itemId, destinationId).catch((error) => {
+          setSaveStatus("Move failed");
+          console.error(error);
+        });
+      }
+    }
+
+    function cancelDrag() {
+      endDrag({ pointerId: drag.pointerId });
+    }
+
+    window.addEventListener("pointermove", moveDrag, { passive: false });
+    window.addEventListener("pointerup", endDrag);
+    window.addEventListener("pointercancel", cancelDrag);
+    window.addEventListener("blur", cancelDrag);
+  });
+
+  row.addEventListener("click", (event) => {
+    if (state.libraryDragSuppressClick) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+}
+
+function renderFolderRow(folder) {
+  const row = document.createElement("article");
+  const details = document.createElement("div");
+  const name = document.createElement("div");
+  const icon = document.createElement("span");
+  const label = document.createElement("span");
+  const meta = document.createElement("div");
+  const actions = document.createElement("div");
+  const openButton = document.createElement("button");
+  const menuButton = document.createElement("button");
+  const itemCount = countDirectFolderItems(folder.id);
+
+  row.className = "document-row document-folder-row";
+  row.dataset.libraryType = "folder";
+  row.dataset.libraryId = folder.id;
+  row.dataset.dropFolderId = folder.id;
+  details.className = "document-row-details";
+  name.className = "document-name document-folder-name";
+  icon.className = "document-folder-icon";
+  icon.setAttribute("aria-hidden", "true");
+  label.textContent = folder.name || "Untitled folder";
+  meta.className = "document-meta";
+  meta.textContent = `Folder - ${itemCount} item${itemCount === 1 ? "" : "s"} - updated ${formatDateLabel(folder.updatedAt)}`;
+  actions.className = "document-row-actions";
+
+  openButton.className = "document-button";
+  openButton.type = "button";
+  openButton.textContent = "Open";
+  openButton.addEventListener("click", () => setCurrentFolder(folder.id));
+
+  menuButton.className = "document-menu-button";
+  menuButton.type = "button";
+  menuButton.setAttribute(
+    "aria-label",
+    `${folder.name || "Untitled folder"} actions`
+  );
+  menuButton.innerHTML = "&#8942;";
+  menuButton.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    openFolderActionMenu(folder.id, menuButton);
+  });
+
+  name.append(icon, label);
+  details.append(name, meta);
+  actions.append(openButton, menuButton);
+  row.append(details, actions);
+  addLibraryDragInteractions(row);
+
+  return row;
 }
 
 function renderDocumentList() {
   closeDocumentMenus();
   documentList.textContent = "";
+  state.currentFolderId = resolveExistingFolderId(state.currentFolderId);
+  updateDocumentSubtitle();
+  renderDocumentBreadcrumbs();
 
-  if (state.documents.length === 0) {
+  const currentFolderId = state.currentFolderId;
+  const folders = state.folders.filter(
+    (folder) => resolveExistingFolderId(folder.parentId) === currentFolderId
+  );
+  const documents = state.documents.filter(
+    (documentRecord) =>
+      resolveExistingFolderId(documentRecord.folderId) === currentFolderId
+  );
+
+  if (folders.length === 0 && documents.length === 0) {
     const empty = document.createElement("div");
 
     empty.className = "document-empty";
     empty.textContent =
-      "No documents yet. Create one or import a DinoDraw JSON file.";
+      currentFolderId
+        ? "This folder is empty. Create a folder, create a drawing, or import a DinoDraw JSON file."
+        : "No drawings yet. Create one or import a DinoDraw JSON file.";
     documentList.appendChild(empty);
     return;
   }
 
-  state.documents.forEach((documentRecord) => {
+  folders.forEach((folder) => {
+    documentList.appendChild(renderFolderRow(folder));
+  });
+
+  documents.forEach((documentRecord) => {
     const row = document.createElement("article");
     const details = document.createElement("div");
     const name = document.createElement("div");
+    const icon = document.createElement("span");
+    const label = document.createElement("span");
     const meta = document.createElement("div");
     const actions = document.createElement("div");
     const openButton = document.createElement("button");
@@ -1158,10 +1850,15 @@ function renderDocumentList() {
 
     row.className = "document-row";
     row.classList.toggle("is-active", documentRecord.id === state.documentId);
-    name.className = "document-name";
+    row.dataset.libraryType = "document";
+    row.dataset.libraryId = documentRecord.id;
+    details.className = "document-row-details";
+    name.className = "document-name document-drawing-name";
+    icon.className = "document-drawing-icon";
+    icon.setAttribute("aria-hidden", "true");
+    label.textContent = documentRecord.name || "Untitled";
     meta.className = "document-meta";
     actions.className = "document-row-actions";
-    name.textContent = documentRecord.name || "Untitled";
     const pageCount = (documentRecord.pages || []).length || 1;
 
     meta.textContent = `${pageCount} page${
@@ -1197,16 +1894,21 @@ function renderDocumentList() {
       openDocumentActionMenu(documentRecord.id, menuButton);
     });
 
+    name.append(icon, label);
     details.append(name, meta);
     actions.append(openButton, menuButton);
     row.append(details, actions);
+    addLibraryDragInteractions(row);
     documentList.appendChild(row);
   });
 }
 
 async function refreshDocuments() {
   try {
-    state.documents = await getAllDocuments();
+    const records = await Promise.all([getAllFolders(), getAllDocuments()]);
+
+    state.folders = records[0];
+    state.documents = records[1];
     renderDocumentList();
   } catch (error) {
     setSaveStatus("Storage unavailable");
@@ -1307,6 +2009,7 @@ async function loadDocument(record, shouldHideLibrary = true) {
   state.documentCreatedAt = record.createdAt || new Date().toISOString();
   state.documentUpdatedAt = record.updatedAt || state.documentCreatedAt;
   state.documentLastOpenedAt = record.lastOpenedAt || state.documentUpdatedAt;
+  state.documentFolderId = resolveExistingFolderId(record.folderId);
   applyDocumentSettings(record.settings || {});
 
   const savedPages = record.pages && record.pages.length
@@ -1373,13 +2076,34 @@ async function createNewDocument() {
   const name = enteredName && enteredName.trim()
     ? enteredName.trim()
     : "Untitled notebook";
-  const record = createDocumentRecord(name);
+  const record = createDocumentRecord(name, state.currentFolderId);
 
   record.lastOpenedAt = new Date().toISOString();
   await putDocument(record);
   await refreshDocuments();
   await loadDocument(record);
   scheduleDocumentSave(0);
+}
+
+async function createNewFolder() {
+  await flushDocumentSave();
+  const enteredName = await showTextDialog(
+    "New Folder",
+    `Create a folder in ${getFolderPathLabel(state.currentFolderId)}.`,
+    "Untitled folder"
+  );
+
+  if (enteredName === null) {
+    return;
+  }
+
+  const name = enteredName && enteredName.trim()
+    ? enteredName.trim()
+    : "Untitled folder";
+  const record = createFolderRecord(name, state.currentFolderId);
+
+  await putFolder(record);
+  await refreshDocuments();
 }
 
 async function renameDocument(id) {
@@ -1415,6 +2139,39 @@ async function renameDocument(id) {
   await refreshDocuments();
 }
 
+async function moveDocument(id) {
+  await flushDocumentSave();
+  const record = await getDocument(id);
+
+  if (!record) {
+    return;
+  }
+
+  const currentFolderId = resolveExistingFolderId(record.folderId);
+  const destinationId = await showMoveDialog(
+    "Move Document",
+    `Choose a folder for "${record.name || "Untitled"}".`,
+    getMoveDestinationOptions(null),
+    currentFolderId
+  );
+
+  if (destinationId === undefined || destinationId === currentFolderId) {
+    return;
+  }
+
+  record.folderId = resolveExistingFolderId(destinationId);
+  record.updatedAt = new Date().toISOString();
+  await putDocument(record);
+
+  if (state.documentId === id) {
+    state.documentFolderId = record.folderId;
+    state.documentUpdatedAt = record.updatedAt;
+    setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
+  }
+
+  await refreshDocuments();
+}
+
 async function deleteDocument(id) {
   await flushDocumentSave();
   const record = await getDocument(id);
@@ -1443,6 +2200,7 @@ async function deleteDocument(id) {
     state.documentCreatedAt = null;
     state.documentUpdatedAt = null;
     state.documentLastOpenedAt = null;
+    state.documentFolderId = null;
     state.pages = [];
     clearTemporaryCanvasState();
     updateDocumentSubtitle();
@@ -1452,6 +2210,110 @@ async function deleteDocument(id) {
 
   await refreshDocuments();
   showDocumentScreen();
+}
+
+async function renameFolder(id) {
+  await flushDocumentSave();
+  const record = await getFolder(id);
+
+  if (!record) {
+    return;
+  }
+
+  const enteredName = await showTextDialog(
+    "Rename Folder",
+    "Update this folder name.",
+    record.name || "Untitled folder"
+  );
+  const name = enteredName ? enteredName.trim() : "";
+
+  if (!name || name === record.name) {
+    return;
+  }
+
+  record.name = name;
+  record.updatedAt = new Date().toISOString();
+  await putFolder(record);
+  await refreshDocuments();
+}
+
+async function moveFolder(id) {
+  await flushDocumentSave();
+  const record = await getFolder(id);
+
+  if (!record) {
+    return;
+  }
+
+  const currentParentId = resolveExistingFolderId(record.parentId);
+  const destinationId = await showMoveDialog(
+    "Move Folder",
+    `Choose a parent folder for "${record.name || "Untitled folder"}".`,
+    getMoveDestinationOptions(id),
+    currentParentId
+  );
+
+  if (destinationId === undefined || destinationId === currentParentId) {
+    return;
+  }
+
+  record.parentId = resolveExistingFolderId(destinationId);
+  record.updatedAt = new Date().toISOString();
+  await putFolder(record);
+  await refreshDocuments();
+}
+
+async function deleteFolder(id) {
+  await flushDocumentSave();
+  const record = await getFolder(id);
+
+  if (!record) {
+    return;
+  }
+
+  const shouldDelete = await showConfirmDialog(
+    "Delete Folder",
+    `Delete "${record.name || "Untitled folder"}" and move its contents up one level?`,
+    "Delete"
+  );
+
+  if (!shouldDelete) {
+    return;
+  }
+
+  const parentId = resolveExistingFolderId(record.parentId);
+  const childFolders = state.folders.filter(
+    (folder) => normalizeFolderId(folder.parentId) === id
+  );
+  const childDocuments = state.documents.filter(
+    (documentRecord) => resolveExistingFolderId(documentRecord.folderId) === id
+  );
+  const now = new Date().toISOString();
+
+  for (const folder of childFolders) {
+    folder.parentId = parentId;
+    folder.updatedAt = now;
+    await putFolder(folder);
+  }
+
+  for (const documentRecord of childDocuments) {
+    documentRecord.folderId = parentId;
+    documentRecord.updatedAt = now;
+    await putDocument(documentRecord);
+
+    if (state.documentId === documentRecord.id) {
+      state.documentFolderId = parentId;
+      state.documentUpdatedAt = now;
+    }
+  }
+
+  await deleteFolderRecord(id);
+
+  if (state.currentFolderId === id) {
+    state.currentFolderId = parentId;
+  }
+
+  await refreshDocuments();
 }
 
 async function getRecordForExport(id) {
@@ -1464,18 +2326,19 @@ async function getRecordForExport(id) {
 }
 
 function createDinoDrawBlob(record) {
+  const portableRecord = getPortableDocumentRecord(record);
   const exportRecord = {
     format: exportFormat,
     formatVersion: exportFormatVersion,
     exportedAt: new Date().toISOString(),
-    document: record,
+    document: portableRecord,
   };
 
   return {
     blob: new Blob([JSON.stringify(exportRecord)], {
       type: "application/json",
     }),
-    filename: `${sanitizeFileName(record.name)}.dinodraw.json`,
+    filename: `${sanitizeFileName(portableRecord.name)}.dinodraw.json`,
     mimeType: "application/json",
   };
 }
@@ -1630,6 +2493,7 @@ function normalizeImportedDocument(parsed) {
   return {
     id: createId(),
     name: `${source.name || "Imported document"}`,
+    folderId: resolveExistingFolderId(state.currentFolderId),
     createdAt: source.createdAt || now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -6902,6 +7766,15 @@ addImageButton.addEventListener("click", openAddImageDialog);
 resetToolbarsButton.addEventListener("click", resetToolbarPositions);
 openLibraryButton.addEventListener("click", showDocumentScreen);
 closeLibraryButton.addEventListener("click", hideDocumentScreen);
+folderBackButton.addEventListener("click", () => {
+  const currentFolder = getFolderById(state.currentFolderId);
+
+  if (!currentFolder) {
+    return;
+  }
+
+  setCurrentFolder(currentFolder.parentId);
+});
 openGuideButtons.forEach((button) => {
   button.addEventListener("click", openGuide);
 });
@@ -6914,6 +7787,12 @@ if (dismissDocumentIntroButton) {
 newDocumentButton.addEventListener("click", () => {
   createNewDocument().catch((error) => {
     setSaveStatus("Create failed");
+    console.error(error);
+  });
+});
+newFolderButton.addEventListener("click", () => {
+  createNewFolder().catch((error) => {
+    setSaveStatus("Folder failed");
     console.error(error);
   });
 });
@@ -6992,6 +7871,27 @@ appDialog.addEventListener("close", () => {
 
   state.appDialogResult = null;
 });
+moveDialogForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  closeMoveDialog(moveDialogSelect.value || null);
+});
+moveDialogCancelButtons.forEach((button) => {
+  button.addEventListener("click", () => closeMoveDialog(undefined));
+});
+moveDialog.addEventListener("cancel", (event) => {
+  event.preventDefault();
+  closeMoveDialog(undefined);
+});
+moveDialog.addEventListener("close", () => {
+  const result = state.moveDialogResult;
+
+  if (state.moveDialogResolve) {
+    state.moveDialogResolve(result);
+    state.moveDialogResolve = null;
+  }
+
+  state.moveDialogResult = undefined;
+});
 documentScreen.addEventListener("click", (event) => {
   if (!event.target.closest(".document-row-actions, .document-menu")) {
     closeDocumentMenus();
@@ -7004,6 +7904,15 @@ documentRenameButton.addEventListener("click", () => {
   closeDocumentMenus();
   renameDocument(id).catch((error) => {
     setSaveStatus("Rename failed");
+    console.error(error);
+  });
+});
+documentMoveButton.addEventListener("click", () => {
+  const id = documentActionMenu.dataset.documentId;
+
+  closeDocumentMenus();
+  moveDocument(id).catch((error) => {
+    setSaveStatus("Move failed");
     console.error(error);
   });
 });
@@ -7039,6 +7948,33 @@ documentDeleteButton.addEventListener("click", () => {
 
   closeDocumentMenus();
   deleteDocument(id).catch((error) => {
+    setSaveStatus("Delete failed");
+    console.error(error);
+  });
+});
+folderRenameButton.addEventListener("click", () => {
+  const id = folderActionMenu.dataset.folderId;
+
+  closeDocumentMenus();
+  renameFolder(id).catch((error) => {
+    setSaveStatus("Rename failed");
+    console.error(error);
+  });
+});
+folderMoveButton.addEventListener("click", () => {
+  const id = folderActionMenu.dataset.folderId;
+
+  closeDocumentMenus();
+  moveFolder(id).catch((error) => {
+    setSaveStatus("Move failed");
+    console.error(error);
+  });
+});
+folderDeleteButton.addEventListener("click", () => {
+  const id = folderActionMenu.dataset.folderId;
+
+  closeDocumentMenus();
+  deleteFolder(id).catch((error) => {
     setSaveStatus("Delete failed");
     console.error(error);
   });

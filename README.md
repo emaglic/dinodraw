@@ -10,6 +10,7 @@ The app is designed to feel quiet, direct, and paper-like: open a document, pick
 - Erase with the eraser tool or a supported pen eraser.
 - Use brush presets as normal ink or "Draw Behind" highlighter strokes.
 - Add, delete, and reorder-style manage pages through the page view.
+- Organize documents into folders and nested folders.
 - Use different page backgrounds, including plain, ruled, and graph styles.
 - Save documents locally on the device.
 - Export editable Dino Draw documents.
@@ -23,12 +24,16 @@ When Dino Draw opens, you will see the Documents screen.
 
 From there you can:
 
-- Choose `New` to create a blank document.
-- Choose `Import` to open a previously exported Dino Draw document.
+- Choose `New Drawing` to create a blank document in the current folder.
+- Choose `New Folder` to create a folder in the current location.
+- Choose `Import Doc` to open a previously exported Dino Draw document in the current folder.
 - Choose `Open` next to an existing document to continue working.
-- Use the three-dot menu on a document row for options like rename, export, save PNG, save PDF, or delete.
+- Use folder rows and breadcrumbs to move through nested folders.
+- Use the back arrow to move up to the parent folder.
+- Press and hold, then drag a drawing or folder row onto a folder row or breadcrumb to move it.
+- Use the three-dot menu on a document row for options like move, rename, export, save PNG, save PDF, or delete.
 
-Documents are shown with the most recently opened document first.
+Existing documents start in the root folder. Documents are shown with the most recently opened document first inside the current folder.
 
 ## Drawing
 
