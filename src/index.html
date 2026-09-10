@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.98">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.101">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.98">
+    <link rel="stylesheet" href="./styles.css?v=0.8.101">
   </head>
   <body>
     <main class="app-shell">
@@ -182,7 +182,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.98</div>
+      <div class="version-badge" aria-label="Version">v0.8.101</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,7 +190,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.98</small>
+          <small data-brand-version>v0.8.101</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -330,7 +330,7 @@
             <h2 id="guide-toolbars-title">Toolbars</h2>
             <ul>
               <li>Drag a toolbar handle to move a toolbar.</li>
-              <li>Move a toolbar near an edge to change its orientation.</li>
+              <li>Move a toolbar into an edge preview to dock it and set its orientation.</li>
               <li>Use the tab at the screen edge to hide or show enabled toolbars.</li>
               <li>Settings controls which optional toolbars are enabled.</li>
               <li>Reset Toolbar Positions restores the default toolbar positions.</li>
@@ -665,11 +665,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.98"></script>
+    <script src="./app.js?v=0.8.101"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.98", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.101", {
             updateViaCache: "none"
           }).catch(function () {});
         });

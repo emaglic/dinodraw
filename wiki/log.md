@@ -280,3 +280,21 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 ## [2026-09-10] polish | Replaced Folder Back Icon
 
 - Replaced the landing-page previous-folder back button glyph with the local Material Symbols `arrow_back` icon.
+
+## [2026-09-10] feature | Added Toolbar Dock Preview
+
+- Added a semi-transparent edge preview while regular toolbars are dragged near a screen edge.
+- Snapped toolbars to the previewed edge with 8px padding on pointer release.
+- Kept docked orientation horizontal for top/bottom edges and vertical for left/right edges.
+
+## [2026-09-10] polish | Tuned Toolbar Docking
+
+- Made toolbar docking preview bands thicker and darker for better e-ink visibility.
+- Removed automatic orientation changes during ordinary edge-adjacent dragging.
+- Kept orientation changes tied to releasing the toolbar on a docking preview.
+
+## [2026-09-10] feature | Stored Toolbar Positions Per Document
+
+- Moved regular toolbar position records from global localStorage into document `settings.toolbarPositions`.
+- Kept new documents starting at default toolbar positions.
+- Preserved the hide/show tab as a separate edge-pinned global localStorage position.

@@ -70,7 +70,16 @@ Current local records include:
 - `settings`
 - `pages`
 
-`settings` includes eraser size, active preset index, brush presets, and shape config.
+`settings` includes eraser size, active preset index, brush presets, shape config, and regular toolbar positions.
+
+`settings.toolbarPositions` stores per-document position records for:
+
+- `main`
+- `presets`
+- `undo`
+- `fullscreen`
+
+New documents start without saved toolbar positions, so their first load applies default toolbar positions. Moving a toolbar in a document saves that document's toolbar positions for the next time it is opened.
 
 `folderId` is local library organization. Missing or unknown values resolve to Root. DinoDraw JSON exports strip `folderId`, and imported documents are placed into the currently viewed folder.
 

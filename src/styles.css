@@ -73,6 +73,51 @@ button {
   pointer-events: none;
 }
 
+.toolbar-dock-preview {
+  position: fixed;
+  z-index: 7;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  background: rgba(0, 0, 0, 0.24);
+  transition: opacity 80ms ease;
+}
+
+.toolbar-dock-preview.is-visible {
+  visibility: visible;
+  opacity: 1;
+}
+
+.toolbar-dock-preview[data-edge="left"],
+.toolbar-dock-preview[data-edge="right"] {
+  top: 0;
+  bottom: 0;
+  width: 64px;
+}
+
+.toolbar-dock-preview[data-edge="left"] {
+  left: 0;
+}
+
+.toolbar-dock-preview[data-edge="right"] {
+  right: 0;
+}
+
+.toolbar-dock-preview[data-edge="top"],
+.toolbar-dock-preview[data-edge="bottom"] {
+  left: 0;
+  right: 0;
+  height: 64px;
+}
+
+.toolbar-dock-preview[data-edge="top"] {
+  top: 0;
+}
+
+.toolbar-dock-preview[data-edge="bottom"] {
+  bottom: 0;
+}
+
 .toolbar-toggle {
   position: fixed;
   left: 50%;

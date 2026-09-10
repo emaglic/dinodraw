@@ -81,8 +81,9 @@ For the best offline experience, use Dino Draw from an HTTPS site or from localh
 - If the app looks stale after an update, check the visible version number on the screen.
 - If a toolbar is in the way, drag it to another edge of the screen.
 - Drag the top grip on the pull-tab to move the hide/show button around the screen edges.
-- Dragging a toolbar to the top or bottom edge makes it horizontal.
-- Dragging a toolbar to the left or right edge makes it vertical.
+- Dragging a toolbar near an edge shows a darker gray docking preview; release there to snap it to that edge and set its orientation.
+- Toolbars become horizontal only when docked to the top or bottom edge and vertical only when docked to the left or right edge.
+- Toolbar positions are saved per drawing, so each document can keep its own layout.
 - If toolbar positions become inconvenient, use `Reset Toolbar Positions` in Settings.
 - Press and hold toolbar buttons briefly to show tooltips.
 

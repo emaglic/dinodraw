@@ -9,9 +9,12 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Contains document/library, draw, erase, shape, add image, lasso, settings, page navigation, page indicator, and add page controls.
 - The document/library button is labeled as Home in the UI while still opening the Documents landing screen.
 - Toolbars are draggable.
-- Dragging to top or bottom edge should use horizontal orientation.
-- Dragging to left or right edge should use vertical orientation.
-- Saved localStorage key: `mainToolbarPosition`.
+- Dragging near an edge shows a semi-transparent docking preview strip for that edge.
+- Releasing while the docking preview is visible snaps the toolbar to that edge with 8px padding.
+- Releasing on a top or bottom docking preview sets horizontal orientation.
+- Releasing on a left or right docking preview sets vertical orientation.
+- Dragging near an edge without docking should not change the current toolbar orientation.
+- Saved in the active document under `settings.toolbarPositions.main`.
 - Main toolbar visibility is always enabled because it provides access to Settings.
 
 ## Brush Preset Toolbar
@@ -21,14 +24,14 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Visible when draw tool is selected.
 - Contains six user-editable brush presets.
 - Double tap a preset to edit size, opacity, color, and Draw Behind.
-- Saved localStorage key: `presetToolbarPositionBottomLeft`.
+- Saved in the active document under `settings.toolbarPositions.presets`.
 - Brush preset storage key: `brushPresets`.
 
 ## Undo/Redo Toolbar
 
 - Default position: top-left.
 - Draggable and edge-oriented like other toolbars.
-- Saved localStorage key: `undoToolbarPositionTopLeft`.
+- Saved in the active document under `settings.toolbarPositions.undo`.
 
 ## Toolbar Icons
 
@@ -41,7 +44,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Default position: top-right.
 - Has a drag handle and fullscreen toggle button.
 - The fullscreen toggle uses `fullscreen` when entering fullscreen and `fullscreen_exit` when exiting.
-- Saved localStorage key: `fullscreenToolbarPosition`.
+- Saved in the active document under `settings.toolbarPositions.fullscreen`.
 
 ## Toolbar Visibility Settings
 
@@ -79,16 +82,15 @@ Hiding should not change the selected tool. Showing toolbars again should only s
 
 The Settings modal Toolbars section includes `Reset Toolbar Positions`. This resets toolbar positions only. It must not reset toolbar visibility, brush presets, or other user settings.
 
-Current reset removes:
+Current reset reapplies default positions for the four regular toolbars and writes those positions back to the active document. It also removes legacy global regular-toolbar position keys when possible:
 
 - `mainToolbarPosition`
 - `presetToolbarPositionBottomLeft`
 - `undoToolbarPositionTopLeft`
 - `fullscreenToolbarPosition`
-- `toolbarVisibilityTabPosition`
 - legacy `presetToolbarPositionBottomRight`
 
-Then it reapplies default positions for all toolbars and the hide/show tab.
+The hide/show tab still uses its separate edge-pinned `toolbarVisibilityTabPosition` localStorage key and is reset by the same button.
 
 ## Tooltips
 
@@ -106,9 +108,11 @@ Then it reapplies default positions for all toolbars and the hide/show tab.
 The four regular toolbars share similar drag behavior:
 
 - calculate the pointer offset within the toolbar on `pointerdown`
-- update orientation while the pointer nears an edge
+- show an edge docking preview when the toolbar is within the dock zone
+- keep the current orientation during ordinary dragging
+- snap to the previewed edge and apply that edge orientation on `pointerup`
 - clamp position to the viewport with an 8px margin
-- write `{ left, top, orientation }` plus responsive anchor metadata to localStorage on drag end
+- write `{ left, top, orientation }` plus responsive anchor metadata to `settings.toolbarPositions` on drag end
 - preserve left/right/top/bottom edge distance for toolbars placed near an edge when the viewport resizes or rotates
 - preserve center-axis ratio for toolbars placed away from edges
 - reclamp positions on window resize so toolbars remain on screen

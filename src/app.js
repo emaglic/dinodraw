@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.98";
+const APP_VERSION = "v0.8.101";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -254,6 +254,12 @@ const state = {
   documentUpdatedAt: null,
   documentLastOpenedAt: null,
   documentFolderId: null,
+  toolbarPositions: {
+    main: null,
+    presets: null,
+    undo: null,
+    fullscreen: null,
+  },
   documents: [],
   folders: [],
   currentFolderId: null,
@@ -307,6 +313,8 @@ const presetToolbarPositionStorageKey = "presetToolbarPositionBottomLeft";
 const undoToolbarPositionStorageKey = "undoToolbarPositionTopLeft";
 const fullscreenToolbarPositionStorageKey = "fullscreenToolbarPosition";
 const toolbarTogglePositionStorageKey = "toolbarVisibilityTabPosition";
+const toolbarDockPreviewDistance = 56;
+const toolbarDockPadding = 8;
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
 const databaseName = "booxDrawingDocuments";
 const databaseVersion = 2;
@@ -799,13 +807,38 @@ function getCanvasDataUrl(layer) {
   return layer.toDataURL("image/png");
 }
 
-function getDocumentSettings() {
+function cloneToolbarPositionRecord(position) {
+  if (!position) {
+    return null;
+  }
+
   return {
+    ...position,
+  };
+}
+
+function getToolbarPositionSettings() {
+  return {
+    main: cloneToolbarPositionRecord(state.toolbarPositions.main),
+    presets: cloneToolbarPositionRecord(state.toolbarPositions.presets),
+    undo: cloneToolbarPositionRecord(state.toolbarPositions.undo),
+    fullscreen: cloneToolbarPositionRecord(state.toolbarPositions.fullscreen),
+  };
+}
+
+function getDocumentSettings(includeToolbarPositions = true) {
+  const settings = {
     eraserSize: brush.eraseSize,
     activePresetIndex: state.activePresetIndex,
     presets: state.presets.map((preset) => ({ ...preset })),
     shapeConfig: { ...shapeConfig },
   };
+
+  if (includeToolbarPositions) {
+    settings.toolbarPositions = getToolbarPositionSettings();
+  }
+
+  return settings;
 }
 
 function applyDocumentSettings(settings = {}) {
@@ -845,7 +878,7 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
     lastOpenedAt: now,
     appVersion: APP_VERSION,
     activePageIndex: 0,
-    settings: getDocumentSettings(),
+    settings: getDocumentSettings(false),
     pages: [
       {
         background: "blank",
@@ -2023,6 +2056,7 @@ async function loadDocument(record, shouldHideLibrary = true) {
   state.documentLastOpenedAt = record.lastOpenedAt || state.documentUpdatedAt;
   state.documentFolderId = resolveExistingFolderId(record.folderId);
   applyDocumentSettings(record.settings || {});
+  applyDocumentToolbarPositions((record.settings || {}).toolbarPositions || {});
 
   const savedPages = record.pages && record.pages.length
     ? record.pages
@@ -2213,6 +2247,7 @@ async function deleteDocument(id) {
     state.documentUpdatedAt = null;
     state.documentLastOpenedAt = null;
     state.documentFolderId = null;
+    applyDocumentToolbarPositions();
     state.pages = [];
     clearTemporaryCanvasState();
     updateDocumentSubtitle();
@@ -7039,54 +7074,132 @@ function setupToolbarTooltips() {
   });
 }
 
-function getDockOrientation(left, top, element) {
-  const margin = 8;
+function getToolbarDockOrientation(edge) {
+  return edge === "left" || edge === "right" ? "vertical" : "horizontal";
+}
+
+function getToolbarDockEdge(left, top, element) {
   const rect = element.getBoundingClientRect();
-  const touchesLeft = left <= margin;
-  const touchesTop = top <= margin;
-  const touchesRight = left + rect.width >= window.innerWidth - margin;
-  const touchesBottom = top + rect.height >= window.innerHeight - margin;
-
-  if (!touchesLeft && !touchesTop && !touchesRight && !touchesBottom) {
-    return null;
-  }
-
   const distances = [
     { edge: "left", value: left },
     { edge: "top", value: top },
     { edge: "right", value: window.innerWidth - left - rect.width },
     { edge: "bottom", value: window.innerHeight - top - rect.height },
   ];
-  const closestEdge = distances.reduce((closest, next) =>
-    next.value < closest.value ? next : closest
-  ).edge;
+  const nearbyEdges = distances.filter(
+    (distance) => distance.value <= toolbarDockPreviewDistance
+  );
 
-  return closestEdge === "left" || closestEdge === "right"
-    ? "vertical"
-    : "horizontal";
-}
-
-function getPointerDockOrientation(point) {
-  const margin = 16;
-  const distances = [
-    { edge: "left", value: point.x },
-    { edge: "top", value: point.y },
-    { edge: "right", value: window.innerWidth - point.x },
-    { edge: "bottom", value: window.innerHeight - point.y },
-  ];
-  const touchedEdges = distances.filter((distance) => distance.value <= margin);
-
-  if (touchedEdges.length === 0) {
+  if (nearbyEdges.length === 0) {
     return null;
   }
 
-  const closestEdge = touchedEdges.reduce((closest, next) =>
+  return nearbyEdges.reduce((closest, next) =>
     next.value < closest.value ? next : closest
   ).edge;
+}
 
-  return closestEdge === "left" || closestEdge === "right"
-    ? "vertical"
-    : "horizontal";
+function showToolbarDockPreview(edge) {
+  if (!edge) {
+    hideToolbarDockPreview();
+    return;
+  }
+
+  let preview = document.querySelector("[data-toolbar-dock-preview]");
+
+  if (!preview) {
+    preview = document.createElement("div");
+    preview.className = "toolbar-dock-preview";
+    preview.dataset.toolbarDockPreview = "true";
+    preview.setAttribute("aria-hidden", "true");
+    appShell.appendChild(preview);
+  }
+
+  preview.dataset.edge = edge;
+  preview.classList.add("is-visible");
+}
+
+function hideToolbarDockPreview() {
+  const preview = document.querySelector("[data-toolbar-dock-preview]");
+
+  if (!preview) {
+    return;
+  }
+
+  preview.classList.remove("is-visible");
+}
+
+function getToolbarDockedPosition(edge, left, top, element, clampPosition) {
+  const rect = element.getBoundingClientRect();
+  let nextLeft = left;
+  let nextTop = top;
+
+  if (edge === "left") {
+    nextLeft = toolbarDockPadding;
+  } else if (edge === "right") {
+    nextLeft = window.innerWidth - rect.width - toolbarDockPadding;
+  } else if (edge === "top") {
+    nextTop = toolbarDockPadding;
+  } else if (edge === "bottom") {
+    nextTop = window.innerHeight - rect.height - toolbarDockPadding;
+  }
+
+  return clampPosition(nextLeft, nextTop);
+}
+
+function moveRegularToolbarDrag(
+  element,
+  left,
+  top,
+  setPosition
+) {
+  const dockEdge = getToolbarDockEdge(left, top, element);
+
+  if (dockEdge) {
+    showToolbarDockPreview(dockEdge);
+  } else {
+    hideToolbarDockPreview();
+  }
+
+  return {
+    dockEdge,
+    left,
+    top,
+    position: setPosition(left, top),
+  };
+}
+
+function finishRegularToolbarDrag(
+  drag,
+  element,
+  setPosition,
+  clampPosition,
+  savePosition,
+  event
+) {
+  let position = drag.position;
+
+  hideToolbarDockPreview();
+
+  if (event && event.type === "pointerup" && drag.dockEdge) {
+    applyToolbarOrientation(
+      element,
+      getToolbarDockOrientation(drag.dockEdge)
+    );
+    const dockedPosition = getToolbarDockedPosition(
+      drag.dockEdge,
+      drag.left,
+      drag.top,
+      element,
+      clampPosition
+    );
+
+    position = setPosition(dockedPosition.left, dockedPosition.top);
+  }
+
+  if (position) {
+    savePosition(position);
+  }
 }
 
 function applyToolbarOrientation(element, orientation) {
@@ -7157,30 +7270,37 @@ function createToolbarPositionRecord(element, left, top, orientation) {
   };
 }
 
-function readToolbarPosition(storageKey) {
-  let savedPosition = null;
+function setDocumentToolbarPosition(key, position, shouldSave = false) {
+  state.toolbarPositions[key] = cloneToolbarPositionRecord(position);
 
-  try {
-    savedPosition = localStorage.getItem(storageKey);
-  } catch {
-    return null;
+  if (shouldSave && state.documentId && !state.isLoadingDocument) {
+    scheduleDocumentSave();
+  }
+}
+
+function resetDocumentToolbarPositions() {
+  state.toolbarPositions = {
+    main: null,
+    presets: null,
+    undo: null,
+    fullscreen: null,
+  };
+}
+
+function withMeasurableToolbar(element, callback) {
+  const wasHidden = element.classList.contains("is-hidden");
+
+  if (wasHidden) {
+    element.classList.remove("is-hidden");
   }
 
-  if (!savedPosition) {
-    return null;
-  }
-
   try {
-    return JSON.parse(savedPosition);
-  } catch {
-    try {
-      localStorage.removeItem(storageKey);
-    } catch {
-      return null;
+    return callback();
+  } finally {
+    if (wasHidden) {
+      element.classList.add("is-hidden");
     }
   }
-
-  return null;
 }
 
 function getResponsiveToolbarPosition(position, element) {
@@ -7220,19 +7340,11 @@ function clampToolbarPosition(left, top) {
 }
 
 function saveToolbarPosition(position) {
-  try {
-    localStorage.setItem(toolbarPositionStorageKey, JSON.stringify(position));
-  } catch {
-    return;
-  }
+  setDocumentToolbarPosition("main", position, true);
 }
 
 function setToolbarPosition(left, top, shouldSave = false) {
-  let position = clampToolbarPosition(left, top);
-  const orientation = getDockOrientation(position.left, position.top, toolbar);
-
-  applyToolbarOrientation(toolbar, orientation);
-  position = clampToolbarPosition(position.left, position.top);
+  const position = clampToolbarPosition(left, top);
 
   toolbar.style.left = `${position.left}px`;
   toolbar.style.top = `${position.top}px`;
@@ -7247,6 +7359,8 @@ function setToolbarPosition(left, top, shouldSave = false) {
     toolbar.dataset.orientation
   );
 
+  setDocumentToolbarPosition("main", record);
+
   if (shouldSave) {
     saveToolbarPosition(record);
   }
@@ -7254,9 +7368,7 @@ function setToolbarPosition(left, top, shouldSave = false) {
   return record;
 }
 
-function restoreToolbarPosition() {
-  const position = readToolbarPosition(toolbarPositionStorageKey);
-
+function restoreToolbarPosition(position = state.toolbarPositions.main) {
   if (!position) {
     return false;
   }
@@ -7278,7 +7390,7 @@ function setDefaultToolbarPosition() {
 }
 
 function reclampToolbarPosition() {
-  const savedPosition = readToolbarPosition(toolbarPositionStorageKey);
+  const savedPosition = state.toolbarPositions.main;
 
   if (savedPosition) {
     applyToolbarOrientation(toolbar, savedPosition.orientation);
@@ -7306,65 +7418,54 @@ function clampPresetToolbarPosition(left, top) {
 }
 
 function savePresetToolbarPosition(position) {
-  try {
-    localStorage.setItem(
-      presetToolbarPositionStorageKey,
-      JSON.stringify(position)
-    );
-  } catch {
-    return;
-  }
+  setDocumentToolbarPosition("presets", position, true);
 }
 
 function setPresetToolbarPosition(left, top, shouldSave = false) {
-  let position = clampPresetToolbarPosition(left, top);
-  const orientation = getDockOrientation(
-    position.left,
-    position.top,
-    presetToolbar
-  );
+  return withMeasurableToolbar(presetToolbar, () => {
+    const position = clampPresetToolbarPosition(left, top);
 
-  applyToolbarOrientation(presetToolbar, orientation);
-  position = clampPresetToolbarPosition(position.left, position.top);
+    presetToolbar.style.left = `${position.left}px`;
+    presetToolbar.style.top = `${position.top}px`;
+    presetToolbar.style.right = "auto";
+    presetToolbar.style.bottom = "auto";
+    presetToolbar.style.transform = "none";
 
-  presetToolbar.style.left = `${position.left}px`;
-  presetToolbar.style.top = `${position.top}px`;
-  presetToolbar.style.right = "auto";
-  presetToolbar.style.bottom = "auto";
-  presetToolbar.style.transform = "none";
+    const record = createToolbarPositionRecord(
+      presetToolbar,
+      position.left,
+      position.top,
+      presetToolbar.dataset.orientation
+    );
 
-  const record = createToolbarPositionRecord(
-    presetToolbar,
-    position.left,
-    position.top,
-    presetToolbar.dataset.orientation
-  );
+    setDocumentToolbarPosition("presets", record);
 
-  if (shouldSave) {
-    savePresetToolbarPosition(record);
-  }
+    if (shouldSave) {
+      savePresetToolbarPosition(record);
+    }
 
-  return record;
+    return record;
+  });
 }
 
-function restorePresetToolbarPosition() {
-  const position = readToolbarPosition(presetToolbarPositionStorageKey);
-
+function restorePresetToolbarPosition(position = state.toolbarPositions.presets) {
   if (!position) {
     return false;
   }
 
-  applyToolbarOrientation(presetToolbar, position.orientation);
-  const responsivePosition = getResponsiveToolbarPosition(
-    position,
-    presetToolbar
-  );
+  return withMeasurableToolbar(presetToolbar, () => {
+    applyToolbarOrientation(presetToolbar, position.orientation);
+    const responsivePosition = getResponsiveToolbarPosition(
+      position,
+      presetToolbar
+    );
 
-  setPresetToolbarPosition(
-    responsivePosition.left,
-    responsivePosition.top
-  );
-  return true;
+    setPresetToolbarPosition(
+      responsivePosition.left,
+      responsivePosition.top
+    );
+    return true;
+  });
 }
 
 function reclampPresetToolbarPosition() {
@@ -7372,7 +7473,7 @@ function reclampPresetToolbarPosition() {
     return;
   }
 
-  const savedPosition = readToolbarPosition(presetToolbarPositionStorageKey);
+  const savedPosition = state.toolbarPositions.presets;
 
   if (savedPosition) {
     applyToolbarOrientation(presetToolbar, savedPosition.orientation);
@@ -7388,12 +7489,14 @@ function reclampPresetToolbarPosition() {
 }
 
 function setDefaultPresetToolbarPosition() {
-  applyToolbarOrientation(presetToolbar, "horizontal");
-  const rect = presetToolbar.getBoundingClientRect();
-  const left = 12;
-  const top = window.innerHeight - rect.height - 12;
+  withMeasurableToolbar(presetToolbar, () => {
+    applyToolbarOrientation(presetToolbar, "horizontal");
+    const rect = presetToolbar.getBoundingClientRect();
+    const left = 12;
+    const top = window.innerHeight - rect.height - 12;
 
-  setPresetToolbarPosition(left, top, true);
+    setPresetToolbarPosition(left, top, true);
+  });
 }
 
 function clampUndoToolbarPosition(left, top) {
@@ -7409,22 +7512,11 @@ function clampUndoToolbarPosition(left, top) {
 }
 
 function saveUndoToolbarPosition(position) {
-  try {
-    localStorage.setItem(
-      undoToolbarPositionStorageKey,
-      JSON.stringify(position)
-    );
-  } catch {
-    return;
-  }
+  setDocumentToolbarPosition("undo", position, true);
 }
 
 function setUndoToolbarPosition(left, top, shouldSave = false) {
-  let position = clampUndoToolbarPosition(left, top);
-  const orientation = getDockOrientation(position.left, position.top, undoToolbar);
-
-  applyToolbarOrientation(undoToolbar, orientation);
-  position = clampUndoToolbarPosition(position.left, position.top);
+  const position = clampUndoToolbarPosition(left, top);
 
   undoToolbar.style.left = `${position.left}px`;
   undoToolbar.style.top = `${position.top}px`;
@@ -7439,6 +7531,8 @@ function setUndoToolbarPosition(left, top, shouldSave = false) {
     undoToolbar.dataset.orientation
   );
 
+  setDocumentToolbarPosition("undo", record);
+
   if (shouldSave) {
     saveUndoToolbarPosition(record);
   }
@@ -7446,9 +7540,7 @@ function setUndoToolbarPosition(left, top, shouldSave = false) {
   return record;
 }
 
-function restoreUndoToolbarPosition() {
-  const position = readToolbarPosition(undoToolbarPositionStorageKey);
-
+function restoreUndoToolbarPosition(position = state.toolbarPositions.undo) {
   if (!position) {
     return false;
   }
@@ -7464,7 +7556,7 @@ function restoreUndoToolbarPosition() {
 }
 
 function reclampUndoToolbarPosition() {
-  const savedPosition = readToolbarPosition(undoToolbarPositionStorageKey);
+  const savedPosition = state.toolbarPositions.undo;
 
   if (savedPosition) {
     applyToolbarOrientation(undoToolbar, savedPosition.orientation);
@@ -7497,26 +7589,11 @@ function clampFullscreenToolbarPosition(left, top) {
 }
 
 function saveFullscreenToolbarPosition(position) {
-  try {
-    localStorage.setItem(
-      fullscreenToolbarPositionStorageKey,
-      JSON.stringify(position)
-    );
-  } catch {
-    return;
-  }
+  setDocumentToolbarPosition("fullscreen", position, true);
 }
 
 function setFullscreenToolbarPosition(left, top, shouldSave = false) {
-  let position = clampFullscreenToolbarPosition(left, top);
-  const orientation = getDockOrientation(
-    position.left,
-    position.top,
-    fullscreenToolbar
-  );
-
-  applyToolbarOrientation(fullscreenToolbar, orientation);
-  position = clampFullscreenToolbarPosition(position.left, position.top);
+  const position = clampFullscreenToolbarPosition(left, top);
 
   fullscreenToolbar.style.left = `${position.left}px`;
   fullscreenToolbar.style.top = `${position.top}px`;
@@ -7531,6 +7608,8 @@ function setFullscreenToolbarPosition(left, top, shouldSave = false) {
     fullscreenToolbar.dataset.orientation
   );
 
+  setDocumentToolbarPosition("fullscreen", record);
+
   if (shouldSave) {
     saveFullscreenToolbarPosition(record);
   }
@@ -7538,9 +7617,9 @@ function setFullscreenToolbarPosition(left, top, shouldSave = false) {
   return record;
 }
 
-function restoreFullscreenToolbarPosition() {
-  const position = readToolbarPosition(fullscreenToolbarPositionStorageKey);
-
+function restoreFullscreenToolbarPosition(
+  position = state.toolbarPositions.fullscreen
+) {
   if (!position) {
     return false;
   }
@@ -7559,7 +7638,7 @@ function restoreFullscreenToolbarPosition() {
 }
 
 function reclampFullscreenToolbarPosition() {
-  const savedPosition = readToolbarPosition(fullscreenToolbarPositionStorageKey);
+  const savedPosition = state.toolbarPositions.fullscreen;
 
   if (savedPosition) {
     applyToolbarOrientation(fullscreenToolbar, savedPosition.orientation);
@@ -7583,6 +7662,23 @@ function setDefaultFullscreenToolbarPosition() {
   const left = window.innerWidth - rect.width - 12;
 
   setFullscreenToolbarPosition(left, 12, true);
+}
+
+function applyDocumentToolbarPositions(toolbarPositions = {}) {
+  resetDocumentToolbarPositions();
+
+  if (!restoreToolbarPosition(toolbarPositions.main)) {
+    setDefaultToolbarPosition();
+  }
+  if (!restorePresetToolbarPosition(toolbarPositions.presets)) {
+    setDefaultPresetToolbarPosition();
+  }
+  if (!restoreUndoToolbarPosition(toolbarPositions.undo)) {
+    setDefaultUndoToolbarPosition();
+  }
+  if (!restoreFullscreenToolbarPosition(toolbarPositions.fullscreen)) {
+    setDefaultFullscreenToolbarPosition();
+  }
 }
 
 function resetToolbarPositions() {
@@ -7622,10 +7718,15 @@ function startToolbarDrag(event) {
     y: event.clientY - rect.top,
   };
 
-  let lastPosition = {
+  const drag = {
+    dockEdge: null,
     left: rect.left,
     top: rect.top,
-    orientation: toolbar.dataset.orientation,
+    position: {
+      left: rect.left,
+      top: rect.top,
+      orientation: toolbar.dataset.orientation,
+    },
   };
 
   function moveToolbar(moveEvent) {
@@ -7633,21 +7734,28 @@ function startToolbarDrag(event) {
       moveEvent.preventDefault();
     }
 
-    applyToolbarOrientation(
+    const dragPosition = moveRegularToolbarDrag(
       toolbar,
-      getPointerDockOrientation({ x: moveEvent.clientX, y: moveEvent.clientY })
-    );
-    lastPosition = setToolbarPosition(
       moveEvent.clientX - offset.x,
-      moveEvent.clientY - offset.y
+      moveEvent.clientY - offset.y,
+      setToolbarPosition
     );
+
+    drag.dockEdge = dragPosition.dockEdge;
+    drag.left = dragPosition.left;
+    drag.top = dragPosition.top;
+    drag.position = dragPosition.position;
   }
 
-  function stopToolbarDrag() {
-    if (lastPosition) {
-      saveToolbarPosition(lastPosition);
-    }
-
+  function stopToolbarDrag(endEvent) {
+    finishRegularToolbarDrag(
+      drag,
+      toolbar,
+      setToolbarPosition,
+      clampToolbarPosition,
+      saveToolbarPosition,
+      endEvent
+    );
     window.removeEventListener("pointermove", moveToolbar);
     window.removeEventListener("pointerup", stopToolbarDrag);
     window.removeEventListener("pointercancel", stopToolbarDrag);
@@ -7671,10 +7779,15 @@ function startPresetToolbarDrag(event) {
     y: event.clientY - rect.top,
   };
 
-  let lastPosition = {
+  const drag = {
+    dockEdge: null,
     left: rect.left,
     top: rect.top,
-    orientation: presetToolbar.dataset.orientation,
+    position: {
+      left: rect.left,
+      top: rect.top,
+      orientation: presetToolbar.dataset.orientation,
+    },
   };
 
   function movePresetToolbar(moveEvent) {
@@ -7682,21 +7795,28 @@ function startPresetToolbarDrag(event) {
       moveEvent.preventDefault();
     }
 
-    applyToolbarOrientation(
+    const dragPosition = moveRegularToolbarDrag(
       presetToolbar,
-      getPointerDockOrientation({ x: moveEvent.clientX, y: moveEvent.clientY })
-    );
-    lastPosition = setPresetToolbarPosition(
       moveEvent.clientX - offset.x,
-      moveEvent.clientY - offset.y
+      moveEvent.clientY - offset.y,
+      setPresetToolbarPosition
     );
+
+    drag.dockEdge = dragPosition.dockEdge;
+    drag.left = dragPosition.left;
+    drag.top = dragPosition.top;
+    drag.position = dragPosition.position;
   }
 
-  function stopPresetToolbarDrag() {
-    if (lastPosition) {
-      savePresetToolbarPosition(lastPosition);
-    }
-
+  function stopPresetToolbarDrag(endEvent) {
+    finishRegularToolbarDrag(
+      drag,
+      presetToolbar,
+      setPresetToolbarPosition,
+      clampPresetToolbarPosition,
+      savePresetToolbarPosition,
+      endEvent
+    );
     window.removeEventListener("pointermove", movePresetToolbar);
     window.removeEventListener("pointerup", stopPresetToolbarDrag);
     window.removeEventListener("pointercancel", stopPresetToolbarDrag);
@@ -7722,10 +7842,15 @@ function startUndoToolbarDrag(event) {
     y: event.clientY - rect.top,
   };
 
-  let lastPosition = {
+  const drag = {
+    dockEdge: null,
     left: rect.left,
     top: rect.top,
-    orientation: undoToolbar.dataset.orientation,
+    position: {
+      left: rect.left,
+      top: rect.top,
+      orientation: undoToolbar.dataset.orientation,
+    },
   };
 
   function moveUndoToolbar(moveEvent) {
@@ -7733,21 +7858,28 @@ function startUndoToolbarDrag(event) {
       moveEvent.preventDefault();
     }
 
-    applyToolbarOrientation(
+    const dragPosition = moveRegularToolbarDrag(
       undoToolbar,
-      getPointerDockOrientation({ x: moveEvent.clientX, y: moveEvent.clientY })
-    );
-    lastPosition = setUndoToolbarPosition(
       moveEvent.clientX - offset.x,
-      moveEvent.clientY - offset.y
+      moveEvent.clientY - offset.y,
+      setUndoToolbarPosition
     );
+
+    drag.dockEdge = dragPosition.dockEdge;
+    drag.left = dragPosition.left;
+    drag.top = dragPosition.top;
+    drag.position = dragPosition.position;
   }
 
-  function stopUndoToolbarDrag() {
-    if (lastPosition) {
-      saveUndoToolbarPosition(lastPosition);
-    }
-
+  function stopUndoToolbarDrag(endEvent) {
+    finishRegularToolbarDrag(
+      drag,
+      undoToolbar,
+      setUndoToolbarPosition,
+      clampUndoToolbarPosition,
+      saveUndoToolbarPosition,
+      endEvent
+    );
     window.removeEventListener("pointermove", moveUndoToolbar);
     window.removeEventListener("pointerup", stopUndoToolbarDrag);
     window.removeEventListener("pointercancel", stopUndoToolbarDrag);
@@ -7771,10 +7903,15 @@ function startFullscreenToolbarDrag(event) {
     y: event.clientY - rect.top,
   };
 
-  let lastPosition = {
+  const drag = {
+    dockEdge: null,
     left: rect.left,
     top: rect.top,
-    orientation: fullscreenToolbar.dataset.orientation,
+    position: {
+      left: rect.left,
+      top: rect.top,
+      orientation: fullscreenToolbar.dataset.orientation,
+    },
   };
 
   function moveFullscreenToolbar(moveEvent) {
@@ -7782,21 +7919,28 @@ function startFullscreenToolbarDrag(event) {
       moveEvent.preventDefault();
     }
 
-    applyToolbarOrientation(
+    const dragPosition = moveRegularToolbarDrag(
       fullscreenToolbar,
-      getPointerDockOrientation({ x: moveEvent.clientX, y: moveEvent.clientY })
-    );
-    lastPosition = setFullscreenToolbarPosition(
       moveEvent.clientX - offset.x,
-      moveEvent.clientY - offset.y
+      moveEvent.clientY - offset.y,
+      setFullscreenToolbarPosition
     );
+
+    drag.dockEdge = dragPosition.dockEdge;
+    drag.left = dragPosition.left;
+    drag.top = dragPosition.top;
+    drag.position = dragPosition.position;
   }
 
-  function stopFullscreenToolbarDrag() {
-    if (lastPosition) {
-      saveFullscreenToolbarPosition(lastPosition);
-    }
-
+  function stopFullscreenToolbarDrag(endEvent) {
+    finishRegularToolbarDrag(
+      drag,
+      fullscreenToolbar,
+      setFullscreenToolbarPosition,
+      clampFullscreenToolbarPosition,
+      saveFullscreenToolbarPosition,
+      endEvent
+    );
     window.removeEventListener("pointermove", moveFullscreenToolbar);
     window.removeEventListener("pointerup", stopFullscreenToolbarDrag);
     window.removeEventListener("pointercancel", stopFullscreenToolbarDrag);
@@ -8007,19 +8151,7 @@ async function initializeApp() {
   applyToolbarOrientation(presetToolbar, "horizontal");
   applyToolbarOrientation(undoToolbar, "horizontal");
   applyToolbarOrientation(fullscreenToolbar, "horizontal");
-
-  if (!restoreToolbarPosition()) {
-    setDefaultToolbarPosition();
-  }
-  if (!restorePresetToolbarPosition()) {
-    setDefaultPresetToolbarPosition();
-  }
-  if (!restoreUndoToolbarPosition()) {
-    setDefaultUndoToolbarPosition();
-  }
-  if (!restoreFullscreenToolbarPosition()) {
-    setDefaultFullscreenToolbarPosition();
-  }
+  applyDocumentToolbarPositions();
   if (!restoreToolbarTogglePosition()) {
     setDefaultToolbarTogglePosition();
   }
