@@ -276,3 +276,7 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Replaced toolbar drag handles, draw/erase/shape tool icons, toolbar visibility arrows, modal close buttons, and document-list folder/document icons with local Material Symbols.
 - Kept existing button and toolbar control dimensions while changing the icon glyphs.
+
+## [2026-09-10] polish | Replaced Folder Back Icon
+
+- Replaced the landing-page previous-folder back button glyph with the local Material Symbols `arrow_back` icon.

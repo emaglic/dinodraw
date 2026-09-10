@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.97">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.98">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.97">
+    <link rel="stylesheet" href="./styles.css?v=0.8.98">
   </head>
   <body>
     <main class="app-shell">
@@ -182,7 +182,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.97</div>
+      <div class="version-badge" aria-label="Version">v0.8.98</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,7 +190,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.97</small>
+          <small data-brand-version>v0.8.98</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -209,7 +209,7 @@
             <h1 id="document-title" data-document-title>Documents</h1>
             <div class="document-location-row">
               <button class="icon-button document-back-button" type="button" data-folder-back aria-label="Back to parent folder" title="Back" disabled>
-                &larr;
+                <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
               </button>
               <h2 class="document-folder-title" data-document-subtitle>Root</h2>
             </div>
@@ -665,11 +665,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.97"></script>
+    <script src="./app.js?v=0.8.98"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.97", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.98", {
             updateViaCache: "none"
           }).catch(function () {});
         });
