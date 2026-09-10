@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.92";
+const APP_VERSION = "v0.8.93";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -227,6 +227,7 @@ const state = {
   selectionClipboard: null,
   canvasContextMenuPoint: null,
   canvasPasteLongPress: null,
+  lassoCopyFeedbackTimer: null,
   eraserPreview: null,
   eraserPreviewTimer: null,
   viewportTouchPointers: new Map(),
@@ -297,6 +298,7 @@ const transformPreviewMaxDimension = 480;
 const maxPageZoom = 4;
 const canvasPasteLongPressDelay = 560;
 const canvasPasteLongPressMoveTolerance = 12;
+const lassoCopyFeedbackDuration = 650;
 const tooltipDelay = 375;
 const libraryDragDelay = 360;
 const libraryDragMoveTolerance = 8;
@@ -5414,7 +5416,21 @@ function copySelection() {
     proportionalResize: state.selection.proportionalResize !== false,
   };
   updateCanvasContextMenuActions();
+  showLassoCopyFeedback();
   setSaveStatus("Selection copied");
+}
+
+function showLassoCopyFeedback() {
+  if (!lassoCopyButton) {
+    return;
+  }
+
+  window.clearTimeout(state.lassoCopyFeedbackTimer);
+  lassoCopyButton.classList.add("is-feedback-active");
+  state.lassoCopyFeedbackTimer = window.setTimeout(() => {
+    lassoCopyButton.classList.remove("is-feedback-active");
+    state.lassoCopyFeedbackTimer = null;
+  }, lassoCopyFeedbackDuration);
 }
 
 function getSelectionPasteBox(point, clipboard, page) {

@@ -251,3 +251,7 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added an in-app selection clipboard that preserves separate Draw Behind and normal-layer selection canvases.
 - Added a lasso-tool canvas long-press/context menu for Paste Selection at the chosen page point.
 - Pasted selections remain floating until Done is pressed; deleting an uncommitted paste discards it without adding a history entry.
+
+## [2026-09-10] polish | Added Lasso Copy Feedback
+
+- Made the lasso Copy selection button briefly invert after a successful copy so the tap has visible confirmation.

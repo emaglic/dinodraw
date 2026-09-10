@@ -535,7 +535,8 @@ button {
   color: #777777;
 }
 
-.action-button[aria-pressed="true"] {
+.action-button[aria-pressed="true"],
+.action-button.is-feedback-active {
   background: #000000;
   color: #ffffff;
 }
