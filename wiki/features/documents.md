@@ -7,9 +7,13 @@ Document behavior is implemented mostly in `src/app.js`, with markup in `src/ind
 - The app opens to the Documents screen.
 - The landing page shows the DinoDraw SVG logo centered above "Documents".
 - It shows "Dino Draw" and the current version under the logo.
-- The Documents screen includes a dismissible "What is Dino Draw?" intro card below the logo/version and above the Documents heading. The close button sits beside the heading, while the explanation and right-aligned Instructions button span the card width. Dismissing the card only hides it until the page is reloaded.
+- The Documents screen includes a dismissible "What is Dino Draw?" intro card below the logo/version and above the Documents heading. The close button sits beside the heading, while the explanation and right-aligned Instructions button span the card width. Dismissing the card persists in global settings and shows a compact Help icon button at the top-left of the Documents panel.
 - The main landing heading says `Documents`.
-- The current folder name, such as `Root`, sits below the heading in a smaller bold left-aligned heading on the same line as the parent-folder back arrow.
+- A horizontal rule separates the `Documents` heading from the folder and action area.
+- The current folder name, such as `My Documents`, sits below the heading in a smaller bold left-aligned heading on the same line as the parent-folder back arrow.
+- The parent-folder back arrow is hidden while viewing `My Documents`.
+- The brand, intro/help, folder header, breadcrumbs, and bottom action buttons remain visible while the document list scrolls in the middle of the panel.
+- The Documents panel grows with the document list until the list reaches the available viewport cap, then only the list scrolls.
 - The folder row does not show helper copy like "Local drawings stored on this device."
 - The close X is absolutely positioned at the top-right.
 - Hide or disable the close X when closing is not allowed, such as the initial state with no active document behind the screen.
@@ -18,18 +22,19 @@ Document behavior is implemented mostly in `src/app.js`, with markup in `src/ind
 
 - Documents are stored locally in IndexedDB.
 - Documents can be organized into folders and nested folders from the Documents screen.
-- Existing records with no `folderId` appear in Root.
+- Existing records with no `folderId` appear in the top-level `My Documents` folder.
+- Existing records with no `uuid` are migrated in place on app startup without changing `updatedAt`.
 - Documents are listed by last opened date, most recent first.
 - The current folder title appears above the folder-scoped action row.
-- The New Drawing, New Folder, and Import Doc buttons sit together near the top and may stack on small screens.
-- Breadcrumb buttons show the current folder path and navigate back to Root or parent folders.
+- The New Drawing, New Folder, and Import Doc buttons sit together at the bottom of the Documents panel and may stack on small screens.
+- Link-style breadcrumbs show the current folder path and navigate back to `My Documents` or parent folders. Breadcrumb levels are separated with `keyboard_arrow_right` icons.
 - Folder rows appear before document rows in the current folder and include Open plus a three-dot menu.
 - Folder and document rows include a left-side type icon, title, metadata, an Open button, and a three-dot menu for secondary actions.
 - Metadata should include page count, opened date, and edited date, including the year.
 - The document row three-dot menu is text-only.
 - Expected document row actions include Move, Rename, Export, Save PNG, Save PDF, and Delete.
 - Expected folder row actions include Rename, Move, and Delete. Deleting a folder moves direct child folders and documents up one level rather than deleting document content.
-- Rows can be dragged from their body onto folder rows, breadcrumbs, Root, or the parent/back target to move them. Dragging requires a short press-and-hold; movement before the hold manually scrolls the document panel so straight vertical swipes remain usable. The Move menu remains the fallback path.
+- Rows can be dragged from their body onto folder rows, breadcrumbs, `My Documents`, or the parent/back target to move them. Dragging requires a short press-and-hold; movement before the hold manually scrolls the document panel so straight vertical swipes remain usable. The Move menu remains the fallback path.
 
 ## Dialogs
 
@@ -60,6 +65,7 @@ The Instructions guide should remain local/offline, full-screen, readable on tab
 Current local records include:
 
 - `id`
+- `uuid`
 - `name`
 - `folderId`
 - `createdAt`
@@ -81,7 +87,7 @@ Current local records include:
 
 New documents start without saved toolbar positions, so their first load applies default toolbar positions. Moving a toolbar in a document saves that document's toolbar positions for the next time it is opened.
 
-`folderId` is local library organization. Missing or unknown values resolve to Root. DinoDraw JSON exports strip `folderId`, and imported documents are placed into the currently viewed folder.
+`uuid` is the stable document identity used by DinoDraw JSON export/import duplicate detection. `id` remains the local IndexedDB key. `folderId` is local library organization. Missing or unknown values resolve to the top-level `My Documents` folder. DinoDraw JSON exports strip `folderId`, and imported documents are placed into the currently viewed folder unless they overwrite an existing same-UUID document, in which case the existing document is updated in place in its current folder.
 
 Folder records live in the `folders` object store and include:
 
@@ -115,7 +121,7 @@ Each saved page includes:
 
 ## Global Settings
 
-Device-specific preferences should live outside document records. Current global settings are stored in localStorage under `dinodrawGlobalSettings`; Touch drawing lives there. The Documents intro-card dismissal is session-only runtime state and should reappear on reload.
+Device-specific preferences should live outside document records. Current global settings are stored in localStorage under `dinodrawGlobalSettings`; Touch drawing, toolbar visibility, and Documents intro-card dismissal live there.
 
 ## Document Screen Flow
 

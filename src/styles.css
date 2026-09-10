@@ -752,7 +752,7 @@ button {
   max-height: calc(100vh - 32px);
   gap: 16px;
   padding: 16px;
-  overflow: auto;
+  overflow: hidden;
   border: 2px solid #000000;
   border-radius: 8px;
   background: #ffffff;
@@ -766,6 +766,16 @@ button {
 }
 
 .document-panel [data-close-library]:disabled {
+  display: none;
+}
+
+.document-help-button {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+}
+
+.document-help-button.is-hidden {
   display: none;
 }
 
@@ -825,6 +835,13 @@ button {
   color: #000000;
   font-size: 24px;
   line-height: 1.1;
+}
+
+.document-heading-rule {
+  width: 100%;
+  margin: 12px 0 0;
+  border: 0;
+  border-top: 2px solid #000000;
 }
 
 .document-folder-title {
@@ -963,31 +980,53 @@ button {
 .document-list {
   display: grid;
   gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .document-breadcrumbs {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  column-gap: 4px;
+  row-gap: 6px;
   align-items: center;
-  min-height: 36px;
+  min-height: 28px;
 }
 
 .document-breadcrumb-button {
-  min-height: 34px;
-  padding: 0 10px;
-  border: 2px solid #000000;
-  border-radius: 6px;
-  background: #ffffff;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   color: #000000;
   font-size: 13px;
   font-weight: 700;
+  line-height: 1.3;
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 3px;
   overflow-wrap: anywhere;
 }
 
 .document-breadcrumb-button:disabled {
-  background: #000000;
-  color: #ffffff;
+  color: #000000;
+  background: transparent;
+  opacity: 1;
+  padding: 0;
+  text-decoration: none;
+}
+
+.document-breadcrumb-button:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 3px;
+}
+
+.document-breadcrumb-separator {
+  color: #000000;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .document-breadcrumb-button.is-drop-target,
@@ -1349,6 +1388,7 @@ button {
   font-size: 14px;
   font-weight: 700;
   line-height: 1.35;
+  white-space: pre-line;
 }
 
 .app-dialog-field {

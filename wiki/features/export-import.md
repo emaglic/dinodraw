@@ -9,9 +9,10 @@ Export/import behavior is implemented mostly in `src/app.js`.
 - Preferred internal format identifier: `dinodraw-document`.
 - User-facing button text should be `Export`.
 - Avoid reviving old `DrawDoc` user-facing text.
-- Current wrapped export shape is `{ format, formatVersion, exportedAt, document }`.
+- Current wrapped export shape is `{ format, formatVersion, exportedAt, document }`; exported document records include `uuid`.
 - Current `formatVersion` is `1`.
 - Export calls `flushDocumentSave()` first when exporting the active document, then serializes current in-memory state.
+- Exports try the native Save As picker when `showSaveFilePicker()` is available in a secure context. If the picker is unavailable or blocked before it opens, exports fall back to the browser download behavior. If the user cancels the picker, the export is cancelled and does not fall back to automatic download.
 
 ## Legacy Compatibility
 
@@ -52,15 +53,21 @@ Imported documents should preserve:
 
 Import errors should use DinoDraw custom dialogs, not native browser alerts.
 
+If the imported document has the same `uuid` as an existing local document, import shows a custom dialog explaining which copy is newer based on `updatedAt`, shows both edited timestamps, and offers Overwrite or Import Duplicate.
+
+Overwrite keeps the existing local `id` and `folderId`, replaces the document content/metadata from the import, and preserves the imported `updatedAt`. Import Duplicate assigns a fresh `uuid`/local `id` and imports into the currently viewed folder.
+
+New imports and duplicate imports ignore any exported `folderId`; folder structure is not recreated from the file.
+
 ## Normalization Behavior
 
 `normalizeImportedDocument()`:
 
 - accepts wrapped DinoDraw/legacy records or a bare document-like object
 - requires `pages` to be an array
-- generates a new document `id`
-- preserves source `name` and `createdAt` when present
-- sets `updatedAt`, `lastOpenedAt`, and `appVersion` to current values
+- preserves source `uuid`/`id` as the document identity when no local same-UUID document exists
+- preserves source `name`, `createdAt`, and `updatedAt` when present
+- sets local `lastOpenedAt` and `appVersion` to current values
 - defaults missing page background to `blank`
 - defaults missing dimensions to the current canvas/viewport
 - defaults missing `drawing` and `underDrawing` to empty strings

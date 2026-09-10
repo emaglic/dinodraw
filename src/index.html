@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.107">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.112">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.107">
+    <link rel="stylesheet" href="./styles.css?v=0.8.112">
   </head>
   <body>
     <main class="app-shell">
@@ -182,7 +182,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.107</div>
+      <div class="version-badge" aria-label="Version">v0.8.112</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,8 +190,14 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.107</small>
+          <small data-brand-version>v0.8.112</small>
         </div>
+        <button class="icon-button document-help-button is-hidden" type="button" data-document-help data-open-guide aria-label="Open instructions" title="Help">
+          <span class="material-symbols-outlined" aria-hidden="true">help</span>
+        </button>
+        <button class="icon-button" type="button" data-close-library aria-label="Close documents" title="Close" disabled>
+          <span class="material-symbols-outlined" aria-hidden="true">close</span>
+        </button>
 
         <div class="document-intro-card" data-document-intro>
           <div class="document-intro-header">
@@ -207,19 +213,18 @@
         <header class="document-header">
           <div class="document-heading">
             <h1 id="document-title" data-document-title>Documents</h1>
+            <hr class="document-heading-rule">
             <div class="document-location-row">
               <button class="icon-button document-back-button" type="button" data-folder-back aria-label="Back to parent folder" title="Back" disabled>
                 <span class="material-symbols-outlined" aria-hidden="true">arrow_back</span>
               </button>
-              <h2 class="document-folder-title" data-document-subtitle>Root</h2>
+              <h2 class="document-folder-title" data-document-subtitle>My Documents</h2>
             </div>
           </div>
-          <button class="icon-button" type="button" data-close-library aria-label="Close documents" title="Close" disabled>
-            <span class="material-symbols-outlined" aria-hidden="true">close</span>
-          </button>
         </header>
 
         <nav class="document-breadcrumbs" data-document-breadcrumbs aria-label="Current folder"></nav>
+        <div class="document-list" data-document-list></div>
         <div class="document-start-row">
           <button class="document-button document-button-primary" type="button" data-new-document>New Drawing</button>
           <button class="document-button" type="button" data-new-folder>New Folder</button>
@@ -227,7 +232,6 @@
           <input class="file-input" type="file" accept=".dinodraw.json,.drawdoc,application/json" data-import-input>
         </div>
 
-        <div class="document-list" data-document-list></div>
         <div class="document-menu is-hidden" data-document-action-menu>
           <button class="page-menu-item" type="button" data-document-rename>
             Rename
@@ -521,8 +525,9 @@
           <input type="text" data-app-dialog-input>
         </label>
         <div class="app-dialog-actions">
-          <button class="document-button" type="button" data-app-dialog-cancel>Cancel</button>
           <button class="document-button document-button-primary" type="submit" data-app-dialog-confirm>OK</button>
+          <button class="document-button" type="button" data-app-dialog-secondary hidden>Import Duplicate</button>
+          <button class="document-button" type="button" data-app-dialog-cancel data-app-dialog-cancel-action>Cancel</button>
         </div>
       </form>
     </dialog>
@@ -665,11 +670,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.107"></script>
+    <script src="./app.js?v=0.8.112"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.107", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.112", {
             updateViaCache: "none"
           }).catch(function () {});
         });

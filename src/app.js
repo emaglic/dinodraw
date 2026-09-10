@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.107";
+const APP_VERSION = "v0.8.112";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -42,6 +42,10 @@ const appDialogField = document.querySelector("[data-app-dialog-field]");
 const appDialogInputLabel = document.querySelector("[data-app-dialog-input-label]");
 const appDialogInput = document.querySelector("[data-app-dialog-input]");
 const appDialogConfirmButton = document.querySelector("[data-app-dialog-confirm]");
+const appDialogSecondaryButton = document.querySelector("[data-app-dialog-secondary]");
+const appDialogCancelActionButton = document.querySelector(
+  "[data-app-dialog-cancel-action]"
+);
 const appDialogCancelButtons = Array.from(
   document.querySelectorAll("[data-app-dialog-cancel]")
 );
@@ -74,6 +78,7 @@ const closeLibraryButton = document.querySelector("[data-close-library]");
 const openGuideButtons = Array.from(document.querySelectorAll("[data-open-guide]"));
 const openGuideButton = document.querySelector("[data-open-guide]");
 const documentIntro = document.querySelector("[data-document-intro]");
+const documentHelpButton = document.querySelector("[data-document-help]");
 const dismissDocumentIntroButton = document.querySelector(
   "[data-dismiss-document-intro]"
 );
@@ -250,6 +255,7 @@ const state = {
   pages: [],
   presets: [],
   documentId: null,
+  documentUuid: null,
   documentName: "",
   documentCreatedAt: null,
   documentUpdatedAt: null,
@@ -270,9 +276,9 @@ const state = {
   isSavingDocument: false,
   shouldSaveAgain: false,
   toolbarsHidden: false,
-  documentIntroDismissed: false,
   globalSettings: {
     touchDrawingEnabled: true,
+    documentIntroDismissed: false,
     toolbarVisibility: {
       main: true,
       presets: true,
@@ -320,6 +326,7 @@ const toolbarDockPreviewDistance = 56;
 const toolbarDockPadding = 8;
 const toolbarCollisionGap = 8;
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
+const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
 const databaseVersion = 2;
 const documentStoreName = "documents";
@@ -369,7 +376,68 @@ function createId() {
     return window.crypto.randomUUID();
   }
 
-  return `doc-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  const bytes = new Uint8Array(16);
+
+  if (window.crypto && window.crypto.getRandomValues) {
+    window.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) {
+      bytes[index] = Math.floor(Math.random() * 256);
+    }
+  }
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (byte) => {
+    const value = byte.toString(16);
+
+    return value.length === 1 ? `0${value}` : value;
+  });
+
+  return [
+    hex.slice(0, 4).join(""),
+    hex.slice(4, 6).join(""),
+    hex.slice(6, 8).join(""),
+    hex.slice(8, 10).join(""),
+    hex.slice(10, 16).join(""),
+  ].join("-");
+}
+
+function createDocumentUuid() {
+  return createId();
+}
+
+function getRecordUuid(record) {
+  if (!record) {
+    return "";
+  }
+
+  return String(record.uuid || record.id || "");
+}
+
+function getImportedSourceUuid(source) {
+  if (!source) {
+    return "";
+  }
+
+  return String(source.uuid || source.id || "");
+}
+
+function prepareDocumentRecord(record) {
+  if (!record) {
+    return null;
+  }
+
+  if (!record.uuid) {
+    record.uuid = getRecordUuid(record) || createDocumentUuid();
+  }
+
+  if (!record.id) {
+    record.id = record.uuid;
+  }
+
+  return record;
 }
 
 function openDatabase() {
@@ -424,6 +492,7 @@ async function getAllDocuments() {
     request.onsuccess = () => {
       const documents = request.result || [];
 
+      documents.forEach(prepareDocumentRecord);
       documents.sort((a, b) => {
         const bDate = b.lastOpenedAt || b.updatedAt || b.createdAt || "";
         const aDate = a.lastOpenedAt || a.updatedAt || a.createdAt || "";
@@ -460,7 +529,8 @@ async function getDocument(id) {
   return new Promise((resolve, reject) => {
     const request = store.get(id);
 
-    request.onsuccess = () => resolve(request.result || null);
+    request.onsuccess = () =>
+      resolve(prepareDocumentRecord(request.result) || null);
     request.onerror = () => reject(request.error);
   });
 }
@@ -477,6 +547,7 @@ async function getFolder(id) {
 }
 
 async function putDocument(record) {
+  prepareDocumentRecord(record);
   const store = await getDocumentStore("readwrite");
 
   return new Promise((resolve, reject) => {
@@ -496,6 +567,23 @@ async function putFolder(record) {
     request.onsuccess = () => resolve(record);
     request.onerror = () => reject(request.error);
   });
+}
+
+async function migrateExistingDocumentRecords() {
+  const store = await getDocumentStore("readonly");
+  const documents = await new Promise((resolve, reject) => {
+    const request = store.getAll();
+
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => reject(request.error);
+  });
+
+  for (const record of documents) {
+    if (!record.uuid || !record.id) {
+      prepareDocumentRecord(record);
+      await putDocument(record);
+    }
+  }
 }
 
 async function deleteDocumentRecord(id) {
@@ -564,10 +652,12 @@ function getFolderPathLabel(folderId) {
   const path = getFolderPath(folderId);
 
   if (path.length === 0) {
-    return "Root";
+    return rootFolderLabel;
   }
 
-  return `Root / ${path.map((folder) => folder.name || "Untitled folder").join(" / ")}`;
+  return `${rootFolderLabel} / ${path
+    .map((folder) => folder.name || "Untitled folder")
+    .join(" / ")}`;
 }
 
 function countDirectFolderItems(folderId) {
@@ -621,7 +711,7 @@ function getMoveDestinationOptions(excludedFolderId) {
 
   folderOptions.sort((a, b) => a.label.localeCompare(b.label));
 
-  return [{ id: null, label: "Root" }].concat(folderOptions);
+  return [{ id: null, label: rootFolderLabel }].concat(folderOptions);
 }
 
 function createFolderRecord(name, parentId) {
@@ -637,11 +727,13 @@ function createFolderRecord(name, parentId) {
 }
 
 function formatDateLabel(value) {
-  if (!value) {
+  const timestamp = Date.parse(value || "");
+
+  if (!value || isNaN(timestamp)) {
     return "Unknown";
   }
 
-  return new Date(value).toLocaleString([], {
+  return new Date(timestamp).toLocaleString([], {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -677,6 +769,9 @@ function showAppDialog(options) {
     appDialogTitle.textContent = options.title || "Dino Draw";
     appDialogMessage.textContent = options.message || "";
     appDialogConfirmButton.textContent = options.confirmLabel || "OK";
+    appDialogCancelActionButton.textContent = options.cancelLabel || "Cancel";
+    appDialogSecondaryButton.textContent = options.secondaryLabel || "";
+    appDialogSecondaryButton.hidden = !options.secondaryLabel;
     appDialogCancelButtons.forEach((button) => {
       button.style.display = showCancel ? "" : "none";
     });
@@ -872,9 +967,11 @@ function applyDocumentSettings(settings = {}) {
 function createDocumentRecord(name, folderId = state.currentFolderId) {
   const now = new Date().toISOString();
   const pageSize = getCurrentViewportSize();
+  const uuid = createDocumentUuid();
 
   return {
-    id: createId(),
+    id: uuid,
+    uuid,
     name,
     folderId: resolveExistingFolderId(folderId),
     createdAt: now,
@@ -900,6 +997,7 @@ function serializeCurrentDocument() {
 
   return {
     id: state.documentId,
+    uuid: state.documentUuid || state.documentId || createDocumentUuid(),
     name: state.documentName || "Untitled",
     folderId: resolveExistingFolderId(state.documentFolderId),
     createdAt: state.documentCreatedAt || now,
@@ -1287,6 +1385,75 @@ function downloadBlob(blob, filename) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function getSavePickerUnavailableTarget() {
+  return Promise.resolve({ type: "download" });
+}
+
+function requestSaveFileTarget(options) {
+  if (
+    !window.isSecureContext ||
+    typeof window.showSaveFilePicker !== "function"
+  ) {
+    return getSavePickerUnavailableTarget();
+  }
+
+  const accept = {};
+
+  accept[options.mimeType] = options.extensions;
+
+  return window
+    .showSaveFilePicker({
+      suggestedName: options.filename,
+      types: [
+        {
+          description: options.description,
+          accept,
+        },
+      ],
+    })
+    .then((handle) => ({
+      type: "picker",
+      handle,
+    }))
+    .catch((error) => {
+      if (error && error.name === "AbortError") {
+        return { type: "cancelled" };
+      }
+
+      return { type: "download" };
+    });
+}
+
+async function writeBlobToFileHandle(blob, handle) {
+  const writable = await handle.createWritable();
+
+  await writable.write(blob);
+  await writable.close();
+}
+
+async function saveExportFile(file, targetPromise) {
+  const target = targetPromise
+    ? await targetPromise
+    : await requestSaveFileTarget({
+        filename: file.filename,
+        mimeType: file.mimeType,
+        extensions: file.extensions,
+        description: file.description,
+      });
+
+  if (target.type === "cancelled") {
+    return false;
+  }
+
+  if (target.type === "picker") {
+    await writeBlobToFileHandle(file.blob, target.handle);
+    return true;
+  }
+
+  downloadBlob(file.blob, file.filename);
+  return true;
+}
+
 async function createPageFromSavedPage(savedPage = {}) {
   const underImage = await loadImage(savedPage.underDrawing);
   const image = await loadImage(savedPage.drawing);
@@ -1343,7 +1510,9 @@ function setSaveStatus(message) {
 
 function updateDocumentSubtitle() {
   const currentFolder = getFolderById(state.currentFolderId);
-  const folderName = currentFolder ? currentFolder.name || "Untitled folder" : "Root";
+  const folderName = currentFolder
+    ? currentFolder.name || "Untitled folder"
+    : rootFolderLabel;
   const parentId = currentFolder
     ? resolveExistingFolderId(currentFolder.parentId)
     : null;
@@ -1351,6 +1520,7 @@ function updateDocumentSubtitle() {
   documentTitle.textContent = "Documents";
   documentSubtitle.textContent = folderName;
   folderBackButton.disabled = !currentFolder;
+  folderBackButton.hidden = !currentFolder;
   folderBackButton.dataset.dropFolderId = parentId || "";
 
   if (!state.documentId) {
@@ -1390,6 +1560,7 @@ function showDocumentScreen() {
   documentScreen.classList.remove("is-hidden");
   updateDocumentSubtitle();
   renderDocumentList();
+  syncDocumentListScrollArea();
 }
 
 function hideDocumentScreen() {
@@ -1473,6 +1644,7 @@ function setCurrentFolder(folderId) {
   state.currentFolderId = resolveExistingFolderId(folderId);
   updateDocumentSubtitle();
   renderDocumentList();
+  syncDocumentListScrollArea();
 }
 
 function renderDocumentBreadcrumbs() {
@@ -1481,7 +1653,7 @@ function renderDocumentBreadcrumbs() {
   }
 
   const path = getFolderPath(state.currentFolderId);
-  const crumbs = [{ id: null, name: "Root" }].concat(path);
+  const crumbs = [{ id: null, name: rootFolderLabel }].concat(path);
 
   documentBreadcrumbs.textContent = "";
 
@@ -1501,7 +1673,65 @@ function renderDocumentBreadcrumbs() {
     }
 
     documentBreadcrumbs.appendChild(button);
+
+    if (index < crumbs.length - 1) {
+      const separator = document.createElement("span");
+
+      separator.className = "material-symbols-outlined document-breadcrumb-separator";
+      separator.setAttribute("aria-hidden", "true");
+      separator.textContent = "keyboard_arrow_right";
+      documentBreadcrumbs.appendChild(separator);
+    }
   });
+}
+
+function syncDocumentListScrollArea() {
+  if (!documentPanel || !documentList || !documentScreen) {
+    return;
+  }
+
+  if (documentScreen.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const panelStyle = window.getComputedStyle(documentPanel);
+  const screenStyle = window.getComputedStyle(documentScreen);
+  const getPixels = (value) => parseFloat(value || "0") || 0;
+  const panelPadding =
+    getPixels(panelStyle.paddingTop) +
+    getPixels(panelStyle.paddingBottom) +
+    getPixels(panelStyle.borderTopWidth) +
+    getPixels(panelStyle.borderBottomWidth);
+  const screenPadding =
+    getPixels(screenStyle.paddingTop) + getPixels(screenStyle.paddingBottom);
+  const rowGap = getPixels(panelStyle.rowGap || panelStyle.gap);
+  const fixedChildren = Array.from(documentPanel.children).filter((child) => {
+    if (child === documentList) {
+      return false;
+    }
+
+    const childStyle = window.getComputedStyle(child);
+
+    return (
+      childStyle.display !== "none" &&
+      childStyle.position !== "absolute" &&
+      childStyle.position !== "fixed"
+    );
+  });
+  const fixedHeight = fixedChildren.reduce(
+    (height, child) => height + child.offsetHeight,
+    0
+  );
+  const gapCount = fixedChildren.length;
+  const availableHeight = Math.floor(
+    window.innerHeight -
+      screenPadding -
+      panelPadding -
+      fixedHeight -
+      rowGap * gapCount
+  );
+
+  documentList.style.maxHeight = `${Math.max(112, availableHeight)}px`;
 }
 
 function getCurrentLibraryFolderId(itemType, id) {
@@ -1599,12 +1829,10 @@ function moveLibraryItemToFolder(itemType, id, destinationId) {
       }
 
       record.folderId = resolveExistingFolderId(destinationId);
-      record.updatedAt = new Date().toISOString();
       await putDocument(record);
 
       if (state.documentId === id) {
         state.documentFolderId = record.folderId;
-        state.documentUpdatedAt = record.updatedAt;
       }
     }
 
@@ -1720,7 +1948,7 @@ function addLibraryDragInteractions(row) {
         }
 
         if (drag.isScrolling) {
-          documentPanel.scrollTop -= moveEvent.clientY - drag.lastY;
+          documentList.scrollTop -= moveEvent.clientY - drag.lastY;
           drag.lastY = moveEvent.clientY;
         }
 
@@ -1878,6 +2106,7 @@ function renderDocumentList() {
         ? "This folder is empty. Create a folder, create a drawing, or import a DinoDraw JSON file."
         : "No drawings yet. Create one or import a DinoDraw JSON file.";
     documentList.appendChild(empty);
+    syncDocumentListScrollArea();
     return;
   }
 
@@ -1950,6 +2179,8 @@ function renderDocumentList() {
     addLibraryDragInteractions(row);
     documentList.appendChild(row);
   });
+
+  syncDocumentListScrollArea();
 }
 
 async function refreshDocuments() {
@@ -2052,8 +2283,10 @@ async function loadDocument(record, shouldHideLibrary = true) {
 
   await flushDocumentSave();
   state.isLoadingDocument = true;
+  prepareDocumentRecord(record);
   clearTemporaryCanvasState();
   state.documentId = record.id;
+  state.documentUuid = record.uuid;
   state.documentName = record.name || "Untitled";
   state.documentCreatedAt = record.createdAt || new Date().toISOString();
   state.documentUpdatedAt = record.updatedAt || state.documentCreatedAt;
@@ -2210,16 +2443,14 @@ async function moveDocument(id) {
   }
 
   record.folderId = resolveExistingFolderId(destinationId);
-  record.updatedAt = new Date().toISOString();
   await putDocument(record);
 
   if (state.documentId === id) {
     state.documentFolderId = record.folderId;
-    state.documentUpdatedAt = record.updatedAt;
-    setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
   }
 
   await refreshDocuments();
+  setSaveStatus("Moved");
 }
 
 async function deleteDocument(id) {
@@ -2246,6 +2477,7 @@ async function deleteDocument(id) {
     window.clearTimeout(state.saveTimer);
     state.saveTimer = null;
     state.documentId = null;
+    state.documentUuid = null;
     state.documentName = "";
     state.documentCreatedAt = null;
     state.documentUpdatedAt = null;
@@ -2349,12 +2581,10 @@ async function deleteFolder(id) {
 
   for (const documentRecord of childDocuments) {
     documentRecord.folderId = parentId;
-    documentRecord.updatedAt = now;
     await putDocument(documentRecord);
 
     if (state.documentId === documentRecord.id) {
       state.documentFolderId = parentId;
-      state.documentUpdatedAt = now;
     }
   }
 
@@ -2376,7 +2606,18 @@ async function getRecordForExport(id) {
   return getDocument(id);
 }
 
+function getKnownDocumentName(id) {
+  if (id === state.documentId) {
+    return state.documentName || "Untitled";
+  }
+
+  const record = state.documents.find((documentRecord) => documentRecord.id === id);
+
+  return record && record.name ? record.name : "document";
+}
+
 function createDinoDrawBlob(record) {
+  prepareDocumentRecord(record);
   const portableRecord = getPortableDocumentRecord(record);
   const exportRecord = {
     format: exportFormat,
@@ -2391,10 +2632,30 @@ function createDinoDrawBlob(record) {
     }),
     filename: `${sanitizeFileName(portableRecord.name)}.dinodraw.json`,
     mimeType: "application/json",
+    extensions: [".dinodraw.json", ".json"],
+    description: "DinoDraw document",
   };
 }
 
 async function exportDocument(id) {
+  if (!id) {
+    setSaveStatus("No document");
+    return;
+  }
+
+  const targetPromise = requestSaveFileTarget({
+    filename: `${sanitizeFileName(getKnownDocumentName(id))}.dinodraw.json`,
+    mimeType: "application/json",
+    extensions: [".dinodraw.json", ".json"],
+    description: "DinoDraw document",
+  });
+  const target = await targetPromise;
+
+  if (target.type === "cancelled") {
+    setSaveStatus("Export canceled");
+    return;
+  }
+
   const record = await getRecordForExport(id);
 
   if (!record) {
@@ -2403,7 +2664,8 @@ async function exportDocument(id) {
 
   const file = createDinoDrawBlob(record);
 
-  downloadBlob(file.blob, file.filename);
+  await saveExportFile(file, Promise.resolve(target));
+  setSaveStatus("Exported document");
 }
 
 async function createFlattenedPageCanvas(savedPage) {
@@ -2471,11 +2733,31 @@ async function createPngZipBlob(record) {
     blob: createZipBlob(files),
     filename: `${sanitizeFileName(record.name)}-png-pages.zip`,
     mimeType: "application/zip",
+    extensions: [".zip"],
+    description: "PNG pages ZIP",
     pageCount: files.length,
   };
 }
 
 async function exportPngZip(id) {
+  if (!id && !state.documentId) {
+    setSaveStatus("No document");
+    return;
+  }
+
+  const targetPromise = requestSaveFileTarget({
+    filename: `${sanitizeFileName(getKnownDocumentName(id || state.documentId))}-png-pages.zip`,
+    mimeType: "application/zip",
+    extensions: [".zip"],
+    description: "PNG pages ZIP",
+  });
+  const target = await targetPromise;
+
+  if (target.type === "cancelled") {
+    setSaveStatus("Export canceled");
+    return;
+  }
+
   const record = await getRecordForExport(id || state.documentId);
 
   if (!record || !record.pages || record.pages.length === 0) {
@@ -2486,7 +2768,7 @@ async function exportPngZip(id) {
   setSaveStatus("Exporting PNGs...");
   const file = await createPngZipBlob(record);
 
-  downloadBlob(file.blob, file.filename);
+  await saveExportFile(file, Promise.resolve(target));
   setSaveStatus(
     `Exported ${file.pageCount} PNG${file.pageCount === 1 ? "" : "s"}`
   );
@@ -2510,11 +2792,31 @@ async function createPdfExportBlob(record) {
     blob: createPdfBlob(pageImages),
     filename: `${sanitizeFileName(record.name)}.pdf`,
     mimeType: "application/pdf",
+    extensions: [".pdf"],
+    description: "PDF document",
     pageCount: pageImages.length,
   };
 }
 
 async function exportPdf(id) {
+  if (!id && !state.documentId) {
+    setSaveStatus("No document");
+    return;
+  }
+
+  const targetPromise = requestSaveFileTarget({
+    filename: `${sanitizeFileName(getKnownDocumentName(id || state.documentId))}.pdf`,
+    mimeType: "application/pdf",
+    extensions: [".pdf"],
+    description: "PDF document",
+  });
+  const target = await targetPromise;
+
+  if (target.type === "cancelled") {
+    setSaveStatus("Export canceled");
+    return;
+  }
+
   const record = await getRecordForExport(id || state.documentId);
 
   if (!record || !record.pages || record.pages.length === 0) {
@@ -2525,29 +2827,60 @@ async function exportPdf(id) {
   setSaveStatus("Exporting PDF...");
   const file = await createPdfExportBlob(record);
 
-  downloadBlob(file.blob, file.filename);
+  await saveExportFile(file, Promise.resolve(target));
   setSaveStatus(
     `Exported ${file.pageCount} PDF page${file.pageCount === 1 ? "" : "s"}`
   );
 }
 
-function normalizeImportedDocument(parsed) {
+function getImportedDocumentSource(parsed) {
+  if (!parsed || typeof parsed !== "object") {
+    return null;
+  }
+
   const isWrappedExport =
     parsed.format === exportFormat || parsed.format === legacyExportFormat;
-  const source = isWrappedExport ? parsed.document : parsed;
+
+  return isWrappedExport ? parsed.document : parsed;
+}
+
+function normalizeTimestamp(value, fallback) {
+  const text = value ? String(value) : "";
+  const timestamp = Date.parse(text);
+
+  if (text && !isNaN(timestamp)) {
+    return new Date(timestamp).toISOString();
+  }
+
+  return fallback;
+}
+
+function normalizeImportedDocument(parsed, options = {}) {
+  const source = getImportedDocumentSource(parsed);
   const now = new Date().toISOString();
+  const sourceUuid = getImportedSourceUuid(source);
+  const uuid = options.uuid || sourceUuid || createDocumentUuid();
+  const id = options.id || uuid;
+  const folderId =
+    Object.prototype.hasOwnProperty.call(options, "folderId")
+      ? options.folderId
+      : state.currentFolderId;
 
   if (!source || !Array.isArray(source.pages)) {
     throw new Error("Unsupported document format.");
   }
 
   return {
-    id: createId(),
+    id,
+    uuid,
     name: `${source.name || "Imported document"}`,
-    folderId: resolveExistingFolderId(state.currentFolderId),
+    folderId: resolveExistingFolderId(folderId),
     createdAt: source.createdAt || now,
-    updatedAt: now,
-    lastOpenedAt: now,
+    updatedAt: normalizeTimestamp(
+      source.updatedAt || source.modifiedAt,
+      source.createdAt || now
+    ),
+    lastOpenedAt: options.lastOpenedAt || now,
     appVersion: APP_VERSION,
     activePageIndex: Number(source.activePageIndex || 0),
     settings: source.settings || getDocumentSettings(),
@@ -2559,6 +2892,56 @@ function normalizeImportedDocument(parsed) {
       underDrawing: page.underDrawing || "",
     })),
   };
+}
+
+function findDocumentByUuid(uuid) {
+  const documentUuid = String(uuid || "");
+
+  if (!documentUuid) {
+    return null;
+  }
+
+  return (
+    state.documents.find((record) => getRecordUuid(record) === documentUuid) ||
+    null
+  );
+}
+
+function getImportFreshnessLabel(importedRecord, existingRecord) {
+  const importedTimestamp = Date.parse(importedRecord.updatedAt || "");
+  const existingTimestamp = Date.parse(existingRecord.updatedAt || "");
+
+  if (isNaN(importedTimestamp) || isNaN(existingTimestamp)) {
+    return "Dino Draw could not tell which copy is newer.";
+  }
+
+  if (importedTimestamp > existingTimestamp) {
+    return "The one being imported is newer than the existing one.";
+  }
+
+  if (importedTimestamp < existingTimestamp) {
+    return "The one being imported is older than the existing one.";
+  }
+
+  return "Both copies have the same edited time.";
+}
+
+function showImportConflictDialog(importedRecord, existingRecord) {
+  return showAppDialog({
+    title: "Document Already Exists",
+    message: [
+      "It looks like this document already exists.",
+      getImportFreshnessLabel(importedRecord, existingRecord),
+      "",
+      `Imported edited: ${formatDateLabel(importedRecord.updatedAt)}`,
+      `Existing edited: ${formatDateLabel(existingRecord.updatedAt)}`,
+      "",
+      "What do you want to do?",
+    ].join("\n"),
+    confirmLabel: "Overwrite",
+    secondaryLabel: "Import Duplicate",
+    cancelLabel: "Cancel",
+  });
 }
 
 function readTextFile(file) {
@@ -2581,8 +2964,55 @@ async function importDocumentFile(file) {
   }
 
   try {
+    await flushDocumentSave();
+    await refreshDocuments();
     const text = await readTextFile(file);
-    const record = normalizeImportedDocument(JSON.parse(text));
+    const parsed = JSON.parse(text);
+    const source = getImportedDocumentSource(parsed);
+
+    if (!source || !Array.isArray(source.pages)) {
+      throw new Error("Unsupported document format.");
+    }
+
+    const sourceUuid = getImportedSourceUuid(source);
+    const existingRecord = findDocumentByUuid(sourceUuid);
+    const now = new Date().toISOString();
+    let record = null;
+
+    if (existingRecord) {
+      const importedRecord = normalizeImportedDocument(parsed, {
+        id: existingRecord.id,
+        uuid: getRecordUuid(existingRecord),
+        folderId: existingRecord.folderId,
+        lastOpenedAt: now,
+      });
+      const conflictResult = await showImportConflictDialog(
+        importedRecord,
+        existingRecord
+      );
+
+      if (!conflictResult) {
+        return;
+      }
+
+      if (conflictResult === "secondary") {
+        const duplicateUuid = createDocumentUuid();
+
+        record = normalizeImportedDocument(parsed, {
+          id: duplicateUuid,
+          uuid: duplicateUuid,
+          folderId: state.currentFolderId,
+          lastOpenedAt: now,
+        });
+      } else {
+        record = importedRecord;
+      }
+    } else {
+      record = normalizeImportedDocument(parsed, {
+        folderId: state.currentFolderId,
+        lastOpenedAt: now,
+      });
+    }
 
     await putDocument(record);
     await refreshDocuments();
@@ -2780,12 +3210,19 @@ function normalizeGlobalSettings(settings = {}) {
     settings,
     "touchDrawingEnabled"
   );
+  const hasIntroDismissedSetting = Object.prototype.hasOwnProperty.call(
+    settings,
+    "documentIntroDismissed"
+  );
   const toolbarVisibility = settings.toolbarVisibility || {};
 
   return {
     touchDrawingEnabled: hasTouchDrawingSetting
       ? Boolean(settings.touchDrawingEnabled)
       : true,
+    documentIntroDismissed: hasIntroDismissedSetting
+      ? Boolean(settings.documentIntroDismissed)
+      : false,
     toolbarVisibility: {
       main: true,
       presets: toolbarVisibility.presets !== false,
@@ -2816,11 +3253,22 @@ function syncGlobalSettingsControls() {
   });
 
   if (documentIntro) {
+    const introDismissed = Boolean(state.globalSettings.documentIntroDismissed);
+
     documentIntro.classList.toggle(
       "is-hidden",
-      Boolean(state.documentIntroDismissed)
+      introDismissed
     );
   }
+
+  if (documentHelpButton) {
+    documentHelpButton.classList.toggle(
+      "is-hidden",
+      !Boolean(state.globalSettings.documentIntroDismissed)
+    );
+  }
+
+  syncDocumentListScrollArea();
 }
 
 function saveGlobalSettings() {
@@ -7341,7 +7789,7 @@ function findNonOverlappingToolbarPosition(movingRect, obstacles) {
     );
   });
 
-  return getUniqueToolbarPositionCandidates(candidates)
+  const bestCandidate = getUniqueToolbarPositionCandidates(candidates)
     .filter((candidate) => isToolbarPositionInViewport(candidate, movingRect))
     .map((candidate) => ({
       position: candidate,
@@ -7354,7 +7802,9 @@ function findNonOverlappingToolbarPosition(movingRect, obstacles) {
       (a, b) =>
         getToolbarPositionDistanceScore(a.position, origin) -
         getToolbarPositionDistanceScore(b.position, origin)
-    )[0]?.position || null;
+    )[0];
+
+  return bestCandidate ? bestCandidate.position : null;
 }
 
 function getToolbarDockedAxis(edge) {
@@ -7449,7 +7899,7 @@ function findNonOverlappingDockedToolbarPosition(
     }
   });
 
-  return getUniqueToolbarPositionCandidates(candidates)
+  const bestCandidate = getUniqueToolbarPositionCandidates(candidates)
     .filter((candidate) => isToolbarPositionInViewport(candidate, movingRect))
     .map((candidate) => ({
       position: candidate,
@@ -7462,7 +7912,9 @@ function findNonOverlappingDockedToolbarPosition(
       (a, b) =>
         getToolbarPositionDistanceScore(a.position, origin) -
         getToolbarPositionDistanceScore(b.position, origin)
-    )[0]?.position || null;
+    )[0];
+
+  return bestCandidate ? bestCandidate.position : null;
 }
 
 function moveRegularToolbarDrag(
@@ -8687,6 +9139,7 @@ async function initializeApp() {
   resizeCanvas();
 
   try {
+    await migrateExistingDocumentRecords();
     await refreshDocuments();
     updateDocumentSubtitle();
     updatePageControls();
@@ -8739,8 +9192,7 @@ openGuideButtons.forEach((button) => {
 });
 if (dismissDocumentIntroButton) {
   dismissDocumentIntroButton.addEventListener("click", () => {
-    state.documentIntroDismissed = true;
-    syncGlobalSettingsControls();
+    updateGlobalSettings({ documentIntroDismissed: true });
   });
 }
 newDocumentButton.addEventListener("click", () => {
@@ -8811,6 +9263,9 @@ appDialogForm.addEventListener("submit", (event) => {
 appDialogCancelButtons.forEach((button) => {
   button.addEventListener("click", () => closeAppDialog(null));
 });
+appDialogSecondaryButton.addEventListener("click", () =>
+  closeAppDialog("secondary")
+);
 appDialog.addEventListener("cancel", (event) => {
   event.preventDefault();
   closeAppDialog(null);
@@ -8822,6 +9277,8 @@ appDialog.addEventListener("close", () => {
     button.style.display = "";
   });
   appDialogConfirmButton.classList.remove("is-destructive");
+  appDialogSecondaryButton.hidden = true;
+  appDialogCancelActionButton.textContent = "Cancel";
 
   if (state.appDialogResolve) {
     state.appDialogResolve(result);
@@ -9117,6 +9574,7 @@ window.addEventListener("resize", () => {
   reclampUndoToolbarPosition();
   reclampFullscreenToolbarPosition();
   reclampToolbarTogglePosition();
+  syncDocumentListScrollArea();
 });
 window.addEventListener("keydown", handlePageNavigationKeyDown, true);
 document.addEventListener("pointerdown", closeCanvasContextMenuFromDocument, true);

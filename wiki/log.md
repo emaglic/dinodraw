@@ -320,3 +320,40 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Changed two-finger touch pan/zoom to start as a pending gesture and activate only after center movement or pinch-distance movement crosses a small threshold.
 - Bumped the app/cache version to `v0.8.107`.
+
+## [2026-09-10] feature | Added Document UUID Import Handling
+
+- Added stable document `uuid` handling to local records and exported DinoDraw JSON.
+- Added startup migration for existing records with missing UUIDs without changing document edited times.
+- Added same-UUID import detection with an overwrite-or-duplicate dialog that compares `updatedAt` values and shows both edited timestamps.
+- Kept new/duplicate imports in the currently viewed folder while overwrites update the existing local document in place.
+- Bumped the app/cache version to `v0.8.108`.
+
+## [2026-09-10] feature | Added Save As Export Picker
+
+- Added `showSaveFilePicker()` support for DinoDraw JSON, PNG ZIP, and PDF exports when the browser supports it in a secure context.
+- Kept automatic download fallback when the picker is unavailable or blocked before opening.
+- Made user cancellation of the native picker abort export instead of falling back to download.
+- Bumped the app/cache version to `v0.8.109`.
+
+## [2026-09-10] polish | Refined Documents Landing Help And Navigation
+
+- Persisted Documents intro-card dismissal in global localStorage settings.
+- Added a compact Help icon button at the top-left of the Documents panel after intro dismissal.
+- Added a horizontal rule under the Documents heading.
+- Changed the user-facing top-level folder label from `Root` to `My Documents`.
+- Restyled folder breadcrumbs as underlined text links with `keyboard_arrow_right` separators.
+- Hid the parent-folder back button while viewing the top-level folder.
+- Bumped the app/cache version to `v0.8.110`.
+
+## [2026-09-10] polish | Anchored Documents Landing Actions
+
+- Moved New Drawing, New Folder, and Import Doc to the bottom of the Documents panel.
+- Changed the Documents panel so the brand, intro/help, folder header, breadcrumbs, and bottom action buttons remain visible while the document list scrolls.
+- Added a layout sync that caps the document list height based on the currently visible panel chrome and viewport.
+- Bumped the app/cache version to `v0.8.111`.
+
+## [2026-09-10] fix | Repositioned Documents Close Button
+
+- Moved the Documents close X out of the header and into the modal panel shell so it anchors to the top-right edge directly across from the Help button.
+- Bumped the app/cache version to `v0.8.112`.

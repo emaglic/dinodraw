@@ -33,7 +33,7 @@ From there you can:
 - Press and hold, then drag a drawing or folder row onto a folder row or breadcrumb to move it.
 - Use the three-dot menu on a document row for options like move, rename, export, save PNG, save PDF, or delete.
 
-Existing documents start in the root folder. Documents are shown with the most recently opened document first inside the current folder.
+Existing documents start in `My Documents`. Documents are shown with the most recently opened document first inside the current folder.
 
 ## Drawing
 

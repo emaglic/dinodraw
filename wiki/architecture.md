@@ -38,7 +38,7 @@ Dino Draw is a static web app implemented with plain HTML, CSS, and vanilla Java
 - Current database version: `2`.
 - Current object stores: `documents` and `folders`.
 - Documents are listed by last opened date, most recent first within the current folder.
-- Missing document `folderId` values resolve to Root for compatibility with existing saved documents.
+- Missing document `folderId` values resolve to the top-level `My Documents` library folder for compatibility with existing saved documents.
 
 ## Rendering Model
 
@@ -103,6 +103,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.107`.
+Current app version: `v0.8.112`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.
