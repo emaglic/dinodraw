@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.101">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.102">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.101">
+    <link rel="stylesheet" href="./styles.css?v=0.8.102">
   </head>
   <body>
     <main class="app-shell">
@@ -182,7 +182,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.101</div>
+      <div class="version-badge" aria-label="Version">v0.8.102</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,7 +190,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.101</small>
+          <small data-brand-version>v0.8.102</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -291,7 +291,7 @@
             <ul>
               <li>Choose the pencil for drawing, eraser for erasing, square for shapes, image for importing, or lasso for selection.</li>
               <li>Tap a brush preset to select it. Double tap a preset to edit size, opacity, color, or Draw Behind.</li>
-              <li>Double tap the eraser tool to change eraser size.</li>
+              <li>Double tap the eraser tool to change eraser size or the shape tool to change shape settings.</li>
               <li>Draw Behind places highlighter-style ink under normal writing.</li>
             </ul>
           </section>
@@ -665,11 +665,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.101"></script>
+    <script src="./app.js?v=0.8.102"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.101", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.102", {
             updateViaCache: "none"
           }).catch(function () {});
         });

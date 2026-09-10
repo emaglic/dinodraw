@@ -58,6 +58,7 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 ## [2026-09-04] polish | Added Dismissible Intro Card
 
 - Replaced the standalone Documents-screen Instructions button with a textured "What is Dino Draw?" intro card below the logo/version.
+
 - Added a close button that persists the intro-card dismissal in global localStorage settings.
 - Added an Instructions button to the Settings modal.
 
@@ -298,3 +299,9 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Moved regular toolbar position records from global localStorage into document `settings.toolbarPositions`.
 - Kept new documents starting at default toolbar positions.
 - Preserved the hide/show tab as a separate edge-pinned global localStorage position.
+
+## [2026-09-10] polish | Made Shape Settings Double-Tap
+
+- Changed the main toolbar Shape button so a single tap selects shape drawing with the current document-level `shapeConfig`.
+- Kept shape settings available from a double tap on the Shape button and from the pending shape action toolbar.
+- Bumped the app/cache version to `v0.8.102`.

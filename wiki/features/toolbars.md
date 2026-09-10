@@ -7,6 +7,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Default position: left side of canvas, vertically centered.
 - Default orientation: vertical.
 - Contains document/library, draw, erase, shape, add image, lasso, settings, page navigation, page indicator, and add page controls.
+- Tapping Shape selects the tool without opening settings. Double tapping Shape opens shape settings while preserving the current document-level shape configuration.
 - The document/library button is labeled as Home in the UI while still opening the Documents landing screen.
 - Toolbars are draggable.
 - Dragging near an edge shows a semi-transparent docking preview strip for that edge.
@@ -26,6 +27,13 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Double tap a preset to edit size, opacity, color, and Draw Behind.
 - Saved in the active document under `settings.toolbarPositions.presets`.
 - Brush preset storage key: `brushPresets`.
+
+## Shape Tool
+
+- Shape settings are saved in the active document under `settings.shapeConfig`.
+- Tapping the main toolbar Shape button selects the shape tool and uses the last saved/current configuration.
+- Double tapping the main toolbar Shape button opens shape settings.
+- The shape action toolbar settings button also opens shape settings for the pending shape.
 
 ## Undo/Redo Toolbar
 

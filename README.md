@@ -41,6 +41,8 @@ Use the main toolbar to switch between tools such as drawing, erasing, selection
 
 The brush preset toolbar gives quick access to saved brush styles. Double tap a brush preset to edit its settings, including size, opacity, and whether it should draw behind normal ink.
 
+Tap the shape tool to draw with the current shape settings. Double tap it to change the shape type, border, or fill settings.
+
 Use `Draw Behind` for highlighter-style strokes. These strokes appear underneath normal writing so they do not obscure text as much as ordinary translucent ink.
 
 Use Add Image to choose an image from the device or paste an image from the clipboard when the browser allows clipboard image access. Imported images start centered on the canvas, fit within half the canvas size, and can be moved, resized with proportional lock on or off, rotated with the toolbar slider, confirmed, or deleted before they are baked into the page.

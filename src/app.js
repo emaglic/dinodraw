@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.101";
+const APP_VERSION = "v0.8.102";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -4280,10 +4280,6 @@ function setTool(tool) {
 
   canvas.style.cursor = tool === "erase" ? "cell" : "crosshair";
 
-  if (tool === "shape") {
-    openShapeSettings();
-  }
-
   updateActionToolbar();
   renderWorkspace();
 }
@@ -8039,6 +8035,8 @@ function addToolButtonInteractions(button) {
 
     if (tool === "erase" && isDoubleTap) {
       openEraserSettings();
+    } else if (tool === "shape" && isDoubleTap) {
+      openShapeSettings();
     }
   });
 }
