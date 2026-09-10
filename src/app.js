@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.95";
+const APP_VERSION = "v0.8.96";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -4119,7 +4119,7 @@ function updateFullscreenButton() {
   const icon = fullscreenButton.querySelector(".fullscreen-icon");
 
   if (icon) {
-    icon.classList.remove("is-exit");
+    icon.textContent = isFullscreen ? "fullscreen_exit" : "fullscreen";
   }
 }
 

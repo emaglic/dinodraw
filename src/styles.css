@@ -18,6 +18,7 @@
   text-transform: none;
   white-space: nowrap;
   word-wrap: normal;
+  font-feature-settings: "liga";
   -webkit-font-feature-settings: "liga";
   -webkit-font-smoothing: antialiased;
 }
@@ -268,107 +269,6 @@ button {
   color: #777777;
 }
 
-.document-icon {
-  position: relative;
-  display: block;
-  width: 16px;
-  height: 20px;
-  border: 2px solid #000000;
-  background: #ffffff;
-  color: #000000;
-}
-
-.document-icon::before {
-  content: "";
-  position: absolute;
-  left: 3px;
-  top: 7px;
-  width: 8px;
-  height: 2px;
-  background: #000000;
-  box-shadow: 0 5px 0 #000000;
-}
-
-.document-icon::after {
-  content: "";
-  position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 7px;
-  height: 7px;
-  border-left: 2px solid #000000;
-  border-bottom: 2px solid #000000;
-  background: #ffffff;
-}
-
-.lasso-icon {
-  position: relative;
-  display: block;
-  width: 19px;
-  height: 14px;
-  border: 2px solid currentColor;
-  border-radius: 50%;
-  transform: rotate(-18deg);
-}
-
-.lasso-icon::after {
-  content: "";
-  position: absolute;
-  right: -7px;
-  bottom: -2px;
-  width: 12px;
-  height: 2px;
-  background: currentColor;
-  transform: rotate(42deg);
-  transform-origin: left center;
-}
-
-.image-icon {
-  position: relative;
-  display: block;
-  width: 20px;
-  height: 16px;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-}
-
-.image-icon::before {
-  content: "";
-  position: absolute;
-  left: 3px;
-  bottom: 3px;
-  width: 11px;
-  height: 8px;
-  background:
-    linear-gradient(135deg, transparent 48%, currentColor 50%, currentColor 58%, transparent 60%) left bottom / 100% 100% no-repeat;
-}
-
-.image-icon::after {
-  content: "";
-  position: absolute;
-  right: 3px;
-  top: 3px;
-  width: 4px;
-  height: 4px;
-  border-radius: 50%;
-  background: currentColor;
-}
-
-.fullscreen-icon {
-  display: block;
-  width: 18px;
-  height: 18px;
-  background:
-    linear-gradient(currentColor, currentColor) left top / 7px 2px no-repeat,
-    linear-gradient(currentColor, currentColor) left top / 2px 7px no-repeat,
-    linear-gradient(currentColor, currentColor) right top / 7px 2px no-repeat,
-    linear-gradient(currentColor, currentColor) right top / 2px 7px no-repeat,
-    linear-gradient(currentColor, currentColor) left bottom / 7px 2px no-repeat,
-    linear-gradient(currentColor, currentColor) left bottom / 2px 7px no-repeat,
-    linear-gradient(currentColor, currentColor) right bottom / 7px 2px no-repeat,
-    linear-gradient(currentColor, currentColor) right bottom / 2px 7px no-repeat;
-}
-
 .drag-handle {
   cursor: grab;
   font-size: 14px;
@@ -565,72 +465,12 @@ button {
   color: #ffffff;
 }
 
-.proportional-toggle {
-  position: relative;
-}
-
-.copy-icon {
-  position: relative;
-  display: block;
-  width: 18px;
-  height: 18px;
-}
-
-.copy-icon::before,
-.copy-icon::after {
-  position: absolute;
-  display: block;
-  width: 11px;
-  height: 11px;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-  content: "";
-}
-
-.copy-icon::before {
-  left: 1px;
-  top: 5px;
-}
-
-.copy-icon::after {
-  right: 1px;
-  top: 1px;
-  background: currentColor;
-  box-shadow: inset 0 0 0 3px #ffffff;
-}
-
-.aspect-ratio-icon {
-  position: relative;
-  display: block;
-  width: 14px;
-  height: 11px;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-}
-
-.aspect-ratio-icon::before,
-.aspect-ratio-icon::after {
-  position: absolute;
-  display: block;
-  content: "";
-}
-
-.aspect-ratio-icon::before {
-  right: 1px;
-  bottom: 1px;
-  width: 5px;
-  height: 2px;
-  border-right: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
-}
-
-.proportional-toggle[aria-pressed="false"] .aspect-ratio-icon::after {
-  left: -4px;
-  top: 4px;
-  width: 22px;
-  height: 2px;
-  background: currentColor;
-  transform: rotate(-38deg);
+.tool-button .material-symbols-outlined,
+.action-button .material-symbols-outlined {
+  width: 24px;
+  height: 24px;
+  font-size: 24px;
+  line-height: 1;
 }
 
 .rotation-field {

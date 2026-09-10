@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.95">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.96">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.95">
+    <link rel="stylesheet" href="./styles.css?v=0.8.96">
   </head>
   <body>
     <main class="app-shell">
@@ -35,8 +35,8 @@
         <button class="tool-button drag-handle" type="button" data-drag-handle aria-label="Move toolbar" title="Move toolbar">
           ::
         </button>
-        <button class="tool-button" type="button" data-open-library aria-label="Documents" title="Documents">
-          <span class="document-icon" aria-hidden="true"></span>
+        <button class="tool-button" type="button" data-open-library aria-label="Home" title="Home">
+          <span class="material-symbols-outlined" aria-hidden="true">home</span>
         </button>
         <button class="tool-button is-active" type="button" data-tool="draw" aria-label="Draw" aria-pressed="true" title="Draw">
           &#9998;
@@ -48,24 +48,24 @@
           &#9633;
         </button>
         <button class="tool-button" type="button" data-add-image aria-label="Add image" title="Add image">
-          <span class="image-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">image</span>
         </button>
         <button class="tool-button" type="button" data-tool="lasso" aria-label="Lasso" aria-pressed="false" title="Lasso">
-          <span class="lasso-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">lasso_select</span>
         </button>
         <button class="tool-button" type="button" data-open-settings aria-label="Settings" title="Settings">
-          &#9881;
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         </button>
         <div class="toolbar-divider" aria-hidden="true"></div>
         <button class="tool-button" type="button" data-page-prev aria-label="Previous page" title="Previous page">
-          &lsaquo;
+          <span class="material-symbols-outlined" aria-hidden="true">keyboard_arrow_left</span>
         </button>
         <button class="page-indicator" type="button" data-page-indicator aria-label="Pages" title="Pages" aria-live="polite">1/1</button>
         <button class="tool-button" type="button" data-page-next aria-label="Next page" title="Next page">
-          &rsaquo;
+          <span class="material-symbols-outlined" aria-hidden="true">keyboard_arrow_right</span>
         </button>
         <button class="tool-button" type="button" data-page-add aria-label="Add page" title="Add page">
-          +
+          <span class="material-symbols-outlined" aria-hidden="true">add</span>
         </button>
       </div>
 
@@ -104,26 +104,26 @@
           ::
         </button>
         <button class="action-button" type="button" data-fullscreen-toggle aria-label="Enter fullscreen" title="Enter fullscreen">
-          <span class="fullscreen-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined fullscreen-icon" aria-hidden="true">fullscreen</span>
         </button>
       </div>
 
       <div class="action-toolbar is-hidden" data-shape-action-toolbar role="toolbar" aria-label="Shape actions">
         <button class="action-button" type="button" data-shape-settings aria-label="Shape settings" title="Shape settings">
-          &#9881;
+          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
         </button>
         <label class="rotation-field" aria-label="Shape rotation">
           <input type="range" min="0" max="359" step="1" value="0" data-shape-rotation>
           <output data-shape-rotation-output>0&deg;</output>
         </label>
         <button class="action-button proportional-toggle" type="button" data-shape-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="aspect-ratio-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
         </button>
         <button class="action-button" type="button" data-shape-commit aria-label="Done with shape" title="Done">
-          &#10003;
+          <span class="material-symbols-outlined" aria-hidden="true">check</span>
         </button>
         <button class="action-button" type="button" data-shape-delete aria-label="Delete shape" title="Delete shape">
-          x
+          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
         </button>
       </div>
 
@@ -133,13 +133,13 @@
           <output data-image-rotation-output>0&deg;</output>
         </label>
         <button class="action-button proportional-toggle" type="button" data-image-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="aspect-ratio-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
         </button>
         <button class="action-button" type="button" data-image-commit aria-label="Done with image" title="Done">
-          &#10003;
+          <span class="material-symbols-outlined" aria-hidden="true">check</span>
         </button>
         <button class="action-button" type="button" data-image-delete aria-label="Delete image" title="Delete image">
-          x
+          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
         </button>
       </div>
 
@@ -149,16 +149,16 @@
           <output data-lasso-rotation-output>0&deg;</output>
         </label>
         <button class="action-button proportional-toggle" type="button" data-lasso-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="aspect-ratio-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
         </button>
         <button class="action-button" type="button" data-lasso-copy aria-label="Copy selection" title="Copy selection">
-          <span class="copy-icon" aria-hidden="true"></span>
+          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
         </button>
         <button class="action-button" type="button" data-lasso-commit aria-label="Done with selection" title="Done">
-          &#10003;
+          <span class="material-symbols-outlined" aria-hidden="true">check</span>
         </button>
         <button class="action-button" type="button" data-lasso-delete aria-label="Delete selection" title="Delete selection">
-          x
+          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
         </button>
       </div>
 
@@ -174,15 +174,15 @@
           ::
         </button>
         <button class="action-button" type="button" data-undo aria-label="Undo" title="Undo" disabled>
-          &#8630;
+          <span class="material-symbols-outlined" aria-hidden="true">undo</span>
         </button>
         <button class="action-button" type="button" data-redo aria-label="Redo" title="Redo" disabled>
-          &#8631;
+          <span class="material-symbols-outlined" aria-hidden="true">redo</span>
         </button>
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.95</div>
+      <div class="version-badge" aria-label="Version">v0.8.96</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,7 +190,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.95</small>
+          <small data-brand-version>v0.8.96</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
@@ -665,11 +665,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.95"></script>
+    <script src="./app.js?v=0.8.96"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.95", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.96", {
             updateViaCache: "none"
           }).catch(function () {});
         });

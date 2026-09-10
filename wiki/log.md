@@ -265,3 +265,9 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added a self-hosted Material Symbols Outlined `woff2` font under `src/vendor/material-symbols/`.
 - Added a `.material-symbols-outlined` CSS class for future icon replacements.
 - Added the local font to the service-worker precache so Material Symbols remain available offline.
+
+## [2026-09-10] polish | Replaced Initial Toolbar Icons
+
+- Replaced the initial requested toolbar/action icons with local Material Symbols ligatures from `temp/icon-replacements.md`.
+- Changed the Documents button label and tooltip to Home while preserving its existing behavior.
+- Added fullscreen enter/exit icon switching with `fullscreen` and `fullscreen_exit`.

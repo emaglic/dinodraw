@@ -7,6 +7,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Default position: left side of canvas, vertically centered.
 - Default orientation: vertical.
 - Contains document/library, draw, erase, shape, add image, lasso, settings, page navigation, page indicator, and add page controls.
+- The document/library button is labeled as Home in the UI while still opening the Documents landing screen.
 - Toolbars are draggable.
 - Dragging to top or bottom edge should use horizontal orientation.
 - Dragging to left or right edge should use vertical orientation.
@@ -29,11 +30,17 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - Draggable and edge-oriented like other toolbars.
 - Saved localStorage key: `undoToolbarPositionTopLeft`.
 
+## Toolbar Icons
+
+- Toolbar icon replacements use the local `.material-symbols-outlined` class backed by `src/vendor/material-symbols/material-symbols-outlined.woff2`.
+- Replaced icon ligatures include `home`, `image`, `lasso_select`, `settings`, `keyboard_arrow_left`, `keyboard_arrow_right`, `add`, `delete`, `aspect_ratio`, `check`, `content_copy`, `undo`, `redo`, `fullscreen`, and `fullscreen_exit`.
+- Keep existing toolbar and action button dimensions when swapping icons.
+
 ## Fullscreen Toolbar
 
 - Default position: top-right.
 - Has a drag handle and fullscreen toggle button.
-- It may use the same icon in enter and exit states if a clear matching exit icon is unavailable.
+- The fullscreen toggle uses `fullscreen` when entering fullscreen and `fullscreen_exit` when exiting.
 - Saved localStorage key: `fullscreenToolbarPosition`.
 
 ## Toolbar Visibility Settings
