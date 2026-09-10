@@ -315,3 +315,8 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added a dock-lane collision pass and bumped to `v0.8.104` so overlapping toolbars on the same docked edge slide along that edge instead of moving out of the dock.
 - Made active dock previews sticky while the drag point remains inside the active edge lane and bumped to `v0.8.105`.
 - Raised toolbar stacking above the version badge and bumped to `v0.8.106`.
+
+## [2026-09-10] polish | Raised Touch Pan Activation Threshold
+
+- Changed two-finger touch pan/zoom to start as a pending gesture and activate only after center movement or pinch-distance movement crosses a small threshold.
+- Bumped the app/cache version to `v0.8.107`.

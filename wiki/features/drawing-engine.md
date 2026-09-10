@@ -43,7 +43,7 @@ New pages should default to the active/previous page background.
 - Page coordinates are native document coordinates; viewport coordinates are mapped through `getPageViewportTransform()`.
 - When the viewport is wider or taller than the native page, the page is centered on that axis.
 - When the native page is larger than the viewport at the current zoom, runtime `panX`/`panY` offsets reveal clipped regions without changing page resolution.
-- Two-finger touch drag pans the page and two-finger pinch zooms around the gesture midpoint. Wheel/trackpad scrolling pans for desktop use and testing, and browser Ctrl+wheel pinch gestures zoom.
+- Two-finger touch drag pans the page and two-finger pinch zooms around the gesture midpoint after a small activation movement, reducing accidental palm/wrist-triggered navigation. Wheel/trackpad scrolling pans for desktop use and testing, and browser Ctrl+wheel pinch gestures zoom.
 - Zoom can go out until the native page height fits the viewport height, capped at 100% minimum when the page is already shorter than the viewport.
 - Panning and zoom are view state only; saved document pages, PNG exports, PDF exports, and thumbnails use native page dimensions.
 - The black background is viewport chrome only. It is not drawn into page layers or exports.
@@ -170,6 +170,7 @@ Current code ignores non-primary pointers for drawing, shape, and lasso starts. 
 - Very small stroke movements are skipped to avoid processing dense pointer samples that do not visibly change the line.
 - Right/secondary button, pen eraser button codes, and pen barrel/auxiliary button codes are interpreted as temporary erasing via `getStrokeTool()`.
 - Touch strokes keep a temporary snapshot so a one-finger mark can be canceled into a two-finger pan. Pen strokes should not create that snapshot at stroke start.
+- Two-finger pan/zoom starts as a pending gesture and only activates after the touch center moves or the pinch distance changes past the activation threshold.
 
 ## Page Key Navigation
 

@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.106";
+const APP_VERSION = "v0.8.107";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -231,6 +231,7 @@ const state = {
   eraserPreview: null,
   eraserPreviewTimer: null,
   viewportTouchPointers: new Map(),
+  pendingPanGesture: null,
   panGesture: null,
   renderFrame: null,
   tooltipTimer: null,
@@ -305,6 +306,8 @@ const maxPageZoom = 4;
 const canvasPasteLongPressDelay = 560;
 const canvasPasteLongPressMoveTolerance = 12;
 const lassoCopyFeedbackDuration = 650;
+const touchPanActivationDistance = 22;
+const touchPinchActivationDistance = 18;
 const tooltipDelay = 375;
 const libraryDragDelay = 360;
 const libraryDragMoveTolerance = 8;
@@ -4068,6 +4071,7 @@ function clearTemporaryCanvasState() {
   clearLiveCanvas();
   state.eraserPreview = null;
   state.viewportTouchPointers.clear();
+  state.pendingPanGesture = null;
   state.panGesture = null;
   window.clearTimeout(state.eraserPreviewTimer);
   updateActionToolbar();
@@ -4495,7 +4499,7 @@ function cancelActiveTouchActionForPan() {
   renderWorkspace();
 }
 
-function startViewportPanGesture(event) {
+function startPendingViewportPanGesture() {
   const page = getActivePage();
   const center = getTouchPointerCenter();
   const distance = getTouchPointerDistance();
@@ -4504,11 +4508,44 @@ function startViewportPanGesture(event) {
     return;
   }
 
-  cancelActiveTouchActionForPan();
-  clampPagePan(page);
-  state.panGesture = {
+  state.pendingPanGesture = {
     startCenter: center,
     startDistance: distance,
+  };
+}
+
+function shouldActivatePendingPanGesture(center, distance) {
+  if (!state.pendingPanGesture || !center) {
+    return false;
+  }
+
+  const centerMovement = getDistance(center, state.pendingPanGesture.startCenter);
+  const pinchMovement = Math.abs(
+    distance - state.pendingPanGesture.startDistance
+  );
+
+  return (
+    centerMovement >= touchPanActivationDistance ||
+    pinchMovement >= touchPinchActivationDistance
+  );
+}
+
+function startViewportPanGesture(event, center, distance) {
+  const page = getActivePage();
+  const startCenter = center || getTouchPointerCenter();
+  const startDistance =
+    typeof distance === "number" ? distance : getTouchPointerDistance();
+
+  if (!page || !startCenter) {
+    return;
+  }
+
+  cancelActiveTouchActionForPan();
+  clampPagePan(page);
+  state.pendingPanGesture = null;
+  state.panGesture = {
+    startCenter,
+    startDistance,
     startZoom: getPageZoom(page),
     startPanX: page.panX || 0,
     startPanY: page.panY || 0,
@@ -4526,8 +4563,13 @@ function handleTouchPointerDownForPan(event) {
     return false;
   }
 
-  startViewportPanGesture(event);
-  return Boolean(state.panGesture);
+  startPendingViewportPanGesture();
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  return false;
 }
 
 function handleTouchPointerMoveForPan(event) {
@@ -4537,7 +4579,7 @@ function handleTouchPointerMoveForPan(event) {
 
   rememberTouchPointer(event);
 
-  if (!state.panGesture) {
+  if (!state.panGesture && !state.pendingPanGesture) {
     return false;
   }
 
@@ -4550,6 +4592,22 @@ function handleTouchPointerMoveForPan(event) {
   }
 
   const viewportCenter = getViewportPointFromClientPoint(center);
+
+  if (!state.panGesture) {
+    if (!shouldActivatePendingPanGesture(center, distance)) {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+
+      return false;
+    }
+
+    startViewportPanGesture(event, center, distance);
+  }
+
+  if (!state.panGesture) {
+    return false;
+  }
 
   if (distance > 0 && state.panGesture.startDistance > 0) {
     const zoom =
@@ -4576,11 +4634,16 @@ function handleTouchPointerMoveForPan(event) {
 
 function handleTouchPointerEndForPan(event) {
   const wasPanning = Boolean(state.panGesture);
+  const wasPending = Boolean(state.pendingPanGesture);
 
   forgetTouchPointer(event);
 
+  if (state.viewportTouchPointers.size < 2) {
+    state.pendingPanGesture = null;
+  }
+
   if (!wasPanning) {
-    return false;
+    return wasPending && state.viewportTouchPointers.size >= 2;
   }
 
   if (state.viewportTouchPointers.size >= 2) {
