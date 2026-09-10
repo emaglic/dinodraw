@@ -255,3 +255,7 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 ## [2026-09-10] polish | Added Lasso Copy Feedback
 
 - Made the lasso Copy selection button briefly invert after a successful copy so the tap has visible confirmation.
+
+## [2026-09-10] fix | Selected Lasso After Paste
+
+- Changed selection paste to activate the lasso tool after creating the floating pasted selection so it can be moved, resized, rotated, committed, or deleted immediately.

@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.93";
+const APP_VERSION = "v0.8.94";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -5476,6 +5476,7 @@ function pasteSelectionAtPoint(point) {
     pushesHistoryOnCommit: true,
     pushesHistoryOnDelete: false,
   };
+  setTool("lasso");
   updateActionToolbar();
   renderWorkspace();
   setSaveStatus("Selection pasted");
