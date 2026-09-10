@@ -117,9 +117,13 @@ The four regular toolbars share similar drag behavior:
 
 - calculate the pointer offset within the toolbar on `pointerdown`
 - show an edge docking preview when the toolbar is within the dock zone
+- keep the active docking lane selected while the drag point remains inside that lane, avoiding corner flicker between adjacent edge previews
 - keep the current orientation during ordinary dragging
 - snap to the previewed edge and apply that edge orientation on `pointerup`
 - clamp position to the viewport with an 8px margin
+- resolve visible regular-toolbar overlaps after drag end by first nudging the dragged toolbar, then nudging overlapping neighboring toolbars only when the dragged toolbar cannot fit cleanly
+- when a toolbar is docked onto an occupied edge, prefer sliding both affected toolbars along the same docked edge so neither one is pushed out of its docked state
+- render regular, action, and visibility-tab toolbars above the save-status and version badges so badges cannot obscure toolbar controls
 - write `{ left, top, orientation }` plus responsive anchor metadata to `settings.toolbarPositions` on drag end
 - preserve left/right/top/bottom edge distance for toolbars placed near an edge when the viewport resizes or rotates
 - preserve center-axis ratio for toolbars placed away from edges

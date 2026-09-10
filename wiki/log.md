@@ -305,3 +305,13 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Changed the main toolbar Shape button so a single tap selects shape drawing with the current document-level `shapeConfig`.
 - Kept shape settings available from a double tap on the Shape button and from the pending shape action toolbar.
 - Bumped the app/cache version to `v0.8.102`.
+
+## [2026-09-10] feature | Prevented Regular Toolbar Overlap On Drop
+
+- Added drop-time collision resolution for the four regular draggable toolbars.
+- Kept dragging permissive, then resolves visible toolbar overlaps after release.
+- Resolution first tries to nudge the dragged toolbar within the viewport, then moves overlapping neighboring toolbars when the dragged toolbar has no clean on-screen position.
+- Bumped `src/index.html` and `src/service-worker.js` cache-busting references to `v0.8.103` so browsers load the updated drag behavior.
+- Added a dock-lane collision pass and bumped to `v0.8.104` so overlapping toolbars on the same docked edge slide along that edge instead of moving out of the dock.
+- Made active dock previews sticky while the drag point remains inside the active edge lane and bumped to `v0.8.105`.
+- Raised toolbar stacking above the version badge and bumped to `v0.8.106`.

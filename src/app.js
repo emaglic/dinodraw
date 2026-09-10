@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.102";
+const APP_VERSION = "v0.8.106";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -315,6 +315,7 @@ const fullscreenToolbarPositionStorageKey = "fullscreenToolbarPosition";
 const toolbarTogglePositionStorageKey = "toolbarVisibilityTabPosition";
 const toolbarDockPreviewDistance = 56;
 const toolbarDockPadding = 8;
+const toolbarCollisionGap = 8;
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
 const databaseName = "booxDrawingDocuments";
 const databaseVersion = 2;
@@ -7074,7 +7075,31 @@ function getToolbarDockOrientation(edge) {
   return edge === "left" || edge === "right" ? "vertical" : "horizontal";
 }
 
-function getToolbarDockEdge(left, top, element) {
+function isPointInToolbarDockLane(point, edge) {
+  if (!point || !edge) {
+    return false;
+  }
+
+  if (edge === "left") {
+    return point.x <= toolbarDockPreviewDistance;
+  }
+
+  if (edge === "right") {
+    return point.x >= window.innerWidth - toolbarDockPreviewDistance;
+  }
+
+  if (edge === "top") {
+    return point.y <= toolbarDockPreviewDistance;
+  }
+
+  return point.y >= window.innerHeight - toolbarDockPreviewDistance;
+}
+
+function getToolbarDockEdge(left, top, element, currentDockEdge, point) {
+  if (isPointInToolbarDockLane(point, currentDockEdge)) {
+    return currentDockEdge;
+  }
+
   const rect = element.getBoundingClientRect();
   const distances = [
     { edge: "left", value: left },
@@ -7143,13 +7168,255 @@ function getToolbarDockedPosition(edge, left, top, element, clampPosition) {
   return clampPosition(nextLeft, nextTop);
 }
 
+function clampToolbarCoordinatesToViewport(left, top, rect) {
+  const margin = toolbarCollisionGap;
+  const maxLeft = Math.max(margin, window.innerWidth - rect.width - margin);
+  const maxTop = Math.max(margin, window.innerHeight - rect.height - margin);
+
+  return {
+    left: Math.min(Math.max(margin, left), maxLeft),
+    top: Math.min(Math.max(margin, top), maxTop),
+  };
+}
+
+function createToolbarRect(left, top, rect) {
+  return {
+    left,
+    top,
+    width: rect.width,
+    height: rect.height,
+    right: left + rect.width,
+    bottom: top + rect.height,
+  };
+}
+
+function getPositionedToolbarRect(element, left, top) {
+  return createToolbarRect(left, top, element.getBoundingClientRect());
+}
+
+function isToolbarPositionInViewport(position, rect) {
+  const margin = toolbarCollisionGap;
+  const fitsHorizontally = window.innerWidth >= rect.width + margin * 2;
+  const fitsVertically = window.innerHeight >= rect.height + margin * 2;
+
+  return (
+    (!fitsHorizontally ||
+      (position.left >= margin &&
+        position.left + rect.width <= window.innerWidth - margin)) &&
+    (!fitsVertically ||
+      (position.top >= margin &&
+        position.top + rect.height <= window.innerHeight - margin))
+  );
+}
+
+function getToolbarRectOverlapArea(a, b) {
+  const overlapWidth = Math.max(
+    0,
+    Math.min(a.right, b.right) - Math.max(a.left, b.left)
+  );
+  const overlapHeight = Math.max(
+    0,
+    Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top)
+  );
+
+  return overlapWidth * overlapHeight;
+}
+
+function doToolbarRectsOverlap(a, b) {
+  return (
+    a.left < b.right + toolbarCollisionGap &&
+    a.right + toolbarCollisionGap > b.left &&
+    a.top < b.bottom + toolbarCollisionGap &&
+    a.bottom + toolbarCollisionGap > b.top
+  );
+}
+
+function getToolbarPositionDistanceScore(position, origin) {
+  const dx = position.left - origin.left;
+  const dy = position.top - origin.top;
+
+  return dx * dx + dy * dy;
+}
+
+function getUniqueToolbarPositionCandidates(candidates) {
+  const seen = new Set();
+
+  return candidates.filter((candidate) => {
+    const key = `${Math.round(candidate.left)}:${Math.round(candidate.top)}`;
+
+    if (seen.has(key)) {
+      return false;
+    }
+
+    seen.add(key);
+    return true;
+  });
+}
+
+function findNonOverlappingToolbarPosition(movingRect, obstacles) {
+  const origin = { left: movingRect.left, top: movingRect.top };
+  const candidates = [origin];
+
+  obstacles.forEach((obstacle) => {
+    candidates.push(
+      {
+        left: obstacle.left - movingRect.width - toolbarCollisionGap,
+        top: origin.top,
+      },
+      {
+        left: obstacle.right + toolbarCollisionGap,
+        top: origin.top,
+      },
+      {
+        left: origin.left,
+        top: obstacle.top - movingRect.height - toolbarCollisionGap,
+      },
+      {
+        left: origin.left,
+        top: obstacle.bottom + toolbarCollisionGap,
+      }
+    );
+  });
+
+  return getUniqueToolbarPositionCandidates(candidates)
+    .filter((candidate) => isToolbarPositionInViewport(candidate, movingRect))
+    .map((candidate) => ({
+      position: candidate,
+      rect: createToolbarRect(candidate.left, candidate.top, movingRect),
+    }))
+    .filter(({ rect }) =>
+      obstacles.every((obstacle) => !doToolbarRectsOverlap(rect, obstacle))
+    )
+    .sort(
+      (a, b) =>
+        getToolbarPositionDistanceScore(a.position, origin) -
+        getToolbarPositionDistanceScore(b.position, origin)
+    )[0]?.position || null;
+}
+
+function getToolbarDockedAxis(edge) {
+  return edge === "top" || edge === "bottom" ? "x" : "y";
+}
+
+function getToolbarDockedLanePosition(edge, movingRect, axisStart) {
+  if (edge === "left") {
+    return { left: toolbarDockPadding, top: axisStart };
+  }
+
+  if (edge === "right") {
+    return {
+      left: window.innerWidth - movingRect.width - toolbarDockPadding,
+      top: axisStart,
+    };
+  }
+
+  if (edge === "top") {
+    return { left: axisStart, top: toolbarDockPadding };
+  }
+
+  return {
+    left: axisStart,
+    top: window.innerHeight - movingRect.height - toolbarDockPadding,
+  };
+}
+
+function isToolbarRectDockedToEdge(rect, edge) {
+  const tolerance = toolbarCollisionGap;
+
+  if (edge === "left") {
+    return Math.abs(rect.left - toolbarDockPadding) <= tolerance;
+  }
+
+  if (edge === "right") {
+    return (
+      Math.abs(window.innerWidth - rect.right - toolbarDockPadding) <= tolerance
+    );
+  }
+
+  if (edge === "top") {
+    return Math.abs(rect.top - toolbarDockPadding) <= tolerance;
+  }
+
+  return (
+    Math.abs(window.innerHeight - rect.bottom - toolbarDockPadding) <= tolerance
+  );
+}
+
+function findNonOverlappingDockedToolbarPosition(
+  edge,
+  movingRect,
+  obstacles
+) {
+  const axis = getToolbarDockedAxis(edge);
+  const originAxisStart = axis === "x" ? movingRect.left : movingRect.top;
+  const origin = getToolbarDockedLanePosition(
+    edge,
+    movingRect,
+    originAxisStart
+  );
+  const candidates = [origin];
+
+  obstacles.forEach((obstacle) => {
+    if (axis === "x") {
+      candidates.push(
+        getToolbarDockedLanePosition(
+          edge,
+          movingRect,
+          obstacle.left - movingRect.width - toolbarCollisionGap
+        ),
+        getToolbarDockedLanePosition(
+          edge,
+          movingRect,
+          obstacle.right + toolbarCollisionGap
+        )
+      );
+    } else {
+      candidates.push(
+        getToolbarDockedLanePosition(
+          edge,
+          movingRect,
+          obstacle.top - movingRect.height - toolbarCollisionGap
+        ),
+        getToolbarDockedLanePosition(
+          edge,
+          movingRect,
+          obstacle.bottom + toolbarCollisionGap
+        )
+      );
+    }
+  });
+
+  return getUniqueToolbarPositionCandidates(candidates)
+    .filter((candidate) => isToolbarPositionInViewport(candidate, movingRect))
+    .map((candidate) => ({
+      position: candidate,
+      rect: createToolbarRect(candidate.left, candidate.top, movingRect),
+    }))
+    .filter(({ rect }) =>
+      obstacles.every((obstacle) => !doToolbarRectsOverlap(rect, obstacle))
+    )
+    .sort(
+      (a, b) =>
+        getToolbarPositionDistanceScore(a.position, origin) -
+        getToolbarPositionDistanceScore(b.position, origin)
+    )[0]?.position || null;
+}
+
 function moveRegularToolbarDrag(
   element,
   left,
   top,
-  setPosition
+  setPosition,
+  currentDockEdge,
+  point
 ) {
-  const dockEdge = getToolbarDockEdge(left, top, element);
+  const dockEdge = getToolbarDockEdge(
+    left,
+    top,
+    element,
+    currentDockEdge,
+    point
+  );
 
   if (dockEdge) {
     showToolbarDockPreview(dockEdge);
@@ -7194,6 +7461,12 @@ function finishRegularToolbarDrag(
   }
 
   if (position) {
+    position = resolveRegularToolbarDrop(
+      element,
+      position,
+      setPosition,
+      event && event.type === "pointerup" ? drag.dockEdge : null
+    );
     savePosition(position);
   }
 }
@@ -7325,14 +7598,8 @@ function getResponsiveToolbarPosition(position, element) {
 
 function clampToolbarPosition(left, top) {
   const rect = toolbar.getBoundingClientRect();
-  const margin = 8;
-  const maxLeft = window.innerWidth - rect.width - margin;
-  const maxTop = window.innerHeight - rect.height - margin;
 
-  return {
-    left: Math.min(Math.max(margin, left), maxLeft),
-    top: Math.min(Math.max(margin, top), maxTop),
-  };
+  return clampToolbarCoordinatesToViewport(left, top, rect);
 }
 
 function saveToolbarPosition(position) {
@@ -7403,14 +7670,8 @@ function reclampToolbarPosition() {
 
 function clampPresetToolbarPosition(left, top) {
   const rect = presetToolbar.getBoundingClientRect();
-  const margin = 8;
-  const maxLeft = window.innerWidth - rect.width - margin;
-  const maxTop = window.innerHeight - rect.height - margin;
 
-  return {
-    left: Math.min(Math.max(margin, left), maxLeft),
-    top: Math.min(Math.max(margin, top), maxTop),
-  };
+  return clampToolbarCoordinatesToViewport(left, top, rect);
 }
 
 function savePresetToolbarPosition(position) {
@@ -7497,14 +7758,8 @@ function setDefaultPresetToolbarPosition() {
 
 function clampUndoToolbarPosition(left, top) {
   const rect = undoToolbar.getBoundingClientRect();
-  const margin = 8;
-  const maxLeft = window.innerWidth - rect.width - margin;
-  const maxTop = window.innerHeight - rect.height - margin;
 
-  return {
-    left: Math.min(Math.max(margin, left), maxLeft),
-    top: Math.min(Math.max(margin, top), maxTop),
-  };
+  return clampToolbarCoordinatesToViewport(left, top, rect);
 }
 
 function saveUndoToolbarPosition(position) {
@@ -7574,14 +7829,8 @@ function setDefaultUndoToolbarPosition() {
 
 function clampFullscreenToolbarPosition(left, top) {
   const rect = fullscreenToolbar.getBoundingClientRect();
-  const margin = 8;
-  const maxLeft = window.innerWidth - rect.width - margin;
-  const maxTop = window.innerHeight - rect.height - margin;
 
-  return {
-    left: Math.min(Math.max(margin, left), maxLeft),
-    top: Math.min(Math.max(margin, top), maxTop),
-  };
+  return clampToolbarCoordinatesToViewport(left, top, rect);
 }
 
 function saveFullscreenToolbarPosition(position) {
@@ -7660,6 +7909,214 @@ function setDefaultFullscreenToolbarPosition() {
   setFullscreenToolbarPosition(left, 12, true);
 }
 
+function isRegularToolbarCollisionVisible(element) {
+  const rect = element.getBoundingClientRect();
+  const style = window.getComputedStyle(element);
+
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    style.display !== "none" &&
+    style.visibility !== "hidden" &&
+    style.opacity !== "0"
+  );
+}
+
+function getRegularToolbarCollisionItems() {
+  return [
+    {
+      key: "main",
+      element: toolbar,
+      setPosition: setToolbarPosition,
+      savePosition: saveToolbarPosition,
+    },
+    {
+      key: "presets",
+      element: presetToolbar,
+      setPosition: setPresetToolbarPosition,
+      savePosition: savePresetToolbarPosition,
+    },
+    {
+      key: "undo",
+      element: undoToolbar,
+      setPosition: setUndoToolbarPosition,
+      savePosition: saveUndoToolbarPosition,
+    },
+    {
+      key: "fullscreen",
+      element: fullscreenToolbar,
+      setPosition: setFullscreenToolbarPosition,
+      savePosition: saveFullscreenToolbarPosition,
+    },
+  ]
+    .filter((item) => isRegularToolbarCollisionVisible(item.element))
+    .map((item) => {
+      const rect = item.element.getBoundingClientRect();
+
+      return {
+        ...item,
+        rect: createToolbarRect(rect.left, rect.top, rect),
+      };
+    });
+}
+
+function getOverlappingToolbarItems(rect, items) {
+  return items
+    .filter((item) => doToolbarRectsOverlap(rect, item.rect))
+    .sort(
+      (a, b) =>
+        getToolbarRectOverlapArea(rect, b.rect) -
+        getToolbarRectOverlapArea(rect, a.rect)
+    );
+}
+
+function applyResolvedToolbarCollisionPosition(item, position) {
+  const record = item.setPosition(position.left, position.top);
+  const rect = item.element.getBoundingClientRect();
+
+  item.rect = createToolbarRect(rect.left, rect.top, rect);
+  item.savePosition(record);
+  return record;
+}
+
+function resolveRegularToolbarDrop(
+  draggedElement,
+  position,
+  setDraggedPosition,
+  dockEdge = null
+) {
+  const items = getRegularToolbarCollisionItems();
+  const draggedItem = items.find((item) => item.element === draggedElement);
+
+  if (!draggedItem) {
+    return position;
+  }
+
+  const otherItems = items.filter((item) => item.element !== draggedElement);
+  let draggedRect = getPositionedToolbarRect(
+    draggedElement,
+    position.left,
+    position.top
+  );
+
+  if (getOverlappingToolbarItems(draggedRect, otherItems).length === 0) {
+    return position;
+  }
+
+  if (dockEdge) {
+    const dockAdjustedDraggedPosition = findNonOverlappingDockedToolbarPosition(
+      dockEdge,
+      draggedRect,
+      otherItems.map((item) => item.rect)
+    );
+
+    if (dockAdjustedDraggedPosition) {
+      return setDraggedPosition(
+        dockAdjustedDraggedPosition.left,
+        dockAdjustedDraggedPosition.top
+      );
+    }
+
+    for (let pass = 0; pass < items.length; pass += 1) {
+      let didMoveToolbar = false;
+      const overlappingDockedItems = getOverlappingToolbarItems(
+        draggedRect,
+        otherItems
+      ).filter((item) => isToolbarRectDockedToEdge(item.rect, dockEdge));
+
+      overlappingDockedItems.forEach((item) => {
+        const obstacles = [
+          draggedRect,
+          ...otherItems
+            .filter((otherItem) => otherItem.element !== item.element)
+            .map((otherItem) => otherItem.rect),
+        ];
+        const adjustedPosition = findNonOverlappingDockedToolbarPosition(
+          dockEdge,
+          item.rect,
+          obstacles
+        );
+
+        if (adjustedPosition) {
+          applyResolvedToolbarCollisionPosition(item, adjustedPosition);
+          didMoveToolbar = true;
+        }
+      });
+
+      if (getOverlappingToolbarItems(draggedRect, otherItems).length === 0) {
+        return position;
+      }
+
+      if (!didMoveToolbar || overlappingDockedItems.length === 0) {
+        break;
+      }
+    }
+  }
+
+  const adjustedDraggedPosition = findNonOverlappingToolbarPosition(
+    draggedRect,
+    otherItems.map((item) => item.rect)
+  );
+
+  if (adjustedDraggedPosition) {
+    return setDraggedPosition(
+      adjustedDraggedPosition.left,
+      adjustedDraggedPosition.top
+    );
+  }
+
+  for (let pass = 0; pass < items.length; pass += 1) {
+    let didMoveToolbar = false;
+    const overlappingItems = getOverlappingToolbarItems(draggedRect, otherItems);
+
+    overlappingItems.forEach((item) => {
+      const obstacles = [
+        draggedRect,
+        ...otherItems
+          .filter((otherItem) => otherItem.element !== item.element)
+          .map((otherItem) => otherItem.rect),
+      ];
+      const adjustedPosition = findNonOverlappingToolbarPosition(
+        item.rect,
+        obstacles
+      );
+
+      if (adjustedPosition) {
+        applyResolvedToolbarCollisionPosition(item, adjustedPosition);
+        didMoveToolbar = true;
+      }
+    });
+
+    if (getOverlappingToolbarItems(draggedRect, otherItems).length === 0) {
+      return position;
+    }
+
+    if (!didMoveToolbar) {
+      break;
+    }
+  }
+
+  draggedRect = getPositionedToolbarRect(
+    draggedElement,
+    position.left,
+    position.top
+  );
+
+  const fallbackDraggedPosition = findNonOverlappingToolbarPosition(
+    draggedRect,
+    otherItems.map((item) => item.rect)
+  );
+
+  if (fallbackDraggedPosition) {
+    return setDraggedPosition(
+      fallbackDraggedPosition.left,
+      fallbackDraggedPosition.top
+    );
+  }
+
+  return position;
+}
+
 function applyDocumentToolbarPositions(toolbarPositions = {}) {
   resetDocumentToolbarPositions();
 
@@ -7734,7 +8191,9 @@ function startToolbarDrag(event) {
       toolbar,
       moveEvent.clientX - offset.x,
       moveEvent.clientY - offset.y,
-      setToolbarPosition
+      setToolbarPosition,
+      drag.dockEdge,
+      { x: moveEvent.clientX, y: moveEvent.clientY }
     );
 
     drag.dockEdge = dragPosition.dockEdge;
@@ -7795,7 +8254,9 @@ function startPresetToolbarDrag(event) {
       presetToolbar,
       moveEvent.clientX - offset.x,
       moveEvent.clientY - offset.y,
-      setPresetToolbarPosition
+      setPresetToolbarPosition,
+      drag.dockEdge,
+      { x: moveEvent.clientX, y: moveEvent.clientY }
     );
 
     drag.dockEdge = dragPosition.dockEdge;
@@ -7858,7 +8319,9 @@ function startUndoToolbarDrag(event) {
       undoToolbar,
       moveEvent.clientX - offset.x,
       moveEvent.clientY - offset.y,
-      setUndoToolbarPosition
+      setUndoToolbarPosition,
+      drag.dockEdge,
+      { x: moveEvent.clientX, y: moveEvent.clientY }
     );
 
     drag.dockEdge = dragPosition.dockEdge;
@@ -7919,7 +8382,9 @@ function startFullscreenToolbarDrag(event) {
       fullscreenToolbar,
       moveEvent.clientX - offset.x,
       moveEvent.clientY - offset.y,
-      setFullscreenToolbarPosition
+      setFullscreenToolbarPosition,
+      drag.dockEdge,
+      { x: moveEvent.clientX, y: moveEvent.clientY }
     );
 
     drag.dockEdge = dragPosition.dockEdge;
