@@ -271,3 +271,8 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Replaced the initial requested toolbar/action icons with local Material Symbols ligatures from `temp/icon-replacements.md`.
 - Changed the Documents button label and tooltip to Home while preserving its existing behavior.
 - Added fullscreen enter/exit icon switching with `fullscreen` and `fullscreen_exit`.
+
+## [2026-09-10] polish | Replaced More Toolbar And Document Icons
+
+- Replaced toolbar drag handles, draw/erase/shape tool icons, toolbar visibility arrows, modal close buttons, and document-list folder/document icons with local Material Symbols.
+- Kept existing button and toolbar control dimensions while changing the icon glyphs.

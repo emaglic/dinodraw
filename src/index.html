@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.96">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.97">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.96">
+    <link rel="stylesheet" href="./styles.css?v=0.8.97">
   </head>
   <body>
     <main class="app-shell">
@@ -24,28 +24,28 @@
 
       <div class="toolbar-toggle" data-toolbar-toggle-shell data-edge="top" role="toolbar" aria-label="Toolbar visibility">
         <button class="toolbar-toggle-drag-handle" type="button" data-toolbar-toggle-drag-handle aria-label="Move toolbar visibility tab" title="Move toolbar visibility tab">
-          ::
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
         <button class="toolbar-toggle-button" type="button" data-toolbar-visibility-toggle aria-label="Hide toolbars" title="Hide toolbars">
-          <span data-toolbar-visibility-icon aria-hidden="true">&uarr;</span>
+          <span class="material-symbols-outlined" data-toolbar-visibility-icon aria-hidden="true">keyboard_arrow_up</span>
         </button>
       </div>
 
       <div class="toolbar" role="toolbar" aria-label="Drawing tools">
         <button class="tool-button drag-handle" type="button" data-drag-handle aria-label="Move toolbar" title="Move toolbar">
-          ::
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
         <button class="tool-button" type="button" data-open-library aria-label="Home" title="Home">
           <span class="material-symbols-outlined" aria-hidden="true">home</span>
         </button>
         <button class="tool-button is-active" type="button" data-tool="draw" aria-label="Draw" aria-pressed="true" title="Draw">
-          &#9998;
+          <span class="material-symbols-outlined" aria-hidden="true">ink_pen</span>
         </button>
         <button class="tool-button" type="button" data-tool="erase" aria-label="Erase" aria-pressed="false" title="Erase">
-          &#9003;
+          <span class="material-symbols-outlined" aria-hidden="true">ink_eraser</span>
         </button>
         <button class="tool-button" type="button" data-tool="shape" aria-label="Shape" aria-pressed="false" title="Shape">
-          &#9633;
+          <span class="material-symbols-outlined" aria-hidden="true">shapes</span>
         </button>
         <button class="tool-button" type="button" data-add-image aria-label="Add image" title="Add image">
           <span class="material-symbols-outlined" aria-hidden="true">image</span>
@@ -71,7 +71,7 @@
 
       <div class="preset-toolbar" data-preset-toolbar role="toolbar" aria-label="Brush presets">
         <button class="preset-drag-handle" type="button" data-preset-drag-handle aria-label="Move brush presets" title="Move brush presets">
-          ::
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
         <button class="preset-button is-active" type="button" data-preset-index="0" aria-label="Brush preset 1">
           <span class="preset-swatch"></span>
@@ -101,7 +101,7 @@
 
       <div class="fullscreen-toolbar" data-fullscreen-toolbar role="toolbar" aria-label="Fullscreen">
         <button class="fullscreen-drag-handle" type="button" data-fullscreen-drag-handle aria-label="Move fullscreen toolbar" title="Move fullscreen toolbar">
-          ::
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
         <button class="action-button" type="button" data-fullscreen-toggle aria-label="Enter fullscreen" title="Enter fullscreen">
           <span class="material-symbols-outlined fullscreen-icon" aria-hidden="true">fullscreen</span>
@@ -171,7 +171,7 @@
 
       <div class="undo-toolbar" data-undo-toolbar role="toolbar" aria-label="Undo and redo">
         <button class="undo-drag-handle" type="button" data-undo-drag-handle aria-label="Move undo toolbar" title="Move undo toolbar">
-          ::
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
         <button class="action-button" type="button" data-undo aria-label="Undo" title="Undo" disabled>
           <span class="material-symbols-outlined" aria-hidden="true">undo</span>
@@ -182,7 +182,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.96</div>
+      <div class="version-badge" aria-label="Version">v0.8.97</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,14 +190,14 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.96</small>
+          <small data-brand-version>v0.8.97</small>
         </div>
 
         <div class="document-intro-card" data-document-intro>
           <div class="document-intro-header">
             <h2>What is Dino Draw?</h2>
             <button class="icon-button document-intro-close" type="button" data-dismiss-document-intro aria-label="Hide introduction" title="Hide">
-              x
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
             </button>
           </div>
           <p>Dino Draw is a local-first sketchbook for handwritten notes, sketches, and multi-page notebooks.</p>
@@ -215,7 +215,7 @@
             </div>
           </div>
           <button class="icon-button" type="button" data-close-library aria-label="Close documents" title="Close" disabled>
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -270,7 +270,7 @@
             <p>Local drawing, notebooks, and exports for pen-first tablets.</p>
           </div>
           <button class="icon-button" type="submit" aria-label="Close instructions" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -345,7 +345,7 @@
         <header class="settings-header">
           <h1 id="page-title">Pages</h1>
           <button class="icon-button" type="submit" aria-label="Close pages" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
         <div class="page-list" data-page-list></div>
@@ -371,7 +371,7 @@
         <header class="settings-header">
           <h1 id="add-page-title">Add Page</h1>
           <button class="icon-button" type="submit" aria-label="Close add page" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
         <p class="add-page-current" id="add-page-current-page" data-add-page-current-page>Current page 1 of 1</p>
@@ -392,7 +392,7 @@
         <header class="settings-header">
           <h1 id="add-image-title">Add Image</h1>
           <button class="icon-button" type="submit" aria-label="Close add image" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -418,7 +418,7 @@
         <header class="settings-header">
           <h1 id="settings-title">Settings</h1>
           <button class="icon-button" type="submit" aria-label="Close settings" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -492,7 +492,7 @@
         <header class="settings-header">
           <h1 id="eraser-title">Eraser</h1>
           <button class="icon-button" type="submit" aria-label="Close eraser settings" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -512,7 +512,7 @@
         <header class="settings-header">
           <h1 id="app-dialog-title" data-app-dialog-title>Confirm</h1>
           <button class="icon-button" type="button" data-app-dialog-cancel aria-label="Close dialog" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
         <p id="app-dialog-message" class="app-dialog-message" data-app-dialog-message></p>
@@ -532,7 +532,7 @@
         <header class="settings-header">
           <h1 id="move-dialog-title" data-move-dialog-title>Move</h1>
           <button class="icon-button" type="button" data-move-dialog-cancel aria-label="Close dialog" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
         <p id="move-dialog-message" class="app-dialog-message" data-move-dialog-message></p>
@@ -552,7 +552,7 @@
         <header class="settings-header">
           <h1 id="shape-title">Shape</h1>
           <button class="icon-button" type="submit" aria-label="Close shape settings" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -608,7 +608,7 @@
         <header class="settings-header">
           <h1 id="preset-title">Preset 1</h1>
           <button class="icon-button" type="submit" aria-label="Close preset settings" title="Close">
-            x
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
           </button>
         </header>
 
@@ -665,11 +665,11 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.96"></script>
+    <script src="./app.js?v=0.8.97"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.96", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.97", {
             updateViaCache: "none"
           }).catch(function () {});
         });

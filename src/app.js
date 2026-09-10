@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.96";
+const APP_VERSION = "v0.8.97";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -1781,8 +1781,9 @@ function renderFolderRow(folder) {
   row.dataset.dropFolderId = folder.id;
   details.className = "document-row-details";
   name.className = "document-name document-folder-name";
-  icon.className = "document-folder-icon";
+  icon.className = "material-symbols-outlined document-folder-icon";
   icon.setAttribute("aria-hidden", "true");
+  icon.textContent = "folder";
   label.textContent = folder.name || "Untitled folder";
   meta.className = "document-meta";
   meta.textContent = `Folder - ${itemCount} item${itemCount === 1 ? "" : "s"} - updated ${formatDateLabel(folder.updatedAt)}`;
@@ -1864,8 +1865,9 @@ function renderDocumentList() {
     row.dataset.libraryId = documentRecord.id;
     details.className = "document-row-details";
     name.className = "document-name document-drawing-name";
-    icon.className = "document-drawing-icon";
+    icon.className = "material-symbols-outlined document-drawing-icon";
     icon.setAttribute("aria-hidden", "true");
+    icon.textContent = "article";
     label.textContent = documentRecord.name || "Untitled";
     meta.className = "document-meta";
     actions.className = "document-row-actions";
@@ -3713,8 +3715,8 @@ function updateToolbarVisibility() {
 
   if (toolbarVisibilityIcon) {
     toolbarVisibilityIcon.textContent = state.toolbarsHidden
-      ? "\u2193"
-      : "\u2191";
+      ? "keyboard_arrow_down"
+      : "keyboard_arrow_up";
   }
 }
 

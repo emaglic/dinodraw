@@ -466,11 +466,24 @@ button {
 }
 
 .tool-button .material-symbols-outlined,
-.action-button .material-symbols-outlined {
+.action-button .material-symbols-outlined,
+.icon-button .material-symbols-outlined,
+.toolbar-toggle-button .material-symbols-outlined,
+.toolbar-toggle-drag-handle .material-symbols-outlined,
+.drag-handle .material-symbols-outlined,
+.preset-drag-handle .material-symbols-outlined,
+.undo-drag-handle .material-symbols-outlined,
+.fullscreen-drag-handle .material-symbols-outlined {
   width: 24px;
   height: 24px;
   font-size: 24px;
   line-height: 1;
+}
+
+.toolbar-toggle-drag-handle .material-symbols-outlined {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
 }
 
 .rotation-field {
@@ -1004,49 +1017,11 @@ button {
 
 .document-folder-icon,
 .document-drawing-icon {
-  position: relative;
-  display: inline-block;
   flex: 0 0 auto;
-  background: #ffffff;
-}
-
-.document-folder-icon {
   width: 28px;
-  height: 20px;
-  border: 2px solid #000000;
-  border-radius: 4px;
-}
-
-.document-folder-icon::before {
-  position: absolute;
-  left: 2px;
-  top: -8px;
-  width: 12px;
-  height: 8px;
-  border: 2px solid #000000;
-  border-bottom: 0;
-  border-radius: 4px 4px 0 0;
-  background: #ffffff;
-  content: "";
-}
-
-.document-drawing-icon {
-  width: 22px;
   height: 28px;
-  border: 2px solid #000000;
-  border-radius: 3px;
-}
-
-.document-drawing-icon::before {
-  position: absolute;
-  right: -2px;
-  top: -2px;
-  width: 8px;
-  height: 8px;
-  border-left: 2px solid #000000;
-  border-bottom: 2px solid #000000;
-  background: #ffffff;
-  content: "";
+  font-size: 28px;
+  line-height: 1;
 }
 
 .document-drag-ghost {

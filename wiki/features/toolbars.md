@@ -33,7 +33,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 ## Toolbar Icons
 
 - Toolbar icon replacements use the local `.material-symbols-outlined` class backed by `src/vendor/material-symbols/material-symbols-outlined.woff2`.
-- Replaced icon ligatures include `home`, `image`, `lasso_select`, `settings`, `keyboard_arrow_left`, `keyboard_arrow_right`, `add`, `delete`, `aspect_ratio`, `check`, `content_copy`, `undo`, `redo`, `fullscreen`, and `fullscreen_exit`.
+- Replaced icon ligatures include `drag_indicator`, `keyboard_arrow_up`, `keyboard_arrow_down`, `ink_pen`, `ink_eraser`, `shapes`, `home`, `image`, `lasso_select`, `settings`, `keyboard_arrow_left`, `keyboard_arrow_right`, `add`, `delete`, `aspect_ratio`, `check`, `content_copy`, `undo`, `redo`, `fullscreen`, `fullscreen_exit`, `close`, `folder`, and `article`.
 - Keep existing toolbar and action button dimensions when swapping icons.
 
 ## Fullscreen Toolbar
