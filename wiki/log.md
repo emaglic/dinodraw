@@ -259,3 +259,9 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 ## [2026-09-10] fix | Selected Lasso After Paste
 
 - Changed selection paste to activate the lasso tool after creating the floating pasted selection so it can be moved, resized, rotated, committed, or deleted immediately.
+
+## [2026-09-10] feature | Vendored Material Symbols
+
+- Added a self-hosted Material Symbols Outlined `woff2` font under `src/vendor/material-symbols/`.
+- Added a `.material-symbols-outlined` CSS class for future icon replacements.
+- Added the local font to the service-worker precache so Material Symbols remain available offline.

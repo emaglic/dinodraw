@@ -1,11 +1,12 @@
-const CACHE_NAME = "dinodraw-v0.8.94";
+const CACHE_NAME = "dinodraw-v0.8.95";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css?v=0.8.94",
-  "./app.js?v=0.8.94",
-  "./manifest.webmanifest?v=0.8.94",
-  "./icon.svg"
+  "./styles.css?v=0.8.95",
+  "./app.js?v=0.8.95",
+  "./manifest.webmanifest?v=0.8.95",
+  "./icon.svg",
+  "./vendor/material-symbols/material-symbols-outlined.woff2"
 ];
 
 self.addEventListener("install", function (event) {
