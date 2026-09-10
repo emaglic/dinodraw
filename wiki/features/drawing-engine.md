@@ -134,6 +134,9 @@ Implementation notes:
 - Lasso rotation is stored as a live `rotation` value on the floating selection.
 - The selected rasters are rendered rotated for preview and baked into the page layers only on commit.
 - The action toolbar displays the current normalized degree value beside the 0-359 degree slider.
+- The lasso action toolbar can copy the floating selection into an in-app selection clipboard.
+- With copied selection pixels available, a canvas long-press or context-click while using the lasso tool opens a small Paste Selection menu at that page point.
+- Pasted selections preserve separate `underLayer` and normal-layer rasters; they become page pixels only when the floating selection is committed.
 
 ## History
 
@@ -142,6 +145,7 @@ Implementation notes:
 - `pushHistorySnapshot()` clears redo and schedules a document save.
 - The undo stack is capped by `historyLimit = 30`.
 - Undo deletes a pending shape or image first, then restores a floating lasso selection origin, then falls back to page history.
+- Deleting a freshly pasted floating selection discards it without adding history because the page pixels have not changed yet.
 
 ## Palm Rejection
 

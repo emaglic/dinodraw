@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.91";
+const APP_VERSION = "v0.8.92";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -133,8 +133,11 @@ const lassoRotationOutput = document.querySelector(
 const lassoProportionalResizeButton = document.querySelector(
   "[data-lasso-proportional-resize]"
 );
+const lassoCopyButton = document.querySelector("[data-lasso-copy]");
 const lassoCommitButton = document.querySelector("[data-lasso-commit]");
 const lassoDeleteButton = document.querySelector("[data-lasso-delete]");
+const canvasContextMenu = document.querySelector("[data-canvas-context-menu]");
+const lassoPasteButton = document.querySelector("[data-lasso-paste]");
 const undoToolbar = document.querySelector("[data-undo-toolbar]");
 const undoDragHandle = document.querySelector("[data-undo-drag-handle]");
 const undoButton = document.querySelector("[data-undo]");
@@ -221,6 +224,9 @@ const state = {
   lassoPath: [],
   selection: null,
   selectionInteraction: null,
+  selectionClipboard: null,
+  canvasContextMenuPoint: null,
+  canvasPasteLongPress: null,
   eraserPreview: null,
   eraserPreviewTimer: null,
   viewportTouchPointers: new Map(),
@@ -289,6 +295,8 @@ const liveInputMinInterval = 24;
 const transformInputMinInterval = 56;
 const transformPreviewMaxDimension = 480;
 const maxPageZoom = 4;
+const canvasPasteLongPressDelay = 560;
+const canvasPasteLongPressMoveTolerance = 12;
 const tooltipDelay = 375;
 const libraryDragDelay = 360;
 const libraryDragMoveTolerance = 8;
@@ -2638,6 +2646,10 @@ function cloneCanvas(source) {
   return clone;
 }
 
+function cloneNullableCanvas(source) {
+  return source ? cloneCanvas(source) : null;
+}
+
 function createPageSnapshot(page) {
   return {
     background: page.background,
@@ -3591,6 +3603,69 @@ function renderWorkspace() {
   drawLassoPathOverlay();
 }
 
+function hasSelectionClipboard() {
+  return Boolean(
+    state.selectionClipboard &&
+      (state.selectionClipboard.underCanvas || state.selectionClipboard.canvas)
+  );
+}
+
+function updateCanvasContextMenuActions() {
+  if (lassoPasteButton) {
+    lassoPasteButton.disabled =
+      !hasSelectionClipboard() || !state.canvasContextMenuPoint;
+  }
+}
+
+function closeCanvasContextMenu() {
+  if (canvasContextMenu) {
+    canvasContextMenu.classList.add("is-hidden");
+  }
+
+  state.canvasContextMenuPoint = null;
+  updateCanvasContextMenuActions();
+}
+
+function getClampedMenuPosition(menu, clientPoint) {
+  const margin = 8;
+  const rect = menu.getBoundingClientRect();
+  const left = Math.min(
+    Math.max(margin, clientPoint.x),
+    Math.max(margin, window.innerWidth - rect.width - margin)
+  );
+  const top = Math.min(
+    Math.max(margin, clientPoint.y),
+    Math.max(margin, window.innerHeight - rect.height - margin)
+  );
+
+  return { left, top };
+}
+
+function openCanvasContextMenu(clientPoint, pagePoint) {
+  if (!canvasContextMenu || !hasSelectionClipboard()) {
+    return false;
+  }
+
+  if (!isPointInsidePage(pagePoint)) {
+    closeCanvasContextMenu();
+    return false;
+  }
+
+  state.canvasContextMenuPoint = pagePoint;
+  canvasContextMenu.classList.remove("is-hidden");
+  canvasContextMenu.style.left = "0px";
+  canvasContextMenu.style.top = "0px";
+
+  const position = getClampedMenuPosition(canvasContextMenu, clientPoint);
+
+  canvasContextMenu.style.left = `${position.left}px`;
+  canvasContextMenu.style.top = `${position.top}px`;
+  updateCanvasContextMenuActions();
+  hideToolbarTooltip();
+
+  return true;
+}
+
 function updateActionToolbar() {
   const hasShape = Boolean(state.pendingShape);
   const hasImage = Boolean(state.pendingImage);
@@ -3599,8 +3674,12 @@ function updateActionToolbar() {
   shapeActionToolbar.classList.toggle("is-hidden", !hasShape);
   imageActionToolbar.classList.toggle("is-hidden", !hasImage);
   lassoActionToolbar.classList.toggle("is-hidden", !hasSelection);
+  if (lassoCopyButton) {
+    lassoCopyButton.disabled = !hasSelection;
+  }
   syncRotationInputs();
   syncProportionalResizeButtons();
+  updateCanvasContextMenuActions();
 }
 
 function updateToolbarVisibility() {
@@ -3810,7 +3889,131 @@ function getToolbarToggleOffsetFromPointer(edge, point) {
   return isHorizontalToggleEdge(edge) ? point.x : point.y;
 }
 
+function cancelCanvasPasteLongPress() {
+  if (!state.canvasPasteLongPress) {
+    return;
+  }
+
+  window.clearTimeout(state.canvasPasteLongPress.timer);
+  state.canvasPasteLongPress = null;
+}
+
+function resetActiveLassoGestureForMenu(pointerId) {
+  if (state.activePointerId !== pointerId) {
+    return;
+  }
+
+  if (canvas.hasPointerCapture && canvas.hasPointerCapture(pointerId)) {
+    canvas.releasePointerCapture(pointerId);
+  }
+
+  if (
+    state.selection &&
+    state.selectionInteraction &&
+    state.selectionInteraction.startSelection
+  ) {
+    state.selection = {
+      ...state.selection,
+      ...state.selectionInteraction.startSelection,
+    };
+  }
+
+  state.isDrawing = false;
+  state.activePointerId = null;
+  state.activePointerType = "";
+  state.activeStrokeSnapshot = null;
+  state.lastPoint = null;
+  state.canvasRect = null;
+  state.canvasTransform = null;
+  state.lastLiveInputTimestamp = 0;
+  state.selectionInteraction = null;
+  state.lassoPath = [];
+  state.liveLassoDashLength = 0;
+  clearLiveCanvas();
+  updateActionToolbar();
+  renderWorkspace();
+}
+
+function canStartCanvasPasteLongPress(event) {
+  return (
+    hasSelectionClipboard() &&
+    state.tool === "lasso" &&
+    event.isPrimary !== false &&
+    event.button <= 0
+  );
+}
+
+function startCanvasPasteLongPress(event) {
+  closeCanvasContextMenu();
+
+  if (!canStartCanvasPasteLongPress(event)) {
+    return;
+  }
+
+  const clientPoint = { x: event.clientX, y: event.clientY };
+  const pagePoint = getPagePointFromClientPoint(clientPoint);
+
+  if (!isPointInsidePage(pagePoint)) {
+    return;
+  }
+
+  cancelCanvasPasteLongPress();
+  state.canvasPasteLongPress = {
+    pointerId: event.pointerId,
+    clientPoint,
+    pagePoint,
+    timer: window.setTimeout(() => {
+      const press = state.canvasPasteLongPress;
+
+      if (!press || press.pointerId !== event.pointerId) {
+        return;
+      }
+
+      state.canvasPasteLongPress = null;
+      resetActiveLassoGestureForMenu(press.pointerId);
+      openCanvasContextMenu(press.clientPoint, press.pagePoint);
+    }, canvasPasteLongPressDelay),
+  };
+}
+
+function updateCanvasPasteLongPress(event) {
+  const press = state.canvasPasteLongPress;
+
+  if (!press || press.pointerId !== event.pointerId) {
+    return;
+  }
+
+  const distance = getDistance(press.clientPoint, {
+    x: event.clientX,
+    y: event.clientY,
+  });
+
+  if (distance > canvasPasteLongPressMoveTolerance) {
+    cancelCanvasPasteLongPress();
+  }
+}
+
+function handleCanvasContextMenu(event) {
+  const clientPoint = { x: event.clientX, y: event.clientY };
+  const pagePoint = getPagePointFromClientPoint(clientPoint);
+
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  cancelCanvasPasteLongPress();
+  openCanvasContextMenu(clientPoint, pagePoint);
+}
+
+function closeCanvasContextMenuFromDocument(event) {
+  if (!event.target.closest("[data-canvas-context-menu]")) {
+    closeCanvasContextMenu();
+  }
+}
+
 function clearTemporaryCanvasState() {
+  cancelCanvasPasteLongPress();
+  closeCanvasContextMenu();
   state.pendingShape = null;
   state.shapeInteraction = null;
   state.pendingImage = null;
@@ -4094,6 +4297,16 @@ function getPoint(event) {
   return {
     x: (event.clientX - rect.left - transform.x) / transform.scale,
     y: (event.clientY - rect.top - transform.y) / transform.scale,
+  };
+}
+
+function getPagePointFromClientPoint(point) {
+  const rect = canvas.getBoundingClientRect();
+  const transform = getPageViewportTransform();
+
+  return {
+    x: (point.x - rect.left - transform.x) / transform.scale,
+    y: (point.y - rect.top - transform.y) / transform.scale,
   };
 }
 
@@ -5179,10 +5392,77 @@ function finalizeLassoSelection() {
     rotation: 0,
     proportionalResize: true,
     beforeSnapshot,
+    pushesHistoryOnCommit: true,
+    pushesHistoryOnDelete: true,
   };
   state.lassoPath = [];
   updateActionToolbar();
   renderWorkspace();
+}
+
+function copySelection() {
+  if (!state.selection) {
+    return;
+  }
+
+  state.selectionClipboard = {
+    underCanvas: cloneNullableCanvas(state.selection.underCanvas),
+    canvas: cloneNullableCanvas(state.selection.canvas),
+    width: Math.max(1, state.selection.width || 1),
+    height: Math.max(1, state.selection.height || 1),
+    rotation: state.selection.rotation || 0,
+    proportionalResize: state.selection.proportionalResize !== false,
+  };
+  updateCanvasContextMenuActions();
+  setSaveStatus("Selection copied");
+}
+
+function getSelectionPasteBox(point, clipboard, page) {
+  const width = Math.max(1, clipboard.width || 1);
+  const height = Math.max(1, clipboard.height || 1);
+  const maxX = Math.max(0, getPageWidth(page) - width);
+  const maxY = Math.max(0, getPageHeight(page) - height);
+
+  return {
+    x: Math.min(Math.max(0, point.x - width / 2), maxX),
+    y: Math.min(Math.max(0, point.y - height / 2), maxY),
+    width,
+    height,
+  };
+}
+
+function pasteSelectionAtPoint(point) {
+  const clipboard = state.selectionClipboard;
+  const page = getActivePage();
+
+  if (!hasSelectionClipboard() || !page || !isPointInsidePage(point, page)) {
+    return;
+  }
+
+  if (state.selection) {
+    commitSelection();
+  }
+
+  const box = getSelectionPasteBox(point, clipboard, page);
+
+  state.lassoPath = [];
+  state.selectionInteraction = null;
+  state.selection = {
+    underCanvas: cloneNullableCanvas(clipboard.underCanvas),
+    canvas: cloneNullableCanvas(clipboard.canvas),
+    x: box.x,
+    y: box.y,
+    width: box.width,
+    height: box.height,
+    rotation: clipboard.rotation || 0,
+    proportionalResize: clipboard.proportionalResize !== false,
+    beforeSnapshot: null,
+    pushesHistoryOnCommit: true,
+    pushesHistoryOnDelete: false,
+  };
+  updateActionToolbar();
+  renderWorkspace();
+  setSaveStatus("Selection pasted");
 }
 
 function commitSelection() {
@@ -5190,7 +5470,7 @@ function commitSelection() {
     return;
   }
 
-  const didMoveSelection = Boolean(state.selection.beforeSnapshot);
+  const shouldPushHistory = state.selection.pushesHistoryOnCommit !== false;
 
   drawSelectionContent(
     getActivePage().underContext,
@@ -5204,7 +5484,7 @@ function commitSelection() {
   );
   state.selection = null;
   state.selectionInteraction = null;
-  if (didMoveSelection) {
+  if (shouldPushHistory) {
     pushHistorySnapshot();
   }
   updateActionToolbar();
@@ -5212,11 +5492,13 @@ function commitSelection() {
 }
 
 function deleteSelection() {
-  const didDeleteSelection = Boolean(state.selection);
+  const shouldPushHistory = Boolean(
+    state.selection && state.selection.pushesHistoryOnDelete !== false
+  );
 
   state.selection = null;
   state.selectionInteraction = null;
-  if (didDeleteSelection) {
+  if (shouldPushHistory) {
     pushHistorySnapshot();
   }
   updateActionToolbar();
@@ -8000,8 +8282,18 @@ addProportionalResizeToggleInteraction(
   lassoProportionalResizeButton,
   toggleSelectionProportionalResize
 );
+lassoCopyButton.addEventListener("click", copySelection);
 lassoCommitButton.addEventListener("click", commitSelection);
 lassoDeleteButton.addEventListener("click", deleteSelection);
+lassoPasteButton.addEventListener("click", () => {
+  const point = state.canvasContextMenuPoint;
+
+  closeCanvasContextMenu();
+
+  if (point) {
+    pasteSelectionAtPoint(point);
+  }
+});
 previousPageButton.addEventListener("click", () =>
   setActivePage(state.activePageIndex - 1)
 );
@@ -8127,16 +8419,21 @@ presetDragHandle.addEventListener("pointerdown", startPresetToolbarDrag);
 undoDragHandle.addEventListener("pointerdown", startUndoToolbarDrag);
 fullscreenDragHandle.addEventListener("pointerdown", startFullscreenToolbarDrag);
 toolbarToggleDragHandle.addEventListener("pointerdown", startToolbarToggleDrag);
+canvas.addEventListener("pointerdown", startCanvasPasteLongPress);
+canvas.addEventListener(moveEventName, updateCanvasPasteLongPress);
+canvas.addEventListener("pointerup", cancelCanvasPasteLongPress);
+canvas.addEventListener("pointercancel", cancelCanvasPasteLongPress);
 canvas.addEventListener("pointerdown", startCanvasAction);
 canvas.addEventListener(moveEventName, continueCanvasAction);
 canvas.addEventListener("pointerup", endCanvasAction);
 canvas.addEventListener("pointercancel", endCanvasAction);
 canvas.addEventListener("pointerleave", endCanvasAction);
 canvas.addEventListener("wheel", handleCanvasWheel, false);
-canvas.addEventListener("contextmenu", (event) => event.preventDefault());
+canvas.addEventListener("contextmenu", handleCanvasContextMenu);
 
 window.addEventListener("resize", () => {
   hideToolbarTooltip();
+  closeCanvasContextMenu();
   resizeCanvas();
   reclampToolbarPosition();
   reclampPresetToolbarPosition();
@@ -8145,6 +8442,7 @@ window.addEventListener("resize", () => {
   reclampToolbarTogglePosition();
 });
 window.addEventListener("keydown", handlePageNavigationKeyDown, true);
+document.addEventListener("pointerdown", closeCanvasContextMenuFromDocument, true);
 document.addEventListener("paste", handlePasteEvent);
 document.addEventListener("fullscreenchange", updateFullscreenButton);
 initializeApp();

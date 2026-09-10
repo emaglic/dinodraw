@@ -244,3 +244,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Changed library row gestures to capture the pointer immediately and manually scroll the document panel when movement starts before the long-press delay.
 - Kept straight vertical movement as drag movement after the long-press delay, avoiding browser vertical-pan cancellation.
+
+## [2026-09-10] feature | Added Lasso Selection Copy And Paste
+
+- Added a Copy selection button to the lasso action toolbar.
+- Added an in-app selection clipboard that preserves separate Draw Behind and normal-layer selection canvases.
+- Added a lasso-tool canvas long-press/context menu for Paste Selection at the chosen page point.
+- Pasted selections remain floating until Done is pressed; deleting an uncommitted paste discards it without adding a history entry.
