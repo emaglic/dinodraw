@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.128">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.129">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.128">
+    <link rel="stylesheet" href="./styles.css?v=0.8.129">
   </head>
   <body>
     <main class="app-shell">
@@ -234,7 +234,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.128</div>
+      <div class="version-badge" aria-label="Version">v0.8.129</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -242,7 +242,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.128</small>
+          <small data-brand-version>v0.8.129</small>
         </div>
         <button class="icon-button document-help-button is-hidden" type="button" data-document-help data-open-guide aria-label="Open instructions" title="Help">
           <span class="material-symbols-outlined" aria-hidden="true">help</span>
@@ -755,7 +755,7 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.128"></script>
+    <script src="./app.js?v=0.8.129"></script>
     <script>
       if ("serviceWorker" in navigator) {
         var didReloadForServiceWorker = false;
@@ -770,7 +770,7 @@
         });
 
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.128", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.129", {
             updateViaCache: "none"
           }).then(function (registration) {
             if (registration.waiting) {

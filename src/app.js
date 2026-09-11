@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.128";
+const APP_VERSION = "v0.8.129";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -251,6 +251,8 @@ const state = {
   hasLiveStroke: false,
   liveStrokePreset: null,
   liveStrokePoints: [],
+  liveStrokeLayer: null,
+  liveStrokeContext: null,
   liveLassoDashLength: 0,
   activePageIndex: 0,
   activePresetIndex: 0,
@@ -3566,6 +3568,63 @@ function drawBackground(page, targetContext, width, height) {
   }
 }
 
+function drawBackgroundRegion(page, targetContext, region) {
+  const right = region.left + region.width;
+  const bottom = region.top + region.height;
+
+  targetContext.fillStyle = "#ffffff";
+  targetContext.fillRect(region.left, region.top, region.width, region.height);
+
+  if (page.background === "ruled") {
+    const lineCount = 24;
+    const step = getPageHeight(page) / (lineCount + 1);
+
+    targetContext.strokeStyle = "#777777";
+    targetContext.lineWidth = 2;
+    targetContext.beginPath();
+
+    for (let index = 1; index <= lineCount; index += 1) {
+      const y = Math.round(step * index) + 0.5;
+
+      if (y < region.top - 2 || y > bottom + 2) {
+        continue;
+      }
+
+      targetContext.moveTo(region.left, y);
+      targetContext.lineTo(right, y);
+    }
+
+    targetContext.stroke();
+  }
+
+  if (page.background === "graph") {
+    const smallStep = 32;
+    const largeStep = smallStep * 4;
+    const firstX = Math.max(0, Math.floor(region.left / smallStep) * smallStep);
+    const firstY = Math.max(0, Math.floor(region.top / smallStep) * smallStep);
+
+    for (let x = firstX; x <= right; x += smallStep) {
+      targetContext.strokeStyle =
+        x % largeStep === 0 ? "#555555" : "#999999";
+      targetContext.lineWidth = x % largeStep === 0 ? 2 : 1;
+      targetContext.beginPath();
+      targetContext.moveTo(Math.round(x) + 0.5, region.top);
+      targetContext.lineTo(Math.round(x) + 0.5, bottom);
+      targetContext.stroke();
+    }
+
+    for (let y = firstY; y <= bottom; y += smallStep) {
+      targetContext.strokeStyle =
+        y % largeStep === 0 ? "#555555" : "#999999";
+      targetContext.lineWidth = y % largeStep === 0 ? 2 : 1;
+      targetContext.beginPath();
+      targetContext.moveTo(region.left, Math.round(y) + 0.5);
+      targetContext.lineTo(right, Math.round(y) + 0.5);
+      targetContext.stroke();
+    }
+  }
+}
+
 function drawViewportBackground() {
   context.setTransform(1, 0, 0, 1, 0, 0);
   context.fillStyle = "#000000";
@@ -3646,6 +3705,8 @@ function clearLiveCanvas() {
   liveContext.globalAlpha = 1;
   liveContext.globalCompositeOperation = "source-over";
   liveCanvas.classList.remove("is-active");
+  state.liveStrokeLayer = null;
+  state.liveStrokeContext = null;
 }
 
 function renderPage() {
@@ -5573,6 +5634,15 @@ function drawPageStrokePath(targetContext, points, options) {
 
   targetContext.save();
   targetContext.setTransform(1, 0, 0, 1, 0, 0);
+  drawStrokePath(targetContext, points, options);
+  targetContext.restore();
+}
+
+function drawStrokePath(targetContext, points, options) {
+  if (points.length === 0) {
+    return;
+  }
+
   if (targetContext.setLineDash) {
     targetContext.setLineDash([]);
   }
@@ -5595,7 +5665,8 @@ function drawPageStrokePath(targetContext, points, options) {
   }
 
   targetContext.stroke();
-  targetContext.restore();
+  targetContext.globalAlpha = 1;
+  targetContext.globalCompositeOperation = "source-over";
 }
 
 function drawLiveStrokeSegment(from, to, preset) {
@@ -5607,6 +5678,101 @@ function drawLiveStrokeSegment(from, to, preset) {
     opacity: preset.opacity,
     compositeOperation: "source-over",
   });
+  context.restore();
+}
+
+function getLiveStrokeContext(page) {
+  if (
+    !state.liveStrokeLayer ||
+    state.liveStrokeLayer.width !== getPageWidth(page) ||
+    state.liveStrokeLayer.height !== getPageHeight(page)
+  ) {
+    state.liveStrokeLayer = document.createElement("canvas");
+    state.liveStrokeLayer.width = getPageWidth(page);
+    state.liveStrokeLayer.height = getPageHeight(page);
+    state.liveStrokeContext = state.liveStrokeLayer.getContext("2d");
+  }
+
+  return state.liveStrokeContext;
+}
+
+function getStrokeRegion(page, from, to, size) {
+  const padding = Math.max(2, size / 2 + 3);
+  const left = Math.max(0, Math.floor(Math.min(from.x, to.x) - padding));
+  const top = Math.max(0, Math.floor(Math.min(from.y, to.y) - padding));
+  const right = Math.min(
+    getPageWidth(page),
+    Math.ceil(Math.max(from.x, to.x) + padding)
+  );
+  const bottom = Math.min(
+    getPageHeight(page),
+    Math.ceil(Math.max(from.y, to.y) + padding)
+  );
+
+  if (right <= left || bottom <= top) {
+    return null;
+  }
+
+  return {
+    left,
+    top,
+    width: right - left,
+    height: bottom - top,
+  };
+}
+
+function renderLiveDrawBehindStrokeRegion(page, from, to, preset) {
+  if (!page || state.liveStrokePoints.length === 0) {
+    return;
+  }
+
+  const region = getStrokeRegion(page, from, to, preset.size);
+
+  if (!region) {
+    return;
+  }
+
+  context.save();
+  setVisibleContextPageTransform(page);
+  context.beginPath();
+  context.rect(region.left, region.top, region.width, region.height);
+  context.clip();
+  drawBackgroundRegion(page, context, region);
+  context.drawImage(
+    page.underLayer,
+    region.left,
+    region.top,
+    region.width,
+    region.height,
+    region.left,
+    region.top,
+    region.width,
+    region.height
+  );
+  if (state.liveStrokeLayer) {
+    context.drawImage(
+      state.liveStrokeLayer,
+      region.left,
+      region.top,
+      region.width,
+      region.height,
+      region.left,
+      region.top,
+      region.width,
+      region.height
+    );
+  }
+  context.drawImage(
+    page.layer,
+    region.left,
+    region.top,
+    region.width,
+    region.height,
+    region.left,
+    region.top,
+    region.width,
+    region.height
+  );
   context.restore();
 }
 
@@ -5681,7 +5847,20 @@ function drawLine(from, to) {
     ) {
       state.liveStrokePoints.push(to);
     }
-    drawLiveStrokeSegment(from, to, strokePreset);
+
+    if (strokePreset.drawBehind) {
+      const liveStrokeContext = getLiveStrokeContext(page);
+
+      drawPageStrokeSegment(liveStrokeContext, from, to, {
+        color: strokePreset.color,
+        size: strokePreset.size,
+        opacity: strokePreset.opacity,
+        compositeOperation: "source-over",
+      });
+      renderLiveDrawBehindStrokeRegion(page, from, to, strokePreset);
+    } else {
+      drawLiveStrokeSegment(from, to, strokePreset);
+    }
     return;
   }
 

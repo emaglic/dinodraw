@@ -36,7 +36,7 @@ New pages should default to the active/previous page background.
 - `renderPage()` draws a black viewport background outside the page, applies the active page viewport transform, draws the active page background at native page size, then draws `underLayer`, then draws `layer`.
 - `renderWorkspace()` draws the committed page plus temporary overlays for selection, pending shape, and lasso path.
 - `drawPageThumbnail()` and export flattening use the same background, `underLayer`, `layer` order.
-- Draw Behind strokes preview on the main visible canvas while the pointer is down, then replay one committed stroke to `underLayer` with an identity page-layer transform. The page is recomposed once when the stroke ends. Avoid full-page `renderPage()` calls for every pen segment.
+- Draw Behind strokes preview into a temporary page-sized stroke layer, then repaint only the active stroke region in final layer order: background, committed `underLayer`, live stroke preview, then normal `layer`. The stroke is replayed once to `underLayer` when it ends. Avoid full-page `renderPage()` calls for every pen segment.
 
 ## Viewport, Panning, And Zoom
 
@@ -72,7 +72,7 @@ Current defaults:
 
 Draw Behind uses `underLayer`, allowing highlighter-style marks to sit below normal handwriting. Exports, thumbnails, lasso behavior, and eraser behavior must include this layer.
 
-Live Draw Behind rendering should stay on the temporary overlay while the pointer is moving. Full-page recomposition is acceptable at the end of the stroke, but doing it on every pointer segment can freeze BOOX/e-ink browsers.
+Live Draw Behind rendering should stay bounded to the active stroke region while the pointer is moving. The temporary live stroke layer avoids replaying the entire in-progress path on every pointer move. Full-page recomposition is acceptable at the end of the stroke, but doing it on every pointer segment can freeze BOOX/e-ink browsers.
 
 ## Eraser
 

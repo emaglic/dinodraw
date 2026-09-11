@@ -452,3 +452,5 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Bumped the app/cache version to `v0.8.127`.
 - Matched the brush preset toolbar control size to the other regular single-row toolbars.
 - Bumped the app/cache version to `v0.8.128`.
+- Made live Draw Behind strokes repaint their bounded stroke region in final layer order so normal ink stays visually above them while drawing.
+- Bumped the app/cache version to `v0.8.129`.
