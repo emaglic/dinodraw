@@ -224,7 +224,8 @@ button {
 .preset-toolbar,
 .action-toolbar,
 .undo-toolbar,
-.fullscreen-toolbar {
+.fullscreen-toolbar,
+.zoom-toolbar {
   opacity: 1;
   visibility: visible;
   transition:
@@ -235,7 +236,8 @@ button {
 .app-shell.are-toolbars-hidden .toolbar,
 .app-shell.are-toolbars-hidden .preset-toolbar,
 .app-shell.are-toolbars-hidden .undo-toolbar,
-.app-shell.are-toolbars-hidden .fullscreen-toolbar {
+.app-shell.are-toolbars-hidden .fullscreen-toolbar,
+.app-shell.are-toolbars-hidden .zoom-toolbar {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -247,7 +249,8 @@ button {
 .toolbar.is-disabled-by-settings,
 .preset-toolbar.is-disabled-by-settings,
 .undo-toolbar.is-disabled-by-settings,
-.fullscreen-toolbar.is-disabled-by-settings {
+.fullscreen-toolbar.is-disabled-by-settings,
+.zoom-toolbar.is-disabled-by-settings {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -512,13 +515,15 @@ button {
 
 .tool-button .material-symbols-outlined,
 .action-button .material-symbols-outlined,
+.temporary-action-drag-handle .material-symbols-outlined,
 .icon-button .material-symbols-outlined,
 .toolbar-toggle-button .material-symbols-outlined,
 .toolbar-toggle-drag-handle .material-symbols-outlined,
 .drag-handle .material-symbols-outlined,
 .preset-drag-handle .material-symbols-outlined,
 .undo-drag-handle .material-symbols-outlined,
-.fullscreen-drag-handle .material-symbols-outlined {
+.fullscreen-drag-handle .material-symbols-outlined,
+.zoom-drag-handle .material-symbols-outlined {
   width: 24px;
   height: 24px;
   font-size: 24px;
@@ -564,6 +569,163 @@ button {
 }
 
 .rotation-field input:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 1px;
+}
+
+.temporary-action-toolbar {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: stretch;
+  justify-content: center;
+}
+
+.temporary-action-drag-handle {
+  display: grid;
+  flex: 0 0 30px;
+  align-self: stretch;
+  width: 30px;
+  min-height: 34px;
+  height: auto;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #000000;
+  cursor: grab;
+  touch-action: none;
+}
+
+.temporary-action-drag-handle:active {
+  cursor: grabbing;
+}
+
+.temporary-action-drag-handle:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 1px;
+}
+
+.temporary-action-content {
+  display: flex;
+  flex: 0 1 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+[data-shape-action-toolbar] .temporary-action-content {
+  flex-direction: column;
+}
+
+.shape-action-row,
+.image-action-row,
+.lasso-action-row {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+}
+
+.shape-action-row > *,
+.image-action-row > *,
+.lasso-action-row > *,
+.number-stepper {
+  flex: 0 0 auto;
+}
+
+.shape-grid-controls {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 8px;
+  row-gap: 6px;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+}
+
+.shape-grid-controls.is-hidden {
+  display: none;
+}
+
+.number-stepper {
+  display: grid;
+  grid-template-columns: 36px 30px 46px 30px;
+  column-gap: 0;
+  align-items: center;
+  height: 34px;
+  padding: 0;
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.number-stepper + .number-stepper {
+  padding-left: 8px;
+  border-left: 2px solid #000000;
+}
+
+.number-stepper-label {
+  margin-right: 4px;
+  text-align: center;
+}
+
+.number-stepper-button {
+  display: grid;
+  width: 30px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #000000;
+  background: #ffffff;
+  color: #000000;
+  box-sizing: border-box;
+}
+
+.number-stepper-button:first-of-type {
+  border-radius: 4px 0 0 4px;
+}
+
+.number-stepper-button:last-of-type {
+  border-radius: 0 4px 4px 0;
+}
+
+.number-stepper-button .material-symbols-outlined {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.number-stepper-button:disabled {
+  border-color: #777777;
+  color: #777777;
+}
+
+.number-stepper input {
+  width: 46px;
+  height: 28px;
+  min-width: 0;
+  padding: 0 3px;
+  border: 2px solid #000000;
+  border-right: 0;
+  border-left: 0;
+  border-radius: 0;
+  background: #ffffff;
+  color: #000000;
+  box-sizing: border-box;
+  font: inherit;
+  line-height: 1.1;
+  text-align: center;
+}
+
+.number-stepper-button:focus-visible,
+.number-stepper input:focus-visible {
   outline: 2px solid #000000;
   outline-offset: 1px;
 }
@@ -695,6 +857,68 @@ button {
 
 .fullscreen-drag-handle:active {
   cursor: grabbing;
+}
+
+.zoom-toolbar {
+  position: fixed;
+  right: max(12px, env(safe-area-inset-right));
+  top: 74px;
+  z-index: 12;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  border: 2px solid #000000;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 2px 0 #000000;
+  touch-action: none;
+  user-select: none;
+}
+
+.zoom-toolbar[data-orientation="vertical"] {
+  flex-direction: column;
+}
+
+.zoom-drag-handle {
+  display: grid;
+  width: 24px;
+  height: 34px;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #000000;
+  cursor: grab;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  touch-action: none;
+}
+
+.zoom-drag-handle:active {
+  cursor: grabbing;
+}
+
+.zoom-percent-button {
+  display: grid;
+  width: 34px;
+  min-height: 24px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: #ffffff;
+  color: #000000;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.zoom-percent-button:focus-visible {
+  outline: 3px solid #000000;
+  outline-offset: 3px;
 }
 
 .version-badge {
@@ -1623,6 +1847,39 @@ button {
 
 .range-row output {
   text-align: right;
+}
+
+.zoom-range-row {
+  grid-template-columns: 64px 1fr 48px;
+}
+
+.zoom-number-row {
+  display: grid;
+  grid-template-columns: 64px 82px 18px;
+  gap: 6px;
+  align-items: center;
+  color: #000000;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.zoom-number-row input {
+  width: 82px;
+  height: 34px;
+  min-width: 0;
+  padding: 0 6px;
+  border: 2px solid #000000;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #000000;
+  font: inherit;
+  line-height: 1;
+  text-align: right;
+}
+
+.zoom-number-row input:focus-visible {
+  outline: 2px solid #000000;
+  outline-offset: 1px;
 }
 
 .toggle-row {

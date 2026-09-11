@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.112";
+const APP_VERSION = "v0.8.125";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -112,10 +112,36 @@ const moveDialogCancelButtons = Array.from(
 const shapeActionToolbar = document.querySelector("[data-shape-action-toolbar]");
 const imageActionToolbar = document.querySelector("[data-image-action-toolbar]");
 const lassoActionToolbar = document.querySelector("[data-lasso-action-toolbar]");
+const shapeActionDragHandle = document.querySelector(
+  "[data-shape-action-drag-handle]"
+);
+const imageActionDragHandle = document.querySelector(
+  "[data-image-action-drag-handle]"
+);
+const lassoActionDragHandle = document.querySelector(
+  "[data-lasso-action-drag-handle]"
+);
 const shapeSettingsButton = document.querySelector("[data-shape-settings]");
 const shapeRotationInput = document.querySelector("[data-shape-rotation]");
 const shapeRotationOutput = document.querySelector(
   "[data-shape-rotation-output]"
+);
+const shapeGridControls = document.querySelector("[data-shape-grid-controls]");
+const shapeGridRowsInput = document.querySelector("[data-shape-grid-rows]");
+const shapeGridColumnsInput = document.querySelector(
+  "[data-shape-grid-columns]"
+);
+const shapeGridRowsDecrementButton = document.querySelector(
+  "[data-shape-grid-rows-decrement]"
+);
+const shapeGridRowsIncrementButton = document.querySelector(
+  "[data-shape-grid-rows-increment]"
+);
+const shapeGridColumnsDecrementButton = document.querySelector(
+  "[data-shape-grid-columns-decrement]"
+);
+const shapeGridColumnsIncrementButton = document.querySelector(
+  "[data-shape-grid-columns-increment]"
 );
 const shapeProportionalResizeButton = document.querySelector(
   "[data-shape-proportional-resize]"
@@ -150,9 +176,18 @@ const redoButton = document.querySelector("[data-redo]");
 const fullscreenToolbar = document.querySelector("[data-fullscreen-toolbar]");
 const fullscreenDragHandle = document.querySelector("[data-fullscreen-drag-handle]");
 const fullscreenButton = document.querySelector("[data-fullscreen-toggle]");
+const zoomToolbar = document.querySelector("[data-zoom-toolbar]");
+const zoomDragHandle = document.querySelector("[data-zoom-drag-handle]");
+const zoomOutButton = document.querySelector("[data-zoom-out]");
+const zoomPercentButton = document.querySelector("[data-zoom-percent-button]");
+const zoomInButton = document.querySelector("[data-zoom-in]");
 const pageIndicator = document.querySelector("[data-page-indicator]");
 const pageDialog = document.querySelector("#page-dialog");
 const addPageDialog = document.querySelector("#add-page-dialog");
+const zoomDialog = document.querySelector("#zoom-dialog");
+const zoomRangeInput = document.querySelector("[data-zoom-range]");
+const zoomRangeOutput = document.querySelector("[data-zoom-range-output]");
+const zoomPercentInput = document.querySelector("[data-zoom-percent-input]");
 const addPageCurrentPage = document.querySelector("[data-add-page-current-page]");
 const pageList = document.querySelector("[data-page-list]");
 const pageActionMenu = document.querySelector("[data-page-action-menu]");
@@ -266,6 +301,14 @@ const state = {
     presets: null,
     undo: null,
     fullscreen: null,
+    zoom: null,
+  },
+  toolbarVisibility: {
+    main: true,
+    presets: true,
+    undo: true,
+    fullscreen: true,
+    zoom: true,
   },
   documents: [],
   folders: [],
@@ -279,12 +322,6 @@ const state = {
   globalSettings: {
     touchDrawingEnabled: true,
     documentIntroDismissed: false,
-    toolbarVisibility: {
-      main: true,
-      presets: true,
-      undo: true,
-      fullscreen: true,
-    },
   },
 };
 
@@ -292,14 +329,24 @@ const brush = {
   eraseSize: 28,
 };
 
-const shapeConfig = {
+const defaultGridRows = 3;
+const defaultGridColumns = 3;
+const minGridDimension = 1;
+const maxGridDimension = 50;
+
+const defaultShapeConfig = {
   type: "rectangle",
   strokeEnabled: true,
   strokeColor: "#000000",
   strokeWidth: 3,
   fillEnabled: false,
   fillColor: "#d6b400",
+  gridRows: defaultGridRows,
+  gridColumns: defaultGridColumns,
+  proportionalResize: true,
 };
+
+const shapeConfig = { ...defaultShapeConfig };
 
 const canvasPixelRatio = 1;
 const moveEventName = "pointermove";
@@ -309,6 +356,7 @@ const liveInputMinInterval = 24;
 const transformInputMinInterval = 56;
 const transformPreviewMaxDimension = 480;
 const maxPageZoom = 4;
+const zoomButtonStep = 1.2;
 const canvasPasteLongPressDelay = 560;
 const canvasPasteLongPressMoveTolerance = 12;
 const lassoCopyFeedbackDuration = 650;
@@ -922,15 +970,29 @@ function getToolbarPositionSettings() {
     presets: cloneToolbarPositionRecord(state.toolbarPositions.presets),
     undo: cloneToolbarPositionRecord(state.toolbarPositions.undo),
     fullscreen: cloneToolbarPositionRecord(state.toolbarPositions.fullscreen),
+    zoom: cloneToolbarPositionRecord(state.toolbarPositions.zoom),
   };
+}
+
+function normalizeToolbarVisibility(visibility = {}) {
+  return {
+    main: true,
+    presets: visibility.presets !== false,
+    undo: visibility.undo !== false,
+    fullscreen: visibility.fullscreen !== false,
+    zoom: visibility.zoom !== false,
+  };
+}
+
+function getToolbarVisibilitySettings() {
+  return normalizeToolbarVisibility(state.toolbarVisibility);
 }
 
 function getDocumentSettings(includeToolbarPositions = true) {
   const settings = {
     eraserSize: brush.eraseSize,
-    activePresetIndex: state.activePresetIndex,
-    presets: state.presets.map((preset) => ({ ...preset })),
     shapeConfig: { ...shapeConfig },
+    toolbarVisibility: getToolbarVisibilitySettings(),
   };
 
   if (includeToolbarPositions) {
@@ -940,28 +1002,64 @@ function getDocumentSettings(includeToolbarPositions = true) {
   return settings;
 }
 
+function getNewDocumentSettings() {
+  const settings = getDocumentSettings(false);
+
+  settings.shapeConfig = {
+    ...settings.shapeConfig,
+    gridRows: defaultGridRows,
+    gridColumns: defaultGridColumns,
+  };
+  settings.toolbarVisibility = normalizeToolbarVisibility();
+
+  return settings;
+}
+
+function normalizeGridDimension(value, fallback = defaultGridRows) {
+  const parsed = Math.round(Number(value));
+
+  if (!isFinite(parsed)) {
+    return fallback;
+  }
+
+  return Math.max(minGridDimension, Math.min(maxGridDimension, parsed));
+}
+
+function normalizeShapeConfig(config) {
+  config.gridRows = normalizeGridDimension(config.gridRows, defaultGridRows);
+  config.gridColumns = normalizeGridDimension(
+    config.gridColumns,
+    defaultGridColumns
+  );
+}
+
+function ensureGridShapeDimensions(shape) {
+  if (!shape || shape.type !== "grid") {
+    return;
+  }
+
+  shape.gridRows = normalizeGridDimension(shape.gridRows, shapeConfig.gridRows);
+  shape.gridColumns = normalizeGridDimension(
+    shape.gridColumns,
+    shapeConfig.gridColumns
+  );
+}
+
 function applyDocumentSettings(settings = {}) {
   brush.eraseSize = Number(settings.eraserSize || brush.eraseSize);
-  state.activePresetIndex = Math.max(
-    0,
-    Math.min(
-      Number(settings.activePresetIndex || 0),
-      defaultPresets.length - 1
-    )
+  state.toolbarVisibility = normalizeToolbarVisibility(
+    settings.toolbarVisibility
   );
-  state.presets = defaultPresets.map((fallback, index) => ({
-    ...fallback,
-    ...((settings.presets || [])[index] || {}),
-  }));
 
-  if (settings.shapeConfig) {
-    Object.assign(shapeConfig, settings.shapeConfig);
-  }
+  Object.assign(shapeConfig, defaultShapeConfig, settings.shapeConfig || {});
+  normalizeShapeConfig(shapeConfig);
 
   updateEraserSize(brush.eraseSize);
   updatePresetButtons();
   syncPresetDialog();
   syncShapeDialog();
+  syncGlobalSettingsControls();
+  updateToolbarVisibility();
 }
 
 function createDocumentRecord(name, folderId = state.currentFolderId) {
@@ -979,7 +1077,7 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
     lastOpenedAt: now,
     appVersion: APP_VERSION,
     activePageIndex: 0,
-    settings: getDocumentSettings(false),
+    settings: getNewDocumentSettings(),
     pages: [
       {
         background: "blank",
@@ -3214,7 +3312,6 @@ function normalizeGlobalSettings(settings = {}) {
     settings,
     "documentIntroDismissed"
   );
-  const toolbarVisibility = settings.toolbarVisibility || {};
 
   return {
     touchDrawingEnabled: hasTouchDrawingSetting
@@ -3223,12 +3320,6 @@ function normalizeGlobalSettings(settings = {}) {
     documentIntroDismissed: hasIntroDismissedSetting
       ? Boolean(settings.documentIntroDismissed)
       : false,
-    toolbarVisibility: {
-      main: true,
-      presets: toolbarVisibility.presets !== false,
-      undo: toolbarVisibility.undo !== false,
-      fullscreen: toolbarVisibility.fullscreen !== false,
-    },
   };
 }
 
@@ -3237,7 +3328,7 @@ function isRegularToolbarEnabled(key) {
     return true;
   }
 
-  return Boolean(state.globalSettings.toolbarVisibility[key]);
+  return Boolean(state.toolbarVisibility[key]);
 }
 
 function syncGlobalSettingsControls() {
@@ -3312,6 +3403,28 @@ function updateGlobalSettings(settings = {}) {
   saveGlobalSettings();
   syncGlobalSettingsControls();
   updateToolbarVisibility();
+}
+
+function updateDocumentToolbarVisibility(key, isEnabled) {
+  if (key === "main") {
+    state.toolbarVisibility = normalizeToolbarVisibility({
+      ...state.toolbarVisibility,
+      main: true,
+    });
+    syncGlobalSettingsControls();
+    return;
+  }
+
+  state.toolbarVisibility = normalizeToolbarVisibility({
+    ...state.toolbarVisibility,
+    [key]: isEnabled,
+  });
+  syncGlobalSettingsControls();
+  updateToolbarVisibility();
+
+  if (state.documentId && !state.isLoadingDocument) {
+    scheduleDocumentSave();
+  }
 }
 
 function presetsMatch(preset, comparison) {
@@ -3580,8 +3693,37 @@ function drawShapePath(targetContext, shape) {
   }
 }
 
+function drawGridLines(targetContext, shape) {
+  const width = Math.abs(shape.width);
+  const height = Math.abs(shape.height);
+  const rows = normalizeGridDimension(shape.gridRows, defaultGridRows);
+  const columns = normalizeGridDimension(
+    shape.gridColumns,
+    defaultGridColumns
+  );
+
+  targetContext.beginPath();
+
+  for (let column = 1; column < columns; column += 1) {
+    const x = -width / 2 + (width * column) / columns;
+
+    targetContext.moveTo(x, -height / 2);
+    targetContext.lineTo(x, height / 2);
+  }
+
+  for (let row = 1; row < rows; row += 1) {
+    const y = -height / 2 + (height * row) / rows;
+
+    targetContext.moveTo(-width / 2, y);
+    targetContext.lineTo(width / 2, y);
+  }
+
+  targetContext.stroke();
+}
+
 function drawShape(targetContext, shape) {
   targetContext.save();
+  ensureGridShapeDimensions(shape);
   drawShapePath(targetContext, shape);
 
   if (shape.fillEnabled && shape.type !== "line") {
@@ -3597,6 +3739,10 @@ function drawShape(targetContext, shape) {
     targetContext.lineCap = "round";
     targetContext.lineJoin = "round";
     targetContext.stroke();
+
+    if (shape.type === "grid") {
+      drawGridLines(targetContext, shape);
+    }
   }
 
   targetContext.restore();
@@ -3665,6 +3811,53 @@ function syncRotationInputs() {
   );
 }
 
+function syncShapeGridControls() {
+  const source = state.pendingShape || shapeConfig;
+  const isGridShape = Boolean(
+    state.tool === "shape" && source.type === "grid"
+  );
+  const rows = normalizeGridDimension(source.gridRows, defaultGridRows);
+  const columns = normalizeGridDimension(
+    source.gridColumns,
+    defaultGridColumns
+  );
+
+  if (shapeGridControls) {
+    shapeGridControls.classList.toggle("is-hidden", !isGridShape);
+  }
+
+  if (shapeGridRowsInput && document.activeElement !== shapeGridRowsInput) {
+    shapeGridRowsInput.value = String(rows);
+  }
+
+  if (
+    shapeGridColumnsInput &&
+    document.activeElement !== shapeGridColumnsInput
+  ) {
+    shapeGridColumnsInput.value = String(columns);
+  }
+
+  if (shapeGridRowsDecrementButton) {
+    shapeGridRowsDecrementButton.disabled = !isGridShape ||
+      rows <= minGridDimension;
+  }
+
+  if (shapeGridRowsIncrementButton) {
+    shapeGridRowsIncrementButton.disabled = !isGridShape ||
+      rows >= maxGridDimension;
+  }
+
+  if (shapeGridColumnsDecrementButton) {
+    shapeGridColumnsDecrementButton.disabled = !isGridShape ||
+      columns <= minGridDimension;
+  }
+
+  if (shapeGridColumnsIncrementButton) {
+    shapeGridColumnsIncrementButton.disabled = !isGridShape ||
+      columns >= maxGridDimension;
+  }
+}
+
 function syncProportionalResizeButton(button, isLocked) {
   const label = isLocked
     ? "Proportional resize locked"
@@ -3682,7 +3875,9 @@ function syncProportionalResizeButton(button, isLocked) {
 function syncProportionalResizeButtons() {
   syncProportionalResizeButton(
     shapeProportionalResizeButton,
-    !state.pendingShape || state.pendingShape.proportionalResize !== false
+    state.pendingShape
+      ? state.pendingShape.proportionalResize !== false
+      : shapeConfig.proportionalResize !== false
   );
   syncProportionalResizeButton(
     imageProportionalResizeButton,
@@ -4092,6 +4287,7 @@ function renderWorkspace() {
   drawPendingShapeOverlay();
   drawPendingImageOverlay();
   drawLassoPathOverlay();
+  syncZoomControls();
 }
 
 function hasSelectionClipboard() {
@@ -4161,14 +4357,19 @@ function updateActionToolbar() {
   const hasShape = Boolean(state.pendingShape);
   const hasImage = Boolean(state.pendingImage);
   const hasSelection = Boolean(state.selection);
+  const showShapeToolbar = state.tool === "shape" || hasShape;
 
-  shapeActionToolbar.classList.toggle("is-hidden", !hasShape);
+  shapeActionToolbar.classList.toggle("is-hidden", !showShapeToolbar);
+  shapeRotationInput.disabled = !hasShape;
+  shapeCommitButton.disabled = !hasShape;
+  shapeDeleteButton.disabled = !hasShape;
   imageActionToolbar.classList.toggle("is-hidden", !hasImage);
   lassoActionToolbar.classList.toggle("is-hidden", !hasSelection);
   if (lassoCopyButton) {
     lassoCopyButton.disabled = !hasSelection;
   }
   syncRotationInputs();
+  syncShapeGridControls();
   syncProportionalResizeButtons();
   updateCanvasContextMenuActions();
 }
@@ -4192,6 +4393,11 @@ function updateToolbarVisibility() {
   fullscreenToolbar.classList.toggle(
     "is-disabled-by-settings",
     !showEnabledToolbars || !isRegularToolbarEnabled("fullscreen")
+  );
+  zoomToolbar.hidden = false;
+  zoomToolbar.classList.toggle(
+    "is-disabled-by-settings",
+    !showEnabledToolbars || !isRegularToolbarEnabled("zoom")
   );
   toolbarVisibilityButton.setAttribute("aria-label", label);
   toolbarVisibilityButton.dataset.tooltip = label;
@@ -4702,6 +4908,7 @@ function resizeCanvas() {
   state.pages.forEach(clampPagePan);
   clearLiveCanvas();
   renderWorkspace();
+  reclampTemporaryActionToolbarPositions();
 }
 
 function setTool(tool) {
@@ -4734,6 +4941,15 @@ function setTool(tool) {
   canvas.style.cursor = tool === "erase" ? "cell" : "crosshair";
 
   updateActionToolbar();
+
+  if (tool === "shape") {
+    setDefaultShapeActionToolbarPosition();
+  }
+
+  if (tool === "lasso") {
+    setDefaultLassoActionToolbarPosition();
+  }
+
   renderWorkspace();
 }
 
@@ -4900,6 +5116,154 @@ function setPageZoomAroundViewportPoint(page, zoom, viewportPoint) {
     focusPoint.x - viewportPoint.x / nextZoom,
     focusPoint.y - viewportPoint.y / nextZoom
   );
+}
+
+function getZoomViewportCenterPoint() {
+  return {
+    x: canvas.width / 2,
+    y: canvas.height / 2,
+  };
+}
+
+function getMinZoomPercent(page) {
+  return Math.ceil(getMinPageZoom(page) * 100);
+}
+
+function getMaxZoomPercent() {
+  return Math.round(maxPageZoom * 100);
+}
+
+function syncZoomControls() {
+  if (
+    !zoomPercentButton ||
+    !zoomPercentInput ||
+    !zoomRangeInput ||
+    !zoomRangeOutput ||
+    !zoomOutButton ||
+    !zoomInButton
+  ) {
+    return;
+  }
+
+  const page = getActivePage();
+  const hasPage = Boolean(page);
+  const zoom = hasPage ? getPageZoom(page) : 1;
+  const minPercent = hasPage ? getMinZoomPercent(page) : 100;
+  const maxPercent = getMaxZoomPercent();
+  const displayPercent = Math.min(
+    maxPercent,
+    Math.max(minPercent, Math.round(zoom * 100))
+  );
+
+  zoomPercentButton.disabled = !hasPage;
+  zoomPercentButton.textContent = `${displayPercent}%`;
+  zoomPercentInput.min = String(minPercent);
+  zoomPercentInput.max = String(maxPercent);
+  zoomPercentInput.disabled = !hasPage;
+  zoomRangeInput.min = String(minPercent);
+  zoomRangeInput.max = String(maxPercent);
+  zoomRangeInput.disabled = !hasPage;
+  zoomRangeOutput.textContent = `${displayPercent}%`;
+  zoomOutButton.disabled =
+    !hasPage || zoom <= getMinPageZoom(page) + 0.0001;
+  zoomInButton.disabled = !hasPage || zoom >= maxPageZoom - 0.0001;
+
+  if (document.activeElement !== zoomPercentInput) {
+    zoomPercentInput.value = String(displayPercent);
+  }
+
+  if (document.activeElement !== zoomRangeInput) {
+    zoomRangeInput.value = String(displayPercent);
+  }
+}
+
+function setActivePageZoom(zoom) {
+  const page = getActivePage();
+
+  if (!page) {
+    syncZoomControls();
+    return;
+  }
+
+  setPageZoomAroundViewportPoint(page, zoom, getZoomViewportCenterPoint());
+  renderWorkspace();
+}
+
+function adjustActivePageZoom(factor) {
+  const page = getActivePage();
+
+  if (!page) {
+    syncZoomControls();
+    return;
+  }
+
+  setActivePageZoom(getPageZoom(page) * factor);
+}
+
+function applyZoomPercentInputValue() {
+  const page = getActivePage();
+
+  if (!page || !zoomPercentInput) {
+    syncZoomControls();
+    return;
+  }
+
+  const parsedPercent = Math.round(Number(zoomPercentInput.value));
+
+  if (!isFinite(parsedPercent)) {
+    syncZoomControls();
+    return;
+  }
+
+  const percent = Math.min(
+    getMaxZoomPercent(),
+    Math.max(getMinZoomPercent(page), parsedPercent)
+  );
+
+  zoomPercentInput.value = String(percent);
+  setActivePageZoom(percent / 100);
+}
+
+function applyZoomRangeInputValue() {
+  const page = getActivePage();
+
+  if (!page || !zoomRangeInput) {
+    syncZoomControls();
+    return;
+  }
+
+  const parsedPercent = Math.round(Number(zoomRangeInput.value));
+
+  if (!isFinite(parsedPercent)) {
+    syncZoomControls();
+    return;
+  }
+
+  const percent = Math.min(
+    getMaxZoomPercent(),
+    Math.max(getMinZoomPercent(page), parsedPercent)
+  );
+
+  zoomRangeInput.value = String(percent);
+  setActivePageZoom(percent / 100);
+}
+
+function openZoomDialog() {
+  if (!getActivePage()) {
+    return;
+  }
+
+  commitPendingShape();
+  commitPendingImage();
+  commitSelection();
+  syncZoomControls();
+
+  if (zoomDialog.showModal) {
+    zoomDialog.showModal();
+    return;
+  }
+
+  zoomDialog.setAttribute("open", "");
 }
 
 function cancelActiveTouchActionForPan() {
@@ -5379,7 +5743,9 @@ function createShape(startPoint, endPoint) {
     strokeWidth: shapeConfig.strokeWidth,
     fillEnabled: shapeConfig.fillEnabled,
     fillColor: shapeConfig.fillColor,
-    proportionalResize: true,
+    gridRows: shapeConfig.gridRows,
+    gridColumns: shapeConfig.gridColumns,
+    proportionalResize: shapeConfig.proportionalResize !== false,
   };
 }
 
@@ -5389,6 +5755,15 @@ function getSnappedLineSize(width, height) {
   }
 
   return { width: 0, height };
+}
+
+function getProportionalShapeCreationSize(width, height) {
+  const size = Math.max(Math.abs(width), Math.abs(height));
+
+  return {
+    width: width < 0 ? -size : size,
+    height: height < 0 ? -size : size,
+  };
 }
 
 function getShapeResizeBox(shape, point) {
@@ -5421,6 +5796,8 @@ function getShapeResizeBox(shape, point) {
 }
 
 function commitPendingShape() {
+  blurShapeGridInput();
+
   if (!state.pendingShape) {
     return;
   }
@@ -5434,6 +5811,8 @@ function commitPendingShape() {
 }
 
 function deletePendingShape() {
+  blurShapeGridInput();
+
   state.pendingShape = null;
   state.shapeInteraction = null;
   updateActionToolbar();
@@ -5450,14 +5829,68 @@ function setPendingShapeRotation(rotation) {
   renderWorkspace();
 }
 
-function togglePendingShapeProportionalResize() {
-  if (!state.pendingShape) {
+function setShapeGridDimension(key, value) {
+  const fallback = key === "gridColumns"
+    ? shapeConfig.gridColumns
+    : shapeConfig.gridRows;
+  const nextValue = normalizeGridDimension(value, fallback);
+
+  updateShapeConfig({ [key]: nextValue });
+  return nextValue;
+}
+
+function isShapeGridInput(element) {
+  return element === shapeGridRowsInput || element === shapeGridColumnsInput;
+}
+
+function blurShapeGridInput() {
+  if (isShapeGridInput(document.activeElement)) {
+    document.activeElement.blur();
+  }
+}
+
+function getCurrentShapeGridDimension(key) {
+  const source = state.pendingShape && state.pendingShape.type === "grid"
+    ? state.pendingShape
+    : shapeConfig;
+  const fallback = key === "gridColumns"
+    ? defaultGridColumns
+    : defaultGridRows;
+
+  return normalizeGridDimension(source[key], fallback);
+}
+
+function adjustShapeGridDimension(key, delta) {
+  blurShapeGridInput();
+  setShapeGridDimension(key, getCurrentShapeGridDimension(key) + delta);
+}
+
+function handleShapeGridInputKeyDown(event) {
+  if (event.key !== "Enter") {
     return;
   }
 
-  state.pendingShape.proportionalResize =
-    state.pendingShape.proportionalResize === false;
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  event.currentTarget.blur();
+}
+
+function togglePendingShapeProportionalResize() {
+  const currentValue = state.pendingShape
+    ? state.pendingShape.proportionalResize !== false
+    : shapeConfig.proportionalResize !== false;
+  const nextValue = !currentValue;
+
+  shapeConfig.proportionalResize = nextValue;
+
+  if (state.pendingShape) {
+    state.pendingShape.proportionalResize = nextValue;
+  }
+
   updateActionToolbar();
+  scheduleDocumentSave();
 }
 
 function getInitialImagePlacement(image) {
@@ -5489,6 +5922,10 @@ function addPendingImage(image) {
   commitPendingImage();
   commitSelection();
 
+  if (state.tool === "shape" || state.tool === "lasso") {
+    setTool("draw");
+  }
+
   const placement = getInitialImagePlacement(image);
 
   state.pendingImage = {
@@ -5502,6 +5939,7 @@ function addPendingImage(image) {
   };
   state.imageInteraction = null;
   updateActionToolbar();
+  setDefaultImageActionToolbarPosition();
   renderWorkspace();
   setSaveStatus("Place image");
 }
@@ -5790,9 +6228,21 @@ function updateShapeInteraction(point) {
       state.pendingShape.type === "line"
         ? getSnappedLineSize(width, height)
         : null;
+    const proportionalSize =
+      !lineSize && state.pendingShape.proportionalResize !== false
+        ? getProportionalShapeCreationSize(width, height)
+        : null;
 
-    state.pendingShape.width = lineSize ? lineSize.width : width;
-    state.pendingShape.height = lineSize ? lineSize.height : height;
+    state.pendingShape.width = lineSize
+      ? lineSize.width
+      : proportionalSize
+        ? proportionalSize.width
+        : width;
+    state.pendingShape.height = lineSize
+      ? lineSize.height
+      : proportionalSize
+        ? proportionalSize.height
+        : height;
   }
 }
 
@@ -5944,6 +6394,7 @@ function finalizeLassoSelection() {
   };
   state.lassoPath = [];
   updateActionToolbar();
+  setDefaultLassoActionToolbarPosition();
   renderWorkspace();
 }
 
@@ -6388,6 +6839,8 @@ function endStroke(event) {
 }
 
 function startCanvasAction(event) {
+  blurShapeGridInput();
+
   if (handleTouchPointerDownForPan(event)) {
     return;
   }
@@ -7010,6 +7463,7 @@ function updateShapeColorButtons() {
 }
 
 function syncShapeDialog() {
+  normalizeShapeConfig(shapeConfig);
   shapeTypeInputs.forEach((input) => {
     input.checked = input.value === shapeConfig.type;
   });
@@ -7022,13 +7476,16 @@ function syncShapeDialog() {
 
 function updateShapeConfig(updates) {
   Object.assign(shapeConfig, updates);
+  normalizeShapeConfig(shapeConfig);
 
   if (state.pendingShape) {
     Object.assign(state.pendingShape, updates);
+    ensureGridShapeDimensions(state.pendingShape);
     renderWorkspace();
   }
 
   syncShapeDialog();
+  updateActionToolbar();
   scheduleDocumentSave();
 }
 
@@ -7265,7 +7722,6 @@ function selectPreset(index) {
   state.activePresetIndex = index;
   setTool("draw");
   updatePresetButtons();
-  scheduleDocumentSave();
 }
 
 function syncPresetDialog() {
@@ -7285,7 +7741,6 @@ function updateEditingPreset(updates) {
   syncPresetDialog();
   updatePresetButtons();
   savePresets();
-  scheduleDocumentSave();
 }
 
 function openPresetSettings(index) {
@@ -7556,7 +8011,7 @@ function handleToolbarTooltipClick(event) {
 function setupToolbarTooltips() {
   const targets = Array.from(
     document.querySelectorAll(
-      ".toolbar-toggle button, .toolbar button, .preset-toolbar button, .fullscreen-toolbar button, .action-toolbar button, .undo-toolbar button"
+      ".toolbar-toggle button, .toolbar button, .preset-toolbar button, .fullscreen-toolbar button, .zoom-toolbar button, .action-toolbar button, .undo-toolbar button"
     )
   );
 
@@ -7688,6 +8143,68 @@ function clampToolbarCoordinatesToViewport(left, top, rect) {
     left: Math.min(Math.max(margin, left), maxLeft),
     top: Math.min(Math.max(margin, top), maxTop),
   };
+}
+
+function clampTemporaryActionToolbarPosition(toolbarElement, left, top) {
+  const rect = toolbarElement.getBoundingClientRect();
+
+  return clampToolbarCoordinatesToViewport(left, top, rect);
+}
+
+function setTemporaryActionToolbarPosition(toolbarElement, left, top) {
+  const position = clampTemporaryActionToolbarPosition(
+    toolbarElement,
+    left,
+    top
+  );
+
+  toolbarElement.style.left = `${position.left}px`;
+  toolbarElement.style.top = `${position.top}px`;
+  toolbarElement.style.right = "auto";
+  toolbarElement.style.bottom = "auto";
+  toolbarElement.style.transform = "none";
+
+  return position;
+}
+
+function setDefaultTemporaryActionToolbarPosition(toolbarElement) {
+  if (toolbarElement.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const rect = toolbarElement.getBoundingClientRect();
+  const left = (window.innerWidth - rect.width) / 2;
+  const top = 58;
+
+  setTemporaryActionToolbarPosition(toolbarElement, left, top);
+}
+
+function setDefaultShapeActionToolbarPosition() {
+  setDefaultTemporaryActionToolbarPosition(shapeActionToolbar);
+}
+
+function setDefaultImageActionToolbarPosition() {
+  setDefaultTemporaryActionToolbarPosition(imageActionToolbar);
+}
+
+function setDefaultLassoActionToolbarPosition() {
+  setDefaultTemporaryActionToolbarPosition(lassoActionToolbar);
+}
+
+function reclampTemporaryActionToolbarPosition(toolbarElement) {
+  if (toolbarElement.classList.contains("is-hidden")) {
+    return;
+  }
+
+  const rect = toolbarElement.getBoundingClientRect();
+
+  setTemporaryActionToolbarPosition(toolbarElement, rect.left, rect.top);
+}
+
+function reclampTemporaryActionToolbarPositions() {
+  reclampTemporaryActionToolbarPosition(shapeActionToolbar);
+  reclampTemporaryActionToolbarPosition(imageActionToolbar);
+  reclampTemporaryActionToolbarPosition(lassoActionToolbar);
 }
 
 function createToolbarRect(left, top, rect) {
@@ -8068,6 +8585,7 @@ function resetDocumentToolbarPositions() {
     presets: null,
     undo: null,
     fullscreen: null,
+    zoom: null,
   };
 }
 
@@ -8160,9 +8678,9 @@ function restoreToolbarPosition(position = state.toolbarPositions.main) {
 
 function setDefaultToolbarPosition() {
   applyToolbarOrientation(toolbar, "vertical");
-  const rect = toolbar.getBoundingClientRect();
+  const undoRect = undoToolbar.getBoundingClientRect();
   const left = 12;
-  const top = (window.innerHeight - rect.height) / 2;
+  const top = undoRect.bottom + toolbarCollisionGap;
 
   setToolbarPosition(left, top, true);
 }
@@ -8262,10 +8780,11 @@ function reclampPresetToolbarPosition() {
 
 function setDefaultPresetToolbarPosition() {
   withMeasurableToolbar(presetToolbar, () => {
-    applyToolbarOrientation(presetToolbar, "horizontal");
+    applyToolbarOrientation(presetToolbar, "vertical");
     const rect = presetToolbar.getBoundingClientRect();
-    const left = 12;
-    const top = window.innerHeight - rect.height - 12;
+    const fullscreenRect = fullscreenToolbar.getBoundingClientRect();
+    const left = window.innerWidth - rect.width - 12;
+    const top = fullscreenRect.bottom + toolbarCollisionGap;
 
     setPresetToolbarPosition(left, top, true);
   });
@@ -8424,6 +8943,84 @@ function setDefaultFullscreenToolbarPosition() {
   setFullscreenToolbarPosition(left, 12, true);
 }
 
+function clampZoomToolbarPosition(left, top) {
+  const rect = zoomToolbar.getBoundingClientRect();
+
+  return clampToolbarCoordinatesToViewport(left, top, rect);
+}
+
+function saveZoomToolbarPosition(position) {
+  setDocumentToolbarPosition("zoom", position, true);
+}
+
+function setZoomToolbarPosition(left, top, shouldSave = false) {
+  const position = clampZoomToolbarPosition(left, top);
+
+  zoomToolbar.style.left = `${position.left}px`;
+  zoomToolbar.style.top = `${position.top}px`;
+  zoomToolbar.style.right = "auto";
+  zoomToolbar.style.bottom = "auto";
+  zoomToolbar.style.transform = "none";
+
+  const record = createToolbarPositionRecord(
+    zoomToolbar,
+    position.left,
+    position.top,
+    zoomToolbar.dataset.orientation
+  );
+
+  setDocumentToolbarPosition("zoom", record);
+
+  if (shouldSave) {
+    saveZoomToolbarPosition(record);
+  }
+
+  return record;
+}
+
+function restoreZoomToolbarPosition(position = state.toolbarPositions.zoom) {
+  if (!position) {
+    return false;
+  }
+
+  applyToolbarOrientation(zoomToolbar, position.orientation);
+  const responsivePosition = getResponsiveToolbarPosition(
+    position,
+    zoomToolbar
+  );
+
+  setZoomToolbarPosition(
+    responsivePosition.left,
+    responsivePosition.top
+  );
+  return true;
+}
+
+function reclampZoomToolbarPosition() {
+  const savedPosition = state.toolbarPositions.zoom;
+
+  if (savedPosition) {
+    applyToolbarOrientation(zoomToolbar, savedPosition.orientation);
+    const position = getResponsiveToolbarPosition(savedPosition, zoomToolbar);
+
+    setZoomToolbarPosition(position.left, position.top, true);
+    return;
+  }
+
+  const rect = zoomToolbar.getBoundingClientRect();
+
+  setZoomToolbarPosition(rect.left, rect.top, true);
+}
+
+function setDefaultZoomToolbarPosition() {
+  applyToolbarOrientation(zoomToolbar, "vertical");
+  const toolbarRect = toolbar.getBoundingClientRect();
+  const left = 12;
+  const top = toolbarRect.bottom + toolbarCollisionGap;
+
+  setZoomToolbarPosition(left, top, true);
+}
+
 function isRegularToolbarCollisionVisible(element) {
   const rect = element.getBoundingClientRect();
   const style = window.getComputedStyle(element);
@@ -8462,6 +9059,12 @@ function getRegularToolbarCollisionItems() {
       element: fullscreenToolbar,
       setPosition: setFullscreenToolbarPosition,
       savePosition: saveFullscreenToolbarPosition,
+    },
+    {
+      key: "zoom",
+      element: zoomToolbar,
+      setPosition: setZoomToolbarPosition,
+      savePosition: saveZoomToolbarPosition,
     },
   ]
     .filter((item) => isRegularToolbarCollisionVisible(item.element))
@@ -8635,17 +9238,20 @@ function resolveRegularToolbarDrop(
 function applyDocumentToolbarPositions(toolbarPositions = {}) {
   resetDocumentToolbarPositions();
 
-  if (!restoreToolbarPosition(toolbarPositions.main)) {
-    setDefaultToolbarPosition();
-  }
-  if (!restorePresetToolbarPosition(toolbarPositions.presets)) {
-    setDefaultPresetToolbarPosition();
-  }
   if (!restoreUndoToolbarPosition(toolbarPositions.undo)) {
     setDefaultUndoToolbarPosition();
   }
+  if (!restoreToolbarPosition(toolbarPositions.main)) {
+    setDefaultToolbarPosition();
+  }
+  if (!restoreZoomToolbarPosition(toolbarPositions.zoom)) {
+    setDefaultZoomToolbarPosition();
+  }
   if (!restoreFullscreenToolbarPosition(toolbarPositions.fullscreen)) {
     setDefaultFullscreenToolbarPosition();
+  }
+  if (!restorePresetToolbarPosition(toolbarPositions.presets)) {
+    setDefaultPresetToolbarPosition();
   }
 }
 
@@ -8667,10 +9273,11 @@ function resetToolbarPositions() {
     }
   });
 
-  setDefaultToolbarPosition();
-  setDefaultPresetToolbarPosition();
   setDefaultUndoToolbarPosition();
+  setDefaultToolbarPosition();
+  setDefaultZoomToolbarPosition();
   setDefaultFullscreenToolbarPosition();
+  setDefaultPresetToolbarPosition();
   setDefaultToolbarTogglePosition();
   setSaveStatus("Toolbars reset");
 }
@@ -8736,6 +9343,80 @@ function startToolbarDrag(event) {
   window.addEventListener("pointerup", stopToolbarDrag, { once: true });
   window.addEventListener("pointercancel", stopToolbarDrag, { once: true });
   window.addEventListener("blur", stopToolbarDrag, { once: true });
+}
+
+function startTemporaryActionToolbarDrag(event, toolbarElement) {
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  event.stopPropagation();
+  hideToolbarTooltip();
+  blurShapeGridInput();
+
+  const dragHandle = event.currentTarget;
+
+  if (dragHandle.setPointerCapture) {
+    try {
+      dragHandle.setPointerCapture(event.pointerId);
+    } catch {}
+  }
+
+  const rect = toolbarElement.getBoundingClientRect();
+  const offset = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+
+  function moveTemporaryActionToolbar(moveEvent) {
+    if (moveEvent.cancelable) {
+      moveEvent.preventDefault();
+    }
+
+    setTemporaryActionToolbarPosition(
+      toolbarElement,
+      moveEvent.clientX - offset.x,
+      moveEvent.clientY - offset.y
+    );
+  }
+
+  function stopTemporaryActionToolbarDrag() {
+    if (dragHandle.releasePointerCapture) {
+      try {
+        dragHandle.releasePointerCapture(event.pointerId);
+      } catch {}
+    }
+
+    window.removeEventListener("pointermove", moveTemporaryActionToolbar);
+    window.removeEventListener("pointerup", stopTemporaryActionToolbarDrag);
+    window.removeEventListener("pointercancel", stopTemporaryActionToolbarDrag);
+    window.removeEventListener("blur", stopTemporaryActionToolbarDrag);
+  }
+
+  window.addEventListener("pointermove", moveTemporaryActionToolbar, {
+    passive: false,
+  });
+  window.addEventListener("pointerup", stopTemporaryActionToolbarDrag, {
+    once: true,
+  });
+  window.addEventListener("pointercancel", stopTemporaryActionToolbarDrag, {
+    once: true,
+  });
+  window.addEventListener("blur", stopTemporaryActionToolbarDrag, {
+    once: true,
+  });
+}
+
+function startShapeActionToolbarDrag(event) {
+  startTemporaryActionToolbarDrag(event, shapeActionToolbar);
+}
+
+function startImageActionToolbarDrag(event) {
+  startTemporaryActionToolbarDrag(event, imageActionToolbar);
+}
+
+function startLassoActionToolbarDrag(event) {
+  startTemporaryActionToolbarDrag(event, lassoActionToolbar);
 }
 
 function startPresetToolbarDrag(event) {
@@ -8935,6 +9616,75 @@ function startFullscreenToolbarDrag(event) {
   window.addEventListener("blur", stopFullscreenToolbarDrag, { once: true });
 }
 
+function startZoomToolbarDrag(event) {
+  if (event.cancelable) {
+    event.preventDefault();
+  }
+
+  const rect = zoomToolbar.getBoundingClientRect();
+  const offset = {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
+
+  const drag = {
+    dockEdge: null,
+    left: rect.left,
+    top: rect.top,
+    position: {
+      left: rect.left,
+      top: rect.top,
+      orientation: zoomToolbar.dataset.orientation,
+    },
+  };
+
+  function moveZoomToolbar(moveEvent) {
+    if (moveEvent.cancelable) {
+      moveEvent.preventDefault();
+    }
+
+    const dragPosition = moveRegularToolbarDrag(
+      zoomToolbar,
+      moveEvent.clientX - offset.x,
+      moveEvent.clientY - offset.y,
+      setZoomToolbarPosition,
+      drag.dockEdge,
+      { x: moveEvent.clientX, y: moveEvent.clientY }
+    );
+
+    drag.dockEdge = dragPosition.dockEdge;
+    drag.left = dragPosition.left;
+    drag.top = dragPosition.top;
+    drag.position = dragPosition.position;
+  }
+
+  function stopZoomToolbarDrag(endEvent) {
+    finishRegularToolbarDrag(
+      drag,
+      zoomToolbar,
+      setZoomToolbarPosition,
+      clampZoomToolbarPosition,
+      saveZoomToolbarPosition,
+      endEvent
+    );
+    window.removeEventListener("pointermove", moveZoomToolbar);
+    window.removeEventListener("pointerup", stopZoomToolbarDrag);
+    window.removeEventListener("pointercancel", stopZoomToolbarDrag);
+    window.removeEventListener("blur", stopZoomToolbarDrag);
+  }
+
+  window.addEventListener("pointermove", moveZoomToolbar, {
+    passive: false,
+  });
+  window.addEventListener("pointerup", stopZoomToolbarDrag, {
+    once: true,
+  });
+  window.addEventListener("pointercancel", stopZoomToolbarDrag, {
+    once: true,
+  });
+  window.addEventListener("blur", stopZoomToolbarDrag, { once: true });
+}
+
 function startToolbarToggleDrag(event) {
   if (event.cancelable) {
     event.preventDefault();
@@ -9126,9 +9876,10 @@ async function initializeApp() {
   updateToolbarVisibility();
   updateEraserSize(brush.eraseSize);
   applyToolbarOrientation(toolbar, "vertical");
-  applyToolbarOrientation(presetToolbar, "horizontal");
+  applyToolbarOrientation(presetToolbar, "vertical");
   applyToolbarOrientation(undoToolbar, "horizontal");
   applyToolbarOrientation(fullscreenToolbar, "horizontal");
+  applyToolbarOrientation(zoomToolbar, "vertical");
   applyDocumentToolbarPositions();
   if (!restoreToolbarTogglePosition()) {
     setDefaultToolbarTogglePosition();
@@ -9161,6 +9912,45 @@ addRotationInputInteractions(
   () => (state.pendingShape ? state.pendingShape.rotation : 0),
   setPendingShapeRotation
 );
+if (shapeGridRowsInput) {
+  shapeGridRowsInput.addEventListener("input", () => {
+    shapeGridRowsInput.value = String(
+      setShapeGridDimension("gridRows", shapeGridRowsInput.value)
+    );
+  });
+  shapeGridRowsInput.addEventListener("keydown", handleShapeGridInputKeyDown);
+}
+if (shapeGridColumnsInput) {
+  shapeGridColumnsInput.addEventListener("input", () => {
+    shapeGridColumnsInput.value = String(
+      setShapeGridDimension("gridColumns", shapeGridColumnsInput.value)
+    );
+  });
+  shapeGridColumnsInput.addEventListener(
+    "keydown",
+    handleShapeGridInputKeyDown
+  );
+}
+if (shapeGridRowsDecrementButton) {
+  shapeGridRowsDecrementButton.addEventListener("click", () =>
+    adjustShapeGridDimension("gridRows", -1)
+  );
+}
+if (shapeGridRowsIncrementButton) {
+  shapeGridRowsIncrementButton.addEventListener("click", () =>
+    adjustShapeGridDimension("gridRows", 1)
+  );
+}
+if (shapeGridColumnsDecrementButton) {
+  shapeGridColumnsDecrementButton.addEventListener("click", () =>
+    adjustShapeGridDimension("gridColumns", -1)
+  );
+}
+if (shapeGridColumnsIncrementButton) {
+  shapeGridColumnsIncrementButton.addEventListener("click", () =>
+    adjustShapeGridDimension("gridColumns", 1)
+  );
+}
 addRotationInputInteractions(
   imageRotationInput,
   imageRotationOutput,
@@ -9399,6 +10189,23 @@ undoButton.addEventListener("click", undo);
 redoButton.addEventListener("click", redo);
 toolbarVisibilityButton.addEventListener("click", toggleToolbarVisibility);
 fullscreenButton.addEventListener("click", toggleFullscreen);
+zoomOutButton.addEventListener("click", () =>
+  adjustActivePageZoom(1 / zoomButtonStep)
+);
+zoomInButton.addEventListener("click", () =>
+  adjustActivePageZoom(zoomButtonStep)
+);
+zoomPercentButton.addEventListener("click", openZoomDialog);
+zoomRangeInput.addEventListener("input", applyZoomRangeInputValue);
+zoomRangeInput.addEventListener("change", applyZoomRangeInputValue);
+zoomPercentInput.addEventListener("change", applyZoomPercentInputValue);
+zoomPercentInput.addEventListener("blur", applyZoomPercentInputValue);
+zoomPercentInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    zoomPercentInput.blur();
+  }
+});
 shapeSettingsButton.addEventListener("click", openShapeSettings);
 addProportionalResizeToggleInteraction(
   shapeProportionalResizeButton,
@@ -9535,16 +10342,12 @@ toolbarVisibilityInputs.forEach((input) => {
       return;
     }
 
-    updateGlobalSettings({
-      toolbarVisibility: {
-        ...state.globalSettings.toolbarVisibility,
-        [key]: input.checked,
-      },
-    });
+    updateDocumentToolbarVisibility(key, input.checked);
     if (input.checked) {
       reclampPresetToolbarPosition();
       reclampUndoToolbarPosition();
       reclampFullscreenToolbarPosition();
+      reclampZoomToolbarPosition();
     }
   });
 });
@@ -9552,6 +10355,25 @@ dragHandle.addEventListener("pointerdown", startToolbarDrag);
 presetDragHandle.addEventListener("pointerdown", startPresetToolbarDrag);
 undoDragHandle.addEventListener("pointerdown", startUndoToolbarDrag);
 fullscreenDragHandle.addEventListener("pointerdown", startFullscreenToolbarDrag);
+zoomDragHandle.addEventListener("pointerdown", startZoomToolbarDrag);
+if (shapeActionDragHandle) {
+  shapeActionDragHandle.addEventListener(
+    "pointerdown",
+    startShapeActionToolbarDrag
+  );
+}
+if (imageActionDragHandle) {
+  imageActionDragHandle.addEventListener(
+    "pointerdown",
+    startImageActionToolbarDrag
+  );
+}
+if (lassoActionDragHandle) {
+  lassoActionDragHandle.addEventListener(
+    "pointerdown",
+    startLassoActionToolbarDrag
+  );
+}
 toolbarToggleDragHandle.addEventListener("pointerdown", startToolbarToggleDrag);
 canvas.addEventListener("pointerdown", startCanvasPasteLongPress);
 canvas.addEventListener(moveEventName, updateCanvasPasteLongPress);
@@ -9573,6 +10395,7 @@ window.addEventListener("resize", () => {
   reclampPresetToolbarPosition();
   reclampUndoToolbarPosition();
   reclampFullscreenToolbarPosition();
+  reclampZoomToolbarPosition();
   reclampToolbarTogglePosition();
   syncDocumentListScrollArea();
 });

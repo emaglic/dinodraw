@@ -59,7 +59,7 @@ Eraser and lasso operations should affect both drawing layers together. Backgrou
 
 Most app state lives in `state` in `src/app.js`, including active document, current folder, pages, tool selection, presets, history, selection state, toolbar visibility, and modal/menu state.
 
-Device-specific global preferences use local browser storage where appropriate; regular toolbar positions are stored with each document.
+Device-specific global preferences use local browser storage where appropriate. Regular toolbar positions and optional toolbar visibility are stored with each document.
 
 Important global objects:
 
@@ -83,7 +83,7 @@ Important constants:
 - restores brush presets from local storage
 - builds preset and shape color grids
 - initializes dialog/control state
-- sets default toolbar orientations and restores per-document toolbar positions
+- sets default toolbar orientations and restores per-document toolbar positions and visibility
 - updates fullscreen button state
 - installs press-and-hold toolbar tooltips
 - sizes the canvas and page layers
@@ -103,6 +103,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.112`.
+Current app version: `v0.8.125`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

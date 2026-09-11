@@ -44,6 +44,7 @@ New pages should default to the active/previous page background.
 - When the viewport is wider or taller than the native page, the page is centered on that axis.
 - When the native page is larger than the viewport at the current zoom, runtime `panX`/`panY` offsets reveal clipped regions without changing page resolution.
 - Two-finger touch drag pans the page and two-finger pinch zooms around the gesture midpoint after a small activation movement, reducing accidental palm/wrist-triggered navigation. Wheel/trackpad scrolling pans for desktop use and testing, and browser Ctrl+wheel pinch gestures zoom.
+- The regular Zoom toolbar exposes zoom-out, zoom percentage display/dialog access, and zoom-in controls for desktop/non-touch use.
 - Zoom can go out until the native page height fits the viewport height, capped at 100% minimum when the page is already shorter than the viewport.
 - Panning and zoom are view state only; saved document pages, PNG exports, PDF exports, and thumbnails use native page dimensions.
 - The black background is viewport chrome only. It is not drawn into page layers or exports.
@@ -56,7 +57,7 @@ Known background styles include blank, ruled, and graph.
 
 ## Brush Presets
 
-Default brush presets are user-editable and stored in local browser storage after customization. When changing defaults, avoid overwriting customized saved presets. It is acceptable to migrate presets that still exactly match an older default.
+Default brush presets are user-editable and stored in local browser storage after customization. They are not saved into individual document settings, so brush colors, sizes, opacity, and Draw Behind choices carry across newly created and reopened documents. When changing defaults, avoid overwriting customized saved presets. It is acceptable to migrate presets that still exactly match an older default.
 
 Current defaults:
 
@@ -106,9 +107,17 @@ Implementation notes:
 
 - Pending shapes are temporary overlays until committed.
 - Switching away from shape mode commits a pending shape.
-- Rectangles, ellipses, triangles, and lines share `drawShapePath()`.
+- Rectangles, ellipses, triangles, lines, and grids share `drawShapePath()`.
+- Grid shapes default to 3 rows and 3 columns; their row/column controls appear as a second action-toolbar row only for pending grid shapes, and the dimensions are saved in document-level shape settings.
+- Grid row/column controls include explicit minus/plus buttons for tablet browsers that hide native number input steppers; pressing Enter in either numeric field blurs it to dismiss virtual keyboards where supported.
+- Grid borders and internal lines use the shape border settings, while the cell background uses the shape fill settings.
 - Lines snap to horizontal or vertical while being created/resized based on dominant pointer movement.
 - Pending shapes can be resized from the corner handle, rotated with the 0-359 degree slider, and switched between proportional and freeform resizing.
+- Shape, image-placement, and lasso-selection action toolbars use a full-height left-side drag handle; these temporary toolbar positions are not saved.
+- Temporary action toolbar drags use pointer capture so movement continues when the pointer leaves the handle.
+- The temporary shape action toolbar appears whenever the shape tool is active, can be dragged for the current tool session, and resets to its default position each time the shape tool is reselected.
+- Image and lasso action toolbar positions reset when a fresh image placement or lasso-selection workflow is started.
+- Shape proportional resize is a document-level shape setting; when enabled, it constrains the initial creation drag as well as later resizing.
 - Rotated shape resizing uses the visible handle and opposite visual corner, matching image and lasso selection resizing.
 - The action toolbar displays the current normalized degree value beside the slider.
 

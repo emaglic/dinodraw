@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.112">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.125">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.112">
+    <link rel="stylesheet" href="./styles.css?v=0.8.125">
   </head>
   <body>
     <main class="app-shell">
@@ -108,58 +108,110 @@
         </button>
       </div>
 
-      <div class="action-toolbar is-hidden" data-shape-action-toolbar role="toolbar" aria-label="Shape actions">
-        <button class="action-button" type="button" data-shape-settings aria-label="Shape settings" title="Shape settings">
-          <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+      <div class="zoom-toolbar is-disabled-by-settings" data-zoom-toolbar role="toolbar" aria-label="Zoom" hidden>
+        <button class="zoom-drag-handle" type="button" data-zoom-drag-handle aria-label="Move zoom toolbar" title="Move zoom toolbar">
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
-        <label class="rotation-field" aria-label="Shape rotation">
-          <input type="range" min="0" max="359" step="1" value="0" data-shape-rotation>
-          <output data-shape-rotation-output>0&deg;</output>
-        </label>
-        <button class="action-button proportional-toggle" type="button" data-shape-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+        <button class="action-button" type="button" data-zoom-out aria-label="Zoom out" title="Zoom out">
+          <span class="material-symbols-outlined" aria-hidden="true">zoom_out</span>
         </button>
-        <button class="action-button" type="button" data-shape-commit aria-label="Done with shape" title="Done">
-          <span class="material-symbols-outlined" aria-hidden="true">check</span>
-        </button>
-        <button class="action-button" type="button" data-shape-delete aria-label="Delete shape" title="Delete shape">
-          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+        <button class="zoom-percent-button" type="button" data-zoom-percent-button aria-label="Zoom percentage" title="Zoom percentage" aria-live="polite">100%</button>
+        <button class="action-button" type="button" data-zoom-in aria-label="Zoom in" title="Zoom in">
+          <span class="material-symbols-outlined" aria-hidden="true">zoom_in</span>
         </button>
       </div>
 
-      <div class="action-toolbar is-hidden" data-image-action-toolbar role="toolbar" aria-label="Image actions">
-        <label class="rotation-field" aria-label="Image rotation">
-          <input type="range" min="0" max="359" step="1" value="0" data-image-rotation>
-          <output data-image-rotation-output>0&deg;</output>
-        </label>
-        <button class="action-button proportional-toggle" type="button" data-image-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+      <div class="action-toolbar temporary-action-toolbar is-hidden" data-shape-action-toolbar role="toolbar" aria-label="Shape actions">
+        <button class="temporary-action-drag-handle" type="button" data-shape-action-drag-handle aria-label="Move shape toolbar" title="Move shape toolbar">
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
-        <button class="action-button" type="button" data-image-commit aria-label="Done with image" title="Done">
-          <span class="material-symbols-outlined" aria-hidden="true">check</span>
-        </button>
-        <button class="action-button" type="button" data-image-delete aria-label="Delete image" title="Delete image">
-          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-        </button>
+        <div class="temporary-action-content">
+          <div class="shape-action-row">
+            <button class="action-button" type="button" data-shape-settings aria-label="Shape settings" title="Shape settings">
+              <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+            </button>
+            <label class="rotation-field" aria-label="Shape rotation">
+              <input type="range" min="0" max="359" step="1" value="0" data-shape-rotation>
+              <output data-shape-rotation-output>0&deg;</output>
+            </label>
+            <button class="action-button proportional-toggle" type="button" data-shape-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+              <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+            </button>
+            <button class="action-button" type="button" data-shape-commit aria-label="Done with shape" title="Done">
+              <span class="material-symbols-outlined" aria-hidden="true">check</span>
+            </button>
+            <button class="action-button" type="button" data-shape-delete aria-label="Delete shape" title="Delete shape">
+              <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+            </button>
+          </div>
+          <div class="shape-grid-controls is-hidden" data-shape-grid-controls>
+            <div class="number-stepper" aria-label="Grid rows">
+              <span class="number-stepper-label">Rows</span>
+              <button class="number-stepper-button" type="button" data-shape-grid-rows-decrement aria-label="Decrease grid rows" title="Decrease rows">
+                <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+              </button>
+              <input type="number" min="1" max="50" step="1" value="3" inputmode="numeric" data-shape-grid-rows>
+              <button class="number-stepper-button" type="button" data-shape-grid-rows-increment aria-label="Increase grid rows" title="Increase rows">
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+              </button>
+            </div>
+            <div class="number-stepper" aria-label="Grid columns">
+              <span class="number-stepper-label">Cols</span>
+              <button class="number-stepper-button" type="button" data-shape-grid-columns-decrement aria-label="Decrease grid columns" title="Decrease columns">
+                <span class="material-symbols-outlined" aria-hidden="true">remove</span>
+              </button>
+              <input type="number" min="1" max="50" step="1" value="3" inputmode="numeric" data-shape-grid-columns>
+              <button class="number-stepper-button" type="button" data-shape-grid-columns-increment aria-label="Increase grid columns" title="Increase columns">
+                <span class="material-symbols-outlined" aria-hidden="true">add</span>
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div class="action-toolbar is-hidden" data-lasso-action-toolbar role="toolbar" aria-label="Lasso selection actions">
-        <label class="rotation-field" aria-label="Selection rotation">
-          <input type="range" min="0" max="359" step="1" value="0" data-lasso-rotation>
-          <output data-lasso-rotation-output>0&deg;</output>
-        </label>
-        <button class="action-button proportional-toggle" type="button" data-lasso-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
-          <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+      <div class="action-toolbar temporary-action-toolbar is-hidden" data-image-action-toolbar role="toolbar" aria-label="Image actions">
+        <button class="temporary-action-drag-handle" type="button" data-image-action-drag-handle aria-label="Move image toolbar" title="Move image toolbar">
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
-        <button class="action-button" type="button" data-lasso-copy aria-label="Copy selection" title="Copy selection">
-          <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+        <div class="temporary-action-content image-action-row">
+          <label class="rotation-field" aria-label="Image rotation">
+            <input type="range" min="0" max="359" step="1" value="0" data-image-rotation>
+            <output data-image-rotation-output>0&deg;</output>
+          </label>
+          <button class="action-button proportional-toggle" type="button" data-image-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+            <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+          </button>
+          <button class="action-button" type="button" data-image-commit aria-label="Done with image" title="Done">
+            <span class="material-symbols-outlined" aria-hidden="true">check</span>
+          </button>
+          <button class="action-button" type="button" data-image-delete aria-label="Delete image" title="Delete image">
+            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="action-toolbar temporary-action-toolbar is-hidden" data-lasso-action-toolbar role="toolbar" aria-label="Lasso selection actions">
+        <button class="temporary-action-drag-handle" type="button" data-lasso-action-drag-handle aria-label="Move lasso toolbar" title="Move lasso toolbar">
+          <span class="material-symbols-outlined" aria-hidden="true">drag_indicator</span>
         </button>
-        <button class="action-button" type="button" data-lasso-commit aria-label="Done with selection" title="Done">
-          <span class="material-symbols-outlined" aria-hidden="true">check</span>
-        </button>
-        <button class="action-button" type="button" data-lasso-delete aria-label="Delete selection" title="Delete selection">
-          <span class="material-symbols-outlined" aria-hidden="true">delete</span>
-        </button>
+        <div class="temporary-action-content lasso-action-row">
+          <label class="rotation-field" aria-label="Selection rotation">
+            <input type="range" min="0" max="359" step="1" value="0" data-lasso-rotation>
+            <output data-lasso-rotation-output>0&deg;</output>
+          </label>
+          <button class="action-button proportional-toggle" type="button" data-lasso-proportional-resize aria-label="Proportional resize locked" aria-pressed="true" title="Proportional resize locked">
+            <span class="material-symbols-outlined" aria-hidden="true">aspect_ratio</span>
+          </button>
+          <button class="action-button" type="button" data-lasso-copy aria-label="Copy selection" title="Copy selection">
+            <span class="material-symbols-outlined" aria-hidden="true">content_copy</span>
+          </button>
+          <button class="action-button" type="button" data-lasso-commit aria-label="Done with selection" title="Done">
+            <span class="material-symbols-outlined" aria-hidden="true">check</span>
+          </button>
+          <button class="action-button" type="button" data-lasso-delete aria-label="Delete selection" title="Delete selection">
+            <span class="material-symbols-outlined" aria-hidden="true">delete</span>
+          </button>
+        </div>
       </div>
 
       <div class="canvas-context-menu is-hidden" data-canvas-context-menu role="menu" aria-label="Canvas actions">
@@ -182,7 +234,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.112</div>
+      <div class="version-badge" aria-label="Version">v0.8.125</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -190,7 +242,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.112</small>
+          <small data-brand-version>v0.8.125</small>
         </div>
         <button class="icon-button document-help-button is-hidden" type="button" data-document-help data-open-guide aria-label="Open instructions" title="Help">
           <span class="material-symbols-outlined" aria-hidden="true">help</span>
@@ -417,6 +469,31 @@
       </form>
     </dialog>
 
+    <dialog class="settings-dialog zoom-dialog" id="zoom-dialog" aria-labelledby="zoom-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="zoom-title">Zoom</h1>
+          <button class="icon-button" type="submit" aria-label="Close zoom settings" title="Close">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </header>
+
+        <section class="settings-section" aria-labelledby="zoom-size-title">
+          <h2 id="zoom-size-title">Scale</h2>
+          <label class="range-row zoom-range-row">
+            <span>Zoom</span>
+            <input type="range" min="10" max="400" step="1" value="100" data-zoom-range>
+            <output data-zoom-range-output>100%</output>
+          </label>
+          <label class="zoom-number-row">
+            <span>Percent</span>
+            <input type="number" min="10" max="400" step="1" value="100" inputmode="numeric" data-zoom-percent-input>
+            <span aria-hidden="true">%</span>
+          </label>
+        </section>
+      </form>
+    </dialog>
+
     <dialog class="settings-dialog" id="settings-dialog" aria-labelledby="settings-title">
       <form method="dialog" class="settings-panel">
         <header class="settings-header">
@@ -475,6 +552,10 @@
           <label class="toggle-row">
             <input type="checkbox" data-toolbar-visibility="fullscreen" checked>
             <span>Fullscreen</span>
+          </label>
+          <label class="toggle-row">
+            <input type="checkbox" data-toolbar-visibility="zoom" checked>
+            <span>Zoom</span>
           </label>
           <button class="document-button reset-button" type="button" data-reset-toolbars>Reset Toolbar Positions</button>
         </section>
@@ -580,6 +661,10 @@
               <input type="radio" name="shape-type" value="triangle">
               <span>Tri</span>
             </label>
+            <label>
+              <input type="radio" name="shape-type" value="grid">
+              <span>Grid</span>
+            </label>
           </div>
         </section>
 
@@ -670,12 +755,45 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.112"></script>
+    <script src="./app.js?v=0.8.125"></script>
     <script>
       if ("serviceWorker" in navigator) {
+        var didReloadForServiceWorker = false;
+
+        navigator.serviceWorker.addEventListener("controllerchange", function () {
+          if (didReloadForServiceWorker) {
+            return;
+          }
+
+          didReloadForServiceWorker = true;
+          window.location.reload();
+        });
+
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.112", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.125", {
             updateViaCache: "none"
+          }).then(function (registration) {
+            if (registration.waiting) {
+              registration.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
+
+            registration.addEventListener("updatefound", function () {
+              var worker = registration.installing;
+
+              if (!worker) {
+                return;
+              }
+
+              worker.addEventListener("statechange", function () {
+                if (worker.state === "installed" && navigator.serviceWorker.controller) {
+                  worker.postMessage({ type: "SKIP_WAITING" });
+                }
+              });
+            });
+
+            if (registration.update) {
+              registration.update().catch(function () {});
+            }
           }).catch(function () {});
         });
       }

@@ -27,18 +27,22 @@ Offline/PWA install behavior requires HTTPS or localhost. On insecure LAN HTTP, 
 - The service worker caches core static assets.
 - Cache names include the app version.
 - Old caches should be cleaned up during activation.
-- Current cache name is `dinodraw-v0.8.112`.
-- Current precache list: `./`, `./index.html`, versioned `styles.css`, versioned `app.js`, versioned `manifest.webmanifest`, `./icon.svg`, and the local Material Symbols font.
+- Current cache name is `dinodraw-v0.8.125`.
+- Current precache list: `./`, `./index.html`, `./refresh.html`, versioned `styles.css`, versioned `app.js`, versioned `manifest.webmanifest`, `./icon.svg`, and the local Material Symbols font.
 - Install opens the versioned cache, adds precache URLs, then calls `skipWaiting()`.
 - Activate deletes old `dinodraw-*` caches and calls `clients.claim()`.
-- Fetch handling is network-first for same-origin GET requests, writes successful responses back into the current cache, then falls back to cache on network failure.
+- Fetch handling is network-first for same-origin GET requests and forces `cache: "reload"` to avoid stale browser HTTP-cache responses, writes successful responses back into the current cache, then falls back to cache on network failure.
 - Navigation fallback returns cached `./index.html` when available.
 
 ## Registration
 
-`index.html` registers `./service-worker.js?v=...` on window load when `navigator.serviceWorker` exists. Registration uses `updateViaCache: "none"` and ignores registration errors.
+`index.html` registers `./service-worker.js?v=...` on window load when `navigator.serviceWorker` exists. Registration uses `updateViaCache: "none"`, calls `registration.update()` when available, asks waiting workers to skip waiting, and reloads once on `controllerchange` so a newly activated worker controls the current page.
 
 Early inline script handlers surface startup/script errors in the document list and save-status UI.
+
+## Manual Refresh
+
+`refresh.html` is a manual recovery page for devices that get stuck on stale cached files. Visiting it unregisters same-origin service workers, deletes `dinodraw-*` Cache Storage entries, and then opens `index.html` with a cache-busting query string. It does not delete IndexedDB documents, localStorage settings, imports, or exports.
 
 ## Versioning
 

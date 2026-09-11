@@ -357,3 +357,92 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 
 - Moved the Documents close X out of the header and into the modal panel shell so it anchors to the top-right edge directly across from the Help button.
 - Bumped the app/cache version to `v0.8.112`.
+
+## [2026-09-11] feature | Added Grid Shape
+
+- Added Grid as a shape type with document-level default dimensions of 3 rows by 3 columns.
+- Added row and column number fields to the temporary shape action toolbar only while a pending grid shape is selected.
+- Rendered grid fill as the cell background and shape border settings as the outer border plus internal grid lines.
+- Bumped the app/cache version to `v0.8.113`.
+
+## [2026-09-11] polish | Improved Grid Shape Controls
+
+- Moved grid row and column controls to their own second row in the temporary shape action toolbar.
+- Added explicit minus and plus buttons for rows and columns so BOOX users do not depend on hidden native number input steppers.
+- Made Enter blur the active grid number field, and made shape commit/delete/canvas pointer starts blur grid inputs to help dismiss the virtual keyboard.
+- Bumped the app/cache version to `v0.8.114`.
+
+## [2026-09-11] polish | Refined Shape Action Toolbar
+
+- Made the temporary shape action toolbar visible as soon as the shape tool is selected, with pending-shape-only controls disabled until a shape exists.
+- Added a temporary drag handle for the shape action toolbar; its position is not saved and resets when the shape tool is reselected.
+- Made the aspect-ratio lock apply to initial non-line shape creation drags as well as later shape resizing.
+- Bumped the app/cache version to `v0.8.115`.
+
+## [2026-09-11] polish | Unified Temporary Toolbar Drag Handles
+
+- Changed the shape action toolbar drag handle into a full-height side column instead of a first-row button.
+- Added matching temporary drag handles to image-placement and lasso-selection action toolbars.
+- Kept temporary action toolbar positions unsaved, with image and lasso positions reset when fresh workflows start.
+- Bumped the app/cache version to `v0.8.116`.
+
+## [2026-09-11] fix | Corrected Temporary Toolbar Layout And Dragging
+
+- Changed temporary action toolbar layout to a horizontal flex shell with a full-height left drag column and right-side action content.
+- Kept image and lasso action controls on one horizontal row after adding their drag handles.
+- Added pointer capture to temporary toolbar drag handles so dragging continues after the pointer leaves the handle.
+- Hid the shape toolbar when image placement starts by returning the active tool to Draw before showing image actions.
+- Bumped the app/cache version to `v0.8.117`.
+
+## [2026-09-11] polish | Tightened Grid Steppers
+
+- Matched grid row/column number input height to the adjacent minus and plus buttons.
+- Joined the stepper borders so each row/column control reads as a single grouped action.
+- Bumped the app/cache version to `v0.8.118`.
+
+## [2026-09-11] polish | Simplified Grid Stepper Containers
+
+- Removed the outer border around each grid row/column stepper container.
+- Added a simple vertical divider between the Rows and Cols controls.
+- Bumped the app/cache version to `v0.8.119`.
+
+## [2026-09-11] feature | Added Zoom Toolbar
+
+- Added a regular draggable Zoom toolbar with zoom-out, percentage entry, and zoom-in controls.
+- Added a global Settings checkbox to show or hide the Zoom toolbar with the other optional regular toolbars.
+- Saved Zoom toolbar position per document and included it in reset, resize reclamping, and collision handling.
+- Bumped the app/cache version to `v0.8.120`.
+
+## [2026-09-11] fix | Hardened Zoom Toolbar Cache Transition
+
+- Made the Zoom toolbar start hidden in raw HTML so older cached JavaScript cannot leave it visible but inert.
+- Made current JavaScript reveal the Zoom toolbar only after it has loaded and applied global toolbar visibility settings.
+- Bumped the app/cache version to `v0.8.121`.
+
+## [2026-09-11] polish | Compact Zoom Toolbar
+
+- Replaced the inline Zoom toolbar number field with a compact percentage button for better vertical toolbar layout.
+- Added a Zoom dialog opened from the percentage button with both range-slider and numeric percent controls.
+- Kept the slider live and the numeric field committed on Enter, change, or blur.
+- Bumped the app/cache version to `v0.8.122`.
+
+## [2026-09-11] polish | Simplified Zoom Percent Display
+
+- Restyled the Zoom toolbar percentage control as plain clickable text, matching the main toolbar page indicator style.
+- Removed the visible border/background treatment so vertical zoom toolbar width is driven by the icon buttons.
+- Bumped the app/cache version to `v0.8.123`.
+
+## [2026-09-11] fix | Strengthened BOOX Cache Refresh
+
+- Changed service-worker network fetches to use `cache: "reload"` so current workers avoid stale browser HTTP-cache responses.
+- Made service-worker registration actively request updates, skip waiting workers, and reload once when a new worker controls the page.
+- Added `refresh.html` as a manual recovery page that clears Dino Draw service workers and `dinodraw-*` caches before reopening the app.
+- Bumped the app/cache version to `v0.8.124`.
+
+## [2026-09-11] polish | Reset Default Toolbar Layout Per Document
+
+- Changed default toolbar placement to stack undo/main/zoom on the left and fullscreen/brush presets on the right.
+- Made the main, zoom, and brush preset defaults vertical, while undo/redo and fullscreen remain horizontal.
+- Moved optional toolbar visibility from global settings into document settings so each new document starts with the default enabled toolbar set.
+- Kept brush preset colors, sizes, opacity, and Draw Behind settings global rather than serializing them into each document.
+- Bumped the app/cache version to `v0.8.125`.

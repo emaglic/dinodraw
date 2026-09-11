@@ -1,13 +1,18 @@
-const CACHE_NAME = "dinodraw-v0.8.112";
+const CACHE_NAME = "dinodraw-v0.8.125";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
-  "./styles.css?v=0.8.112",
-  "./app.js?v=0.8.112",
-  "./manifest.webmanifest?v=0.8.112",
+  "./refresh.html",
+  "./styles.css?v=0.8.125",
+  "./app.js?v=0.8.125",
+  "./manifest.webmanifest?v=0.8.125",
   "./icon.svg",
   "./vendor/material-symbols/material-symbols-outlined.woff2"
 ];
+
+function fetchFresh(request) {
+  return fetch(request, { cache: "reload" });
+}
 
 self.addEventListener("install", function (event) {
   event.waitUntil(
@@ -20,6 +25,12 @@ self.addEventListener("install", function (event) {
         return self.skipWaiting();
       })
   );
+});
+
+self.addEventListener("message", function (event) {
+  if (event.data && event.data.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", function (event) {
@@ -58,7 +69,7 @@ self.addEventListener("fetch", function (event) {
   }
 
   event.respondWith(
-    fetch(event.request)
+    fetchFresh(event.request)
       .then(function (response) {
         const responseCopy = response.clone();
 

@@ -4,7 +4,7 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 
 ## Main Toolbar
 
-- Default position: left side of canvas, vertically centered.
+- Default position: left side of canvas, just below the undo/redo toolbar.
 - Default orientation: vertical.
 - Contains document/library, draw, erase, shape, add image, lasso, settings, page navigation, page indicator, and add page controls.
 - Tapping Shape selects the tool without opening settings. Double tapping Shape opens shape settings while preserving the current document-level shape configuration.
@@ -20,13 +20,13 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 
 ## Brush Preset Toolbar
 
-- Default position: bottom-left edge.
-- Default orientation: horizontal.
+- Default position: right side of canvas, just below the fullscreen toolbar.
+- Default orientation: vertical.
 - Visible when draw tool is selected.
 - Contains six user-editable brush presets.
 - Double tap a preset to edit size, opacity, color, and Draw Behind.
 - Saved in the active document under `settings.toolbarPositions.presets`.
-- Brush preset storage key: `brushPresets`.
+- Brush preset values are global localStorage preferences, not document settings. Brush preset storage key: `brushPresets`.
 
 ## Shape Tool
 
@@ -54,11 +54,23 @@ Toolbar behavior is implemented in `src/app.js`, `src/index.html`, and `src/styl
 - The fullscreen toggle uses `fullscreen` when entering fullscreen and `fullscreen_exit` when exiting.
 - Saved in the active document under `settings.toolbarPositions.fullscreen`.
 
+## Zoom Toolbar
+
+- Default position: left side of canvas, just below the main toolbar.
+- Default orientation: vertical.
+- Has a drag handle, zoom-out button, plain-text clickable zoom percentage, and zoom-in button.
+- Starts hidden in raw HTML and is revealed by current JavaScript after applying global toolbar settings, preventing a stale older script from leaving an inert visible toolbar during service-worker cache transitions.
+- Tapping the percentage button opens a Zoom dialog with a range slider and numeric percent field.
+- The dialog controls clamp to the active page zoom range; the slider applies live, and the numeric field commits on Enter, change, or blur.
+- Pinch and Ctrl+wheel zoom update the displayed percentage after the workspace renders.
+- Saved in the active document under `settings.toolbarPositions.zoom`.
+
 ## Toolbar Visibility Settings
 
-- Settings includes toolbar visibility checkboxes for Main toolbar, Brush presets, Undo and redo, and Fullscreen.
+- Settings includes toolbar visibility checkboxes for Main toolbar, Brush presets, Undo and redo, Fullscreen, and Zoom.
 - Main toolbar is checked and disabled so it cannot be hidden from the enabled-toolbar set.
-- Optional regular toolbar visibility is stored in global localStorage settings, not inside each document.
+- Optional regular toolbar visibility is stored in the active document under `settings.toolbarVisibility`.
+- New documents reset toolbar visibility to the default enabled set.
 - The edge show/hide tab hides or shows only the regular toolbars enabled in Settings.
 - Temporary action toolbars for shape, image, and lasso are not listed and remain controlled by their active tool state.
 
@@ -78,6 +90,7 @@ When hiding toolbars, fade out:
 - brush preset toolbar
 - undo/redo toolbar
 - fullscreen toolbar
+- zoom toolbar
 - shape action toolbar
 - lasso action toolbar
 - image action toolbar
@@ -90,7 +103,15 @@ Hiding should not change the selected tool. Showing toolbars again should only s
 
 The Settings modal Toolbars section includes `Reset Toolbar Positions`. This resets toolbar positions only. It must not reset toolbar visibility, brush presets, or other user settings.
 
-Current reset reapplies default positions for the four regular toolbars and writes those positions back to the active document. It also removes legacy global regular-toolbar position keys when possible:
+Current reset reapplies default positions for the five regular toolbars and writes those positions back to the active document:
+
+- undo/redo: top-left, horizontal
+- main: below undo/redo on the left, vertical
+- zoom: below main on the left, vertical
+- fullscreen: top-right, horizontal
+- brush presets: below fullscreen on the right, vertical
+
+It also removes legacy global regular-toolbar position keys when possible:
 
 - `mainToolbarPosition`
 - `presetToolbarPositionBottomLeft`
@@ -113,7 +134,7 @@ The hide/show tab still uses its separate edge-pinned `toolbarVisibilityTabPosit
 
 ## Drag Pattern
 
-The four regular toolbars share similar drag behavior:
+The five regular toolbars share similar drag behavior:
 
 - calculate the pointer offset within the toolbar on `pointerdown`
 - show an edge docking preview when the toolbar is within the dock zone
