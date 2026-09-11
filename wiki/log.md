@@ -446,3 +446,9 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Moved optional toolbar visibility from global settings into document settings so each new document starts with the default enabled toolbar set.
 - Kept brush preset colors, sizes, opacity, and Draw Behind settings global rather than serializing them into each document.
 - Bumped the app/cache version to `v0.8.125`.
+- Made regular toolbar drag handles swap dimensions in vertical orientation and rotate the drag indicator icon.
+- Bumped the app/cache version to `v0.8.126`.
+- Centered regular toolbar drag handle icons within their bordered handle boxes.
+- Bumped the app/cache version to `v0.8.127`.
+- Matched the brush preset toolbar control size to the other regular single-row toolbars.
+- Bumped the app/cache version to `v0.8.128`.

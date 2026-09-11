@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.125";
+const APP_VERSION = "v0.8.128";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,

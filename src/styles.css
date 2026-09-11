@@ -265,7 +265,7 @@ button {
   flex-direction: column;
   gap: 6px;
   align-items: center;
-  width: 48px;
+  width: 50px;
   padding: 6px;
   border: 2px solid #000000;
   border-radius: 8px;
@@ -322,6 +322,16 @@ button {
   font-size: 14px;
   letter-spacing: 0;
   touch-action: none;
+}
+
+.toolbar[data-orientation="horizontal"] .drag-handle {
+  width: 24px;
+  height: 34px;
+}
+
+.toolbar[data-orientation="vertical"] .drag-handle {
+  width: 34px;
+  height: 24px;
 }
 
 .drag-handle:active {
@@ -382,8 +392,8 @@ button {
 .preset-button {
   display: grid;
   position: relative;
-  width: 30px;
-  height: 30px;
+  width: 34px;
+  height: 34px;
   place-items: center;
   padding: 0;
   border: 2px solid #000000;
@@ -396,7 +406,7 @@ button {
 .preset-drag-handle {
   display: grid;
   width: 24px;
-  height: 30px;
+  height: 34px;
   place-items: center;
   padding: 0;
   border: 2px solid #000000;
@@ -415,6 +425,11 @@ button {
   cursor: grabbing;
 }
 
+.preset-toolbar[data-orientation="vertical"] .preset-drag-handle {
+  width: 34px;
+  height: 24px;
+}
+
 .preset-button.is-active {
   background: #000000;
 }
@@ -426,8 +441,8 @@ button {
 .preset-swatch {
   display: block;
   position: relative;
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: 1px solid #000000;
   border-radius: 50%;
   background: var(--preset-color, #000000);
@@ -534,6 +549,28 @@ button {
   width: 16px;
   height: 16px;
   font-size: 16px;
+}
+
+.drag-handle .material-symbols-outlined,
+.preset-drag-handle .material-symbols-outlined,
+.undo-drag-handle .material-symbols-outlined,
+.fullscreen-drag-handle .material-symbols-outlined,
+.zoom-drag-handle .material-symbols-outlined {
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  transform-origin: center;
+}
+
+.toolbar[data-orientation="vertical"] .drag-handle .material-symbols-outlined,
+.preset-toolbar[data-orientation="vertical"] .preset-drag-handle .material-symbols-outlined,
+.undo-toolbar[data-orientation="vertical"] .undo-drag-handle .material-symbols-outlined,
+.fullscreen-toolbar[data-orientation="vertical"] .fullscreen-drag-handle .material-symbols-outlined,
+.zoom-toolbar[data-orientation="vertical"] .zoom-drag-handle .material-symbols-outlined {
+  transform: rotate(90deg);
 }
 
 .rotation-field {
@@ -816,6 +853,11 @@ button {
   cursor: grabbing;
 }
 
+.undo-toolbar[data-orientation="vertical"] .undo-drag-handle {
+  width: 34px;
+  height: 24px;
+}
+
 .fullscreen-toolbar {
   position: fixed;
   top: max(12px, env(safe-area-inset-top));
@@ -859,6 +901,11 @@ button {
   cursor: grabbing;
 }
 
+.fullscreen-toolbar[data-orientation="vertical"] .fullscreen-drag-handle {
+  width: 34px;
+  height: 24px;
+}
+
 .zoom-toolbar {
   position: fixed;
   right: max(12px, env(safe-area-inset-right));
@@ -900,6 +947,11 @@ button {
 
 .zoom-drag-handle:active {
   cursor: grabbing;
+}
+
+.zoom-toolbar[data-orientation="vertical"] .zoom-drag-handle {
+  width: 34px;
+  height: 24px;
 }
 
 .zoom-percent-button {
