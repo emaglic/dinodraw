@@ -32,15 +32,15 @@ Agents should read this page first, then only the pages relevant to the task.
 
 ## `src/app.js` Regions
 
-- Lines 1-340: DOM handles, global state, configuration constants, colors, default presets, storage keys, and format identifiers.
-- Lines 341-879: IDs, IndexedDB document/folder helpers, app/move dialogs, filenames, document settings, document serialization.
-- Lines 880-1240: image/blob helpers, hand-rolled ZIP generation, hand-rolled PDF generation, downloads.
-- Lines 1241-2556: saved-page loading, document/folder screen, drag-to-move library rows, document/folder CRUD, save queue, export/import.
-- Lines 2557-3634: page objects, history snapshots, presets, version badge, backgrounds, render pipeline, shape/lasso overlays, toolbar visibility.
-- Lines 3635-5968: toolbar hide/show tab, undo/redo, fullscreen, eraser preview, canvas resize, tool selection, pointer/stylus handling, drawing, eraser, shapes, lasso selection, canvas action routing.
-- Lines 5969-6432: page controls, Pages modal, background controls, eraser/preset/shape settings.
-- Lines 6433-7541: settings dialogs, press-and-hold tooltips, toolbar positioning, toolbar dragging, edge-pinned hide/show tab dragging.
-- Lines 7542-end: button interactions, initialization, event wiring, resize handling, fullscreen change handling.
+- Lines 1-390: DOM handles, global state, configuration constants, colors, default presets, storage keys, and format identifiers.
+- Lines 391-1166: IDs, IndexedDB document/folder/page helpers, app/move dialogs, filenames, document settings, document serialization.
+- Lines 1167-1837: image/blob helpers, hand-rolled ZIP generation, hand-rolled PDF generation, downloads.
+- Lines 1838-3488: saved-page loading, document/folder screen, drag-to-move library rows, document/folder CRUD, save queue, export/import.
+- Lines 3489-4789: page objects, history snapshots, presets, version badge, backgrounds, render pipeline, shape/lasso overlays, toolbar visibility.
+- Lines 4790-7576: toolbar hide/show tab, undo/redo, fullscreen, eraser preview, canvas resize, tool selection, pointer/stylus handling, drawing, eraser, shapes, lasso selection, canvas action routing.
+- Lines 7577-7966: page controls, Pages modal, background controls, eraser/preset/shape settings.
+- Lines 7967-10256: settings dialogs, press-and-hold tooltips, toolbar positioning, toolbar dragging, edge-pinned hide/show tab dragging.
+- Lines 10257-end: button interactions, initialization, event wiring, resize handling, fullscreen change handling.
 
 ## Wiki Maintenance
 

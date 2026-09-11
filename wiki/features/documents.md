@@ -53,12 +53,13 @@ The Instructions guide should remain local/offline, full-screen, readable on tab
 
 - Local document saving uses IndexedDB.
 - Current historical database name: `booxDrawingDocuments`.
-- Current object stores: `documents` and `folders`.
+- Current object stores: `documents`, `documentPages`, and `folders`.
 - Save behavior should include all pages, backgrounds, `underLayer`, normal `layer`, and document settings.
 - Saves are debounced by `scheduleDocumentSave()`, currently with a default delay of `700ms`.
-- `saveCurrentDocument()` serializes through `serializeCurrentDocument()` and writes with `putDocument()`.
+- `saveCurrentDocument()` writes lightweight document metadata and only dirty page records. Full-document serialization is reserved for export/import compatibility.
 - If a save is already in progress, the code sets `shouldSaveAgain` so another save is scheduled after the current write finishes.
 - `flushDocumentSave()` is used before document switching, exporting, renaming, deleting, and creating new documents.
+- Old records with embedded `pages` remain readable and are split into `documentPages` the next time they are saved.
 
 ## Document Record Shape
 
@@ -74,9 +75,12 @@ Current local records include:
 - `appVersion`
 - `activePageIndex`
 - `settings`
-- `pages`
+- `pageIds`
+- `pageCount`
 
 `settings` includes eraser size, active preset index, brush presets, shape config, and regular toolbar positions.
+
+Editable DinoDraw JSON exports still use the portable full-document format with `pages`. Import splits that portable format back into document metadata and separate page records in IndexedDB.
 
 `settings.toolbarPositions` stores per-document position records for:
 
@@ -99,6 +103,9 @@ Folder records live in the `folders` object store and include:
 
 Each saved page includes:
 
+- `documentId`
+- `pageId`
+- `sortOrder`
 - `background`
 - `width`
 - `height`

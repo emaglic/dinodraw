@@ -35,8 +35,9 @@ Dino Draw is a static web app implemented with plain HTML, CSS, and vanilla Java
 
 - Historical IndexedDB database name: `booxDrawingDocuments`.
 - Do not rename the database unless a migration is implemented.
-- Current database version: `2`.
-- Current object stores: `documents` and `folders`.
+- Current database version: `4`.
+- Current object stores: `documents`, `documentPages`, and `folders`.
+- `documents` stores document metadata and page order. `documentPages` stores per-page raster data so autosave can rewrite only changed pages.
 - Documents are listed by last opened date, most recent first within the current folder.
 - Missing document `folderId` values resolve to the top-level `My Documents` library folder for compatibility with existing saved documents.
 
@@ -103,6 +104,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.129`.
+Current app version: `v0.8.134`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

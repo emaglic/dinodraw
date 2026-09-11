@@ -454,3 +454,20 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Bumped the app/cache version to `v0.8.128`.
 - Made live Draw Behind strokes repaint their bounded stroke region in final layer order so normal ink stays visually above them while drawing.
 - Bumped the app/cache version to `v0.8.129`.
+
+## [2026-09-11] perf | Split Document Page Storage
+
+- Bumped IndexedDB to version `3` and added a `documentPages` object store for per-page raster data.
+- Changed autosave to write document metadata plus only dirty page records instead of re-encoding every page on each save.
+- Kept DinoDraw JSON export/import, PNG ZIP, and PDF export on the portable full-document record shape by reassembling pages at export time and splitting them again on import.
+- Preserved old embedded-page document records through lazy read compatibility and split them into page records on the next save.
+- Bumped the app/cache version to `v0.8.130`.
+- Bumped IndexedDB to version `4` and made the `documentPages` upgrade path repair the page index if needed.
+- Replaced page-record lookup with a cursor fallback for browsers that do not support `IDBIndex.getAll()`.
+- Bumped the app/cache version to `v0.8.131`.
+- Added legacy embedded-document save fallback for new/imported documents and autosave if split page storage fails on a browser.
+- Bumped the app/cache version to `v0.8.132`.
+- Added a cursor fallback for document/folder store reads so the landing list works on browsers without `IDBObjectStore.getAll()`.
+- Bumped the app/cache version to `v0.8.133`.
+- Disabled split-page storage by default and restored the legacy full-document save path while keeping database version `4` compatible with tablets that already attempted the upgrade.
+- Bumped the app/cache version to `v0.8.134`.

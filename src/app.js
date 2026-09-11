@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.129";
+const APP_VERSION = "v0.8.134";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -320,6 +320,7 @@ const state = {
   isLoadingDocument: false,
   isSavingDocument: false,
   shouldSaveAgain: false,
+  deletedPageIds: new Set(),
   toolbarsHidden: false,
   globalSettings: {
     touchDrawingEnabled: true,
@@ -378,9 +379,12 @@ const toolbarCollisionGap = 8;
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
 const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
-const databaseVersion = 2;
+const databaseVersion = 4;
 const documentStoreName = "documents";
 const folderStoreName = "folders";
+const pageStoreName = "documentPages";
+const pageDocumentIndexName = "documentId";
+const splitPageStorageEnabled = false;
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
@@ -513,6 +517,24 @@ function openDatabase() {
       if (!db.objectStoreNames.contains(folderStoreName)) {
         db.createObjectStore(folderStoreName, { keyPath: "id" });
       }
+
+      if (splitPageStorageEnabled) {
+        let pageStore = null;
+
+        if (db.objectStoreNames.contains(pageStoreName)) {
+          pageStore = request.transaction.objectStore(pageStoreName);
+        } else {
+          pageStore = db.createObjectStore(pageStoreName, {
+            keyPath: "id",
+          });
+        }
+
+        if (!pageStore.indexNames.contains(pageDocumentIndexName)) {
+          pageStore.createIndex(pageDocumentIndexName, "documentId", {
+            unique: false,
+          });
+        }
+      }
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -533,44 +555,62 @@ function getFolderStore(mode) {
   );
 }
 
-async function getAllDocuments() {
-  const store = await getDocumentStore("readonly");
+function getDocumentPageStore(mode) {
+  return openDatabase().then(
+    (db) => db.transaction(pageStoreName, mode).objectStore(pageStoreName)
+  );
+}
 
+function getAllFromStore(store) {
   return new Promise((resolve, reject) => {
-    const request = store.getAll();
+    if (store.getAll) {
+      const request = store.getAll();
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+      return;
+    }
+
+    const records = [];
+    const request = store.openCursor();
 
     request.onsuccess = () => {
-      const documents = request.result || [];
+      const cursor = request.result;
 
-      documents.forEach(prepareDocumentRecord);
-      documents.sort((a, b) => {
-        const bDate = b.lastOpenedAt || b.updatedAt || b.createdAt || "";
-        const aDate = a.lastOpenedAt || a.updatedAt || a.createdAt || "";
+      if (!cursor) {
+        resolve(records);
+        return;
+      }
 
-        return String(bDate).localeCompare(String(aDate));
-      });
-      resolve(documents);
+      records.push(cursor.value);
+      cursor.continue();
     };
     request.onerror = () => reject(request.error);
   });
 }
 
+async function getAllDocuments() {
+  const store = await getDocumentStore("readonly");
+  const documents = await getAllFromStore(store);
+
+  documents.forEach(prepareDocumentRecord);
+  documents.sort((a, b) => {
+    const bDate = b.lastOpenedAt || b.updatedAt || b.createdAt || "";
+    const aDate = a.lastOpenedAt || a.updatedAt || a.createdAt || "";
+
+    return String(bDate).localeCompare(String(aDate));
+  });
+  return documents;
+}
+
 async function getAllFolders() {
   const store = await getFolderStore("readonly");
+  const folders = await getAllFromStore(store);
 
-  return new Promise((resolve, reject) => {
-    const request = store.getAll();
-
-    request.onsuccess = () => {
-      const folders = request.result || [];
-
-      folders.sort((a, b) =>
-        String(a.name || "").localeCompare(String(b.name || ""))
-      );
-      resolve(folders);
-    };
-    request.onerror = () => reject(request.error);
-  });
+  folders.sort((a, b) =>
+    String(a.name || "").localeCompare(String(b.name || ""))
+  );
+  return folders;
 }
 
 async function getDocument(id) {
@@ -619,14 +659,278 @@ async function putFolder(record) {
   });
 }
 
-async function migrateExistingDocumentRecords() {
-  const store = await getDocumentStore("readonly");
-  const documents = await new Promise((resolve, reject) => {
-    const request = store.getAll();
+function clonePageIds(pageIds) {
+  return Array.isArray(pageIds) ? pageIds.map((id) => String(id)) : [];
+}
 
-    request.onsuccess = () => resolve(request.result || []);
+function getDocumentPageCount(record) {
+  if (!record) {
+    return 0;
+  }
+
+  if (Array.isArray(record.pageIds) && record.pageIds.length > 0) {
+    return record.pageIds.length;
+  }
+
+  if (Array.isArray(record.pages)) {
+    return record.pages.length;
+  }
+
+  return Number(record.pageCount || 0) || 0;
+}
+
+function getDocumentMetadataRecord(record) {
+  const metadata = { ...record };
+  const pageCount = getDocumentPageCount(record);
+
+  delete metadata.pages;
+  metadata.pageIds = clonePageIds(record.pageIds);
+  metadata.pageCount = pageCount || metadata.pageIds.length || 1;
+  metadata.storageVersion = 2;
+
+  return metadata;
+}
+
+function getPageRecordId(documentId, pageId) {
+  return `${documentId}:${pageId}`;
+}
+
+function getRecordPageId(page, fallbackIndex = 0) {
+  if (page && page.id) {
+    return String(page.id);
+  }
+
+  if (page && page.pageId) {
+    return String(page.pageId);
+  }
+
+  return createId();
+}
+
+function getSavedPageRecord(documentId, savedPage, index) {
+  const pageId = getRecordPageId(savedPage, index);
+
+  return {
+    id: getPageRecordId(documentId, pageId),
+    documentId,
+    pageId,
+    sortOrder: index,
+    background: savedPage.background || "blank",
+    width: savedPage.width || canvas.width || window.innerWidth,
+    height: savedPage.height || canvas.height || window.innerHeight,
+    underDrawing: savedPage.underDrawing || "",
+    drawing: savedPage.drawing || "",
+    updatedAt: savedPage.updatedAt || new Date().toISOString(),
+  };
+}
+
+async function getDocumentPageRecords(documentId) {
+  const store = await getDocumentPageStore("readonly");
+
+  return new Promise((resolve, reject) => {
+    let index = null;
+
+    try {
+      if (store.indexNames.contains(pageDocumentIndexName)) {
+        index = store.index(pageDocumentIndexName);
+      }
+    } catch (error) {
+      index = null;
+    }
+
+    if (index && index.getAll) {
+      const request = index.getAll(documentId);
+
+      request.onsuccess = () => resolve(request.result || []);
+      request.onerror = () => reject(request.error);
+      return;
+    }
+
+    const records = [];
+    const request = index
+      ? index.openCursor(IDBKeyRange.only(documentId))
+      : store.openCursor();
+
+    request.onsuccess = () => {
+      const cursor = request.result;
+
+      if (!cursor) {
+        resolve(records);
+        return;
+      }
+
+      if (!index && cursor.value.documentId !== documentId) {
+        cursor.continue();
+        return;
+      }
+
+      records.push(cursor.value);
+      cursor.continue();
+    };
+
     request.onerror = () => reject(request.error);
   });
+}
+
+async function putDocumentPage(record) {
+  const store = await getDocumentPageStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.put(record);
+
+    request.onsuccess = () => resolve(record);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteDocumentPageRecord(id) {
+  const store = await getDocumentPageStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.delete(id);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteDocumentPageRecords(documentId) {
+  const records = await getDocumentPageRecords(documentId);
+
+  for (const record of records) {
+    await deleteDocumentPageRecord(record.id);
+  }
+}
+
+async function saveFullDocumentRecord(record) {
+  prepareDocumentRecord(record);
+
+  if (!splitPageStorageEnabled) {
+    await putDocument(record);
+    return record;
+  }
+
+  try {
+    const pageRecords = (record.pages || []).map((page, index) =>
+      getSavedPageRecord(record.id, page, index)
+    );
+    const metadata = getDocumentMetadataRecord({
+      ...record,
+      pageIds: pageRecords.map((pageRecord) => pageRecord.pageId),
+      pageCount: pageRecords.length,
+    });
+    const nextPageRecordIds = new Set(
+      pageRecords.map((pageRecord) => pageRecord.id)
+    );
+    const existingPageRecords = await getDocumentPageRecords(record.id);
+
+    for (const existingRecord of existingPageRecords) {
+      if (!nextPageRecordIds.has(existingRecord.id)) {
+        await deleteDocumentPageRecord(existingRecord.id);
+      }
+    }
+
+    for (const pageRecord of pageRecords) {
+      await putDocumentPage(pageRecord);
+    }
+
+    await putDocument(metadata);
+    return metadata;
+  } catch (error) {
+    await putDocument(record);
+    return record;
+  }
+}
+
+function sortPageRecordsForDocument(record, pageRecords) {
+  const pageIds = clonePageIds(record.pageIds);
+  const orderById = new Map();
+
+  pageIds.forEach((pageId, index) => {
+    orderById.set(pageId, index);
+  });
+
+  const records = pageIds.length > 0
+    ? pageRecords.filter((pageRecord) => orderById.has(pageRecord.pageId))
+    : pageRecords;
+
+  return records.slice().sort((a, b) => {
+    const aOrder = orderById.has(a.pageId)
+      ? orderById.get(a.pageId)
+      : Number(a.sortOrder || 0);
+    const bOrder = orderById.has(b.pageId)
+      ? orderById.get(b.pageId)
+      : Number(b.sortOrder || 0);
+
+    return aOrder - bOrder;
+  });
+}
+
+async function getSavedPagesForRecord(record) {
+  if (record && Array.isArray(record.pages) && record.pages.length > 0) {
+    return {
+      pages: record.pages,
+      isLegacyEmbeddedRecord: splitPageStorageEnabled,
+    };
+  }
+
+  if (!record) {
+    return {
+      pages: [{ background: "blank", drawing: "" }],
+      isLegacyEmbeddedRecord: false,
+    };
+  }
+
+  if (!splitPageStorageEnabled) {
+    return {
+      pages: [{ background: "blank", drawing: "" }],
+      isLegacyEmbeddedRecord: false,
+    };
+  }
+
+  const pageRecords = sortPageRecordsForDocument(
+    record,
+    await getDocumentPageRecords(record.id)
+  );
+  const pages = pageRecords.map((pageRecord) => ({
+    pageId: pageRecord.pageId,
+    background: pageRecord.background || "blank",
+    width: pageRecord.width,
+    height: pageRecord.height,
+    underDrawing: pageRecord.underDrawing || "",
+    drawing: pageRecord.drawing || "",
+  }));
+
+  return {
+    pages: pages.length > 0 ? pages : [{ background: "blank", drawing: "" }],
+    isLegacyEmbeddedRecord: false,
+  };
+}
+
+async function getFullDocumentRecord(id) {
+  const record = await getDocument(id);
+
+  if (!record) {
+    return null;
+  }
+
+  const savedPages = await getSavedPagesForRecord(record);
+
+  return {
+    ...record,
+    pages: savedPages.pages.map((page) => ({
+      background: page.background || "blank",
+      width: page.width || canvas.width || window.innerWidth,
+      height: page.height || canvas.height || window.innerHeight,
+      underDrawing: page.underDrawing || "",
+      drawing: page.drawing || "",
+    })),
+  };
+}
+
+async function migrateExistingDocumentRecords() {
+  const store = await getDocumentStore("readonly");
+  const documents = await getAllFromStore(store);
 
   for (const record of documents) {
     if (!record.uuid || !record.id) {
@@ -637,6 +941,9 @@ async function migrateExistingDocumentRecords() {
 }
 
 async function deleteDocumentRecord(id) {
+  if (splitPageStorageEnabled) {
+    await deleteDocumentPageRecords(id);
+  }
   const store = await getDocumentStore("readwrite");
 
   return new Promise((resolve, reject) => {
@@ -956,6 +1263,46 @@ function getCanvasDataUrl(layer) {
   return layer.toDataURL("image/png");
 }
 
+function markPageDirty(page = getActivePage()) {
+  if (page && !state.isLoadingDocument) {
+    page.isDirty = true;
+    page.dirtyVersion = Number(page.dirtyVersion || 0) + 1;
+  }
+}
+
+function serializeCurrentDocumentMetadata(now = new Date().toISOString()) {
+  return {
+    id: state.documentId,
+    uuid: state.documentUuid || state.documentId || createDocumentUuid(),
+    name: state.documentName || "Untitled",
+    folderId: resolveExistingFolderId(state.documentFolderId),
+    createdAt: state.documentCreatedAt || now,
+    updatedAt: now,
+    lastOpenedAt: state.documentLastOpenedAt || now,
+    appVersion: APP_VERSION,
+    activePageIndex: state.activePageIndex,
+    settings: getDocumentSettings(),
+    pageIds: state.pages.map((page) => page.id),
+    pageCount: state.pages.length,
+    storageVersion: 2,
+  };
+}
+
+function serializePageRecord(page, index, now = new Date().toISOString()) {
+  return {
+    id: getPageRecordId(state.documentId, page.id),
+    documentId: state.documentId,
+    pageId: page.id,
+    sortOrder: index,
+    background: page.background,
+    width: getPageWidth(page),
+    height: getPageHeight(page),
+    underDrawing: getCanvasDataUrl(page.underLayer),
+    drawing: getCanvasDataUrl(page.layer),
+    updatedAt: now,
+  };
+}
+
 function cloneToolbarPositionRecord(position) {
   if (!position) {
     return null;
@@ -1068,6 +1415,7 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
   const now = new Date().toISOString();
   const pageSize = getCurrentViewportSize();
   const uuid = createDocumentUuid();
+  const pageId = createId();
 
   return {
     id: uuid,
@@ -1080,8 +1428,11 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
     appVersion: APP_VERSION,
     activePageIndex: 0,
     settings: getNewDocumentSettings(),
+    pageIds: [pageId],
+    pageCount: 1,
     pages: [
       {
+        pageId,
         background: "blank",
         width: pageSize.width,
         height: pageSize.height,
@@ -1096,16 +1447,7 @@ function serializeCurrentDocument() {
   const now = new Date().toISOString();
 
   return {
-    id: state.documentId,
-    uuid: state.documentUuid || state.documentId || createDocumentUuid(),
-    name: state.documentName || "Untitled",
-    folderId: resolveExistingFolderId(state.documentFolderId),
-    createdAt: state.documentCreatedAt || now,
-    updatedAt: now,
-    lastOpenedAt: state.documentLastOpenedAt || now,
-    appVersion: APP_VERSION,
-    activePageIndex: state.activePageIndex,
-    settings: getDocumentSettings(),
+    ...serializeCurrentDocumentMetadata(now),
     pages: state.pages.map((page) => ({
       background: page.background,
       width: getPageWidth(page),
@@ -1120,6 +1462,16 @@ function getPortableDocumentRecord(record) {
   const portableRecord = { ...record };
 
   delete portableRecord.folderId;
+  delete portableRecord.pageIds;
+  delete portableRecord.pageCount;
+  delete portableRecord.storageVersion;
+  portableRecord.pages = (portableRecord.pages || []).map((page) => ({
+    background: page.background || "blank",
+    width: page.width,
+    height: page.height,
+    underDrawing: page.underDrawing || "",
+    drawing: page.drawing || "",
+  }));
 
   return portableRecord;
 }
@@ -1554,7 +1906,7 @@ async function saveExportFile(file, targetPromise) {
   return true;
 }
 
-async function createPageFromSavedPage(savedPage = {}) {
+async function createPageFromSavedPage(savedPage = {}, options = {}) {
   const underImage = await loadImage(savedPage.underDrawing);
   const image = await loadImage(savedPage.drawing);
   const fallbackWidth =
@@ -1572,6 +1924,10 @@ async function createPageFromSavedPage(savedPage = {}) {
     savedPage.width || fallbackWidth,
     savedPage.height || fallbackHeight
   );
+
+  page.id = options.pageId || savedPage.pageId || createId();
+  page.isDirty = Boolean(options.isDirty);
+  page.dirtyVersion = page.isDirty ? 1 : 0;
 
   if (underImage) {
     page.underContext.drawImage(
@@ -2237,7 +2593,7 @@ function renderDocumentList() {
     label.textContent = documentRecord.name || "Untitled";
     meta.className = "document-meta";
     actions.className = "document-row-actions";
-    const pageCount = (documentRecord.pages || []).length || 1;
+    const pageCount = getDocumentPageCount(documentRecord) || 1;
 
     meta.textContent = `${pageCount} page${
       pageCount === 1 ? "" : "s"
@@ -2325,15 +2681,70 @@ async function saveCurrentDocument() {
 
   state.savePromise = (async () => {
     try {
-      const record = serializeCurrentDocument();
+      if (!splitPageStorageEnabled) {
+        const record = serializeCurrentDocument();
+
+        await putDocument(record);
+        state.documentUpdatedAt = record.updatedAt;
+        state.documentLastOpenedAt = record.lastOpenedAt;
+        state.pages.forEach((page) => {
+          page.isDirty = false;
+        });
+        state.deletedPageIds.clear();
+        setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
+        await refreshDocuments();
+        return;
+      }
+
+      const now = new Date().toISOString();
+      const record = serializeCurrentDocumentMetadata(now);
+      const dirtyPages = state.pages
+        .map((page, index) => ({
+          page,
+          index,
+          dirtyVersion: Number(page.dirtyVersion || 0),
+        }))
+        .filter((entry) => entry.page.isDirty);
+      const deletedPageIds = Array.from(state.deletedPageIds);
+
+      for (const pageId of deletedPageIds) {
+        await deleteDocumentPageRecord(getPageRecordId(state.documentId, pageId));
+      }
+
+      for (const entry of dirtyPages) {
+        await putDocumentPage(
+          serializePageRecord(entry.page, entry.index, now)
+        );
+
+        if (Number(entry.page.dirtyVersion || 0) === entry.dirtyVersion) {
+          entry.page.isDirty = false;
+        }
+      }
 
       await putDocument(record);
       state.documentUpdatedAt = record.updatedAt;
+      state.documentLastOpenedAt = record.lastOpenedAt;
+      deletedPageIds.forEach((pageId) => state.deletedPageIds.delete(pageId));
       setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
       await refreshDocuments();
     } catch (error) {
-      setSaveStatus("Save failed");
-      console.error(error);
+      try {
+        const fallbackRecord = serializeCurrentDocument();
+
+        await putDocument(fallbackRecord);
+        state.documentUpdatedAt = fallbackRecord.updatedAt;
+        state.documentLastOpenedAt = fallbackRecord.lastOpenedAt;
+        state.pages.forEach((page) => {
+          page.isDirty = false;
+        });
+        state.deletedPageIds.clear();
+        setSaveStatus(`Saved ${formatDateLabel(fallbackRecord.updatedAt)}`);
+        await refreshDocuments();
+      } catch (fallbackError) {
+        setSaveStatus("Save failed");
+        console.error(error);
+        console.error(fallbackError);
+      }
     } finally {
       state.isSavingDocument = false;
       state.savePromise = null;
@@ -2395,14 +2806,16 @@ async function loadDocument(record, shouldHideLibrary = true) {
   applyDocumentSettings(record.settings || {});
   applyDocumentToolbarPositions((record.settings || {}).toolbarPositions || {});
 
-  const savedPages = record.pages && record.pages.length
-    ? record.pages
-    : [{ background: "blank", drawing: "" }];
+  const savedPages = await getSavedPagesForRecord(record);
 
   state.pages = [];
+  state.deletedPageIds.clear();
 
-  for (const savedPage of savedPages) {
-    const page = await createPageFromSavedPage(savedPage);
+  for (const savedPage of savedPages.pages) {
+    const page = await createPageFromSavedPage(savedPage, {
+      isDirty: savedPages.isLegacyEmbeddedRecord,
+      pageId: savedPage.pageId,
+    });
 
     state.pages.push(page);
   }
@@ -2462,7 +2875,7 @@ async function createNewDocument() {
   const record = createDocumentRecord(name, state.currentFolderId);
 
   record.lastOpenedAt = new Date().toISOString();
-  await putDocument(record);
+  await saveFullDocumentRecord(record);
   await refreshDocuments();
   await loadDocument(record);
   scheduleDocumentSave(0);
@@ -2583,6 +2996,7 @@ async function deleteDocument(id) {
     state.documentUpdatedAt = null;
     state.documentLastOpenedAt = null;
     state.documentFolderId = null;
+    state.deletedPageIds.clear();
     applyDocumentToolbarPositions();
     state.pages = [];
     clearTemporaryCanvasState();
@@ -2703,7 +3117,7 @@ async function getRecordForExport(id) {
     return serializeCurrentDocument();
   }
 
-  return getDocument(id);
+  return getFullDocumentRecord(id);
 }
 
 function getKnownDocumentName(id) {
@@ -3114,7 +3528,7 @@ async function importDocumentFile(file) {
       });
     }
 
-    await putDocument(record);
+    await saveFullDocumentRecord(record);
     await refreshDocuments();
     await loadDocument(record);
   } catch (error) {
@@ -3177,7 +3591,7 @@ function getPageZoom(page) {
   );
 }
 
-function createPage(background = "blank", width, height) {
+function createPage(background = "blank", width, height, pageId = createId()) {
   const pageSize = getCurrentViewportSize();
   const pageWidth = normalizePageDimension(width, pageSize.width);
   const pageHeight = normalizePageDimension(height, pageSize.height);
@@ -3189,9 +3603,12 @@ function createPage(background = "blank", width, height) {
   layer.height = pageHeight;
 
   return {
+    id: pageId,
     background,
     width: pageWidth,
     height: pageHeight,
+    isDirty: true,
+    dirtyVersion: 1,
     zoom: 1,
     panX: 0,
     panY: 0,
@@ -3278,6 +3695,7 @@ function pushHistorySnapshot(page = getActivePage()) {
     page.history.undo.shift();
   }
 
+  markPageDirty(page);
   updateHistoryControls();
   scheduleDocumentSave();
 }
@@ -7468,7 +7886,13 @@ function deletePage(index) {
     commitPendingShape();
     commitPendingImage();
     commitSelection();
-    state.pages.splice(index, 1);
+    const deletedPages = state.pages.splice(index, 1);
+
+    deletedPages.forEach((page) => {
+      if (page && page.id) {
+        state.deletedPageIds.add(page.id);
+      }
+    });
 
     if (state.activePageIndex > index) {
       state.activePageIndex -= 1;

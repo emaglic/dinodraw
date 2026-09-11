@@ -27,7 +27,7 @@ Offline/PWA install behavior requires HTTPS or localhost. On insecure LAN HTTP, 
 - The service worker caches core static assets.
 - Cache names include the app version.
 - Old caches should be cleaned up during activation.
-- Current cache name is `dinodraw-v0.8.129`.
+- Current cache name is `dinodraw-v0.8.134`.
 - Current precache list: `./`, `./index.html`, `./refresh.html`, versioned `styles.css`, versioned `app.js`, versioned `manifest.webmanifest`, `./icon.svg`, and the local Material Symbols font.
 - Install opens the versioned cache, adds precache URLs, then calls `skipWaiting()`.
 - Activate deletes old `dinodraw-*` caches and calls `clients.claim()`.
