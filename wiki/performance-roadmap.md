@@ -17,6 +17,7 @@ This page tracks the large-document performance plan so work can continue across
 - Done: large-document debug harness and opt-in performance logging.
 - Done: safe split page autosave is enabled with IndexedDB version `5`, page-record verification, and legacy full-document fallback.
 - Done: PNG/PDF export progress updates and browser-yielding between pages.
+- Done: in-memory page thumbnail cache with dirty/background/document invalidation.
 
 ## Chunk 0: Commit Current Work
 
@@ -128,7 +129,7 @@ Regression checks:
 
 ## Chunk 4: Thumbnail Cache
 
-Status: planned.
+Status: done.
 
 Goal: avoid regenerating page thumbnails on every Pages dialog open.
 
@@ -138,6 +139,14 @@ Possible implementation:
 - Invalidate a page thumbnail when that page becomes dirty, its background changes, or page dimensions change.
 - Keep lazy observer/idle scheduling.
 - Defer persistent thumbnail storage until memory-only caching proves useful.
+
+Implemented notes:
+
+- Page thumbnails are cached in memory by page id plus background, dimensions, and dirty version.
+- Cached thumbnails are reused immediately when reopening the Pages dialog.
+- `markPageDirty()` invalidates the page thumbnail cache entry, covering strokes, shapes, image commits, lasso commits, new pages, and background changes.
+- Document loads clear the thumbnail cache, and deleting a page removes its cached thumbnail.
+- Undo/redo now mark the restored page dirty so split-page autosave and thumbnail invalidation both see the restored pixels.
 
 Regression checks:
 

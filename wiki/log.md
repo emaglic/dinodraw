@@ -500,3 +500,11 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added browser yields between exported pages so large exports can repaint/status-update during long local work.
 - Released temporary flattened canvases after each page is encoded/read.
 - Bumped the app/cache version to `v0.8.139`.
+
+## [2026-09-14] perf | Cached Page Thumbnails
+
+- Added an in-memory page thumbnail cache keyed by page id, background, dimensions, and dirty version.
+- Reused cached thumbnails when reopening the Pages dialog and invalidated each page's cache entry through `markPageDirty()`.
+- Cleared thumbnail cache on document load and removed cache entries for deleted pages.
+- Marked undo/redo restores dirty so split-page autosave and thumbnail invalidation capture restored pixels.
+- Bumped the app/cache version to `v0.8.140`.

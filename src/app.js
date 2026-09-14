@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.139";
+const APP_VERSION = "v0.8.140";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -279,6 +279,7 @@ const state = {
   pageActivationToken: 0,
   pageThumbnailObserver: null,
   pageThumbnailRenderToken: 0,
+  pageThumbnailCache: new Map(),
   tooltipTimer: null,
   tooltipTarget: null,
   tooltipPressX: 0,
@@ -1487,10 +1488,21 @@ function getPageLayerDataUrl(page, layerName) {
     : page.savedDrawing || "";
 }
 
+function invalidatePageThumbnail(page) {
+  if (page && page.id) {
+    state.pageThumbnailCache.delete(page.id);
+  }
+}
+
+function clearPageThumbnailCache() {
+  state.pageThumbnailCache.clear();
+}
+
 function markPageDirty(page = getActivePage()) {
   if (page && !state.isLoadingDocument) {
     page.isDirty = true;
     page.dirtyVersion = Number(page.dirtyVersion || 0) + 1;
+    invalidatePageThumbnail(page);
   }
 }
 
@@ -3329,6 +3341,7 @@ async function loadDocument(record, shouldHideLibrary = true) {
 
   const savedPages = await getSavedPagesForRecord(record);
 
+  clearPageThumbnailCache();
   state.pages = [];
   state.deletedPageIds.clear();
 
@@ -3525,6 +3538,7 @@ async function deleteDocument(id) {
     state.documentFolderId = null;
     state.deletedPageIds.clear();
     applyDocumentToolbarPositions();
+    clearPageThumbnailCache();
     state.pages = [];
     clearTemporaryCanvasState();
     updateDocumentSubtitle();
@@ -5914,6 +5928,7 @@ function undoPageHistory() {
   syncBackgroundInputs();
   renderWorkspace();
   updateHistoryControls();
+  markPageDirty(page);
   scheduleDocumentSave();
 }
 
@@ -5931,6 +5946,7 @@ function redoPageHistory() {
   syncBackgroundInputs();
   renderWorkspace();
   updateHistoryControls();
+  markPageDirty(page);
   scheduleDocumentSave();
 }
 
@@ -8529,6 +8545,50 @@ function drawPageThumbnail(page, thumbnail) {
   thumbnailContext.drawImage(page.layer, 0, 0, thumbnail.width, thumbnail.height);
 }
 
+function getPageThumbnailCacheKey(page) {
+  return [
+    page.id,
+    page.background,
+    getPageWidth(page),
+    getPageHeight(page),
+    Number(page.dirtyVersion || 0),
+  ].join("|");
+}
+
+function drawCachedPageThumbnail(page, thumbnail) {
+  if (!page || !page.id) {
+    return false;
+  }
+
+  const cachedThumbnail = state.pageThumbnailCache.get(page.id);
+
+  if (
+    !cachedThumbnail ||
+    cachedThumbnail.cacheKey !== getPageThumbnailCacheKey(page) ||
+    !cachedThumbnail.canvas
+  ) {
+    return false;
+  }
+
+  const thumbnailContext = thumbnail.getContext("2d");
+
+  thumbnail.width = cachedThumbnail.canvas.width;
+  thumbnail.height = cachedThumbnail.canvas.height;
+  thumbnailContext.drawImage(cachedThumbnail.canvas, 0, 0);
+  return true;
+}
+
+function cachePageThumbnail(page, thumbnail) {
+  if (!page || !page.id || !thumbnail || !isPageHydrated(page)) {
+    return;
+  }
+
+  state.pageThumbnailCache.set(page.id, {
+    cacheKey: getPageThumbnailCacheKey(page),
+    canvas: cloneCanvas(thumbnail),
+  });
+}
+
 function requestDeferredPageThumbnailRender(callback) {
   if (window.requestIdleCallback) {
     window.requestIdleCallback(callback, { timeout: 800 });
@@ -8556,7 +8616,12 @@ async function renderPageThumbnail(page, thumbnail, renderToken) {
     return;
   }
 
+  if (drawCachedPageThumbnail(page, thumbnail)) {
+    return;
+  }
+
   drawPageThumbnail(page, thumbnail);
+  cachePageThumbnail(page, thumbnail);
 }
 
 function schedulePageThumbnailRender(page, thumbnail, renderToken) {
@@ -8612,6 +8677,10 @@ function getPageThumbnailObserver(renderToken) {
 }
 
 function queuePageThumbnailRender(page, thumbnail, index, renderToken) {
+  if (drawCachedPageThumbnail(page, thumbnail)) {
+    return;
+  }
+
   preparePageThumbnail(page, thumbnail);
 
   if (isPageHydrated(page) || index === state.activePageIndex) {
@@ -8730,6 +8799,8 @@ function deletePage(index) {
     const deletedPages = state.pages.splice(index, 1);
 
     deletedPages.forEach((page) => {
+      invalidatePageThumbnail(page);
+
       if (page && page.id) {
         state.deletedPageIds.add(page.id);
       }

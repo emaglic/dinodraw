@@ -38,6 +38,7 @@ New pages should default to the active/previous page background.
 - `renderPage()` draws a black viewport background outside the page, applies the active page viewport transform, draws the active page background at native page size, then draws `underLayer`, then draws `layer`.
 - `renderWorkspace()` draws the committed page plus temporary overlays for selection, pending shape, and lasso path.
 - `drawPageThumbnail()` and export flattening use the same background, `underLayer`, `layer` order.
+- Page thumbnails are cached in memory after rendering and invalidated when the page changes, so reopening the Pages dialog can reuse thumbnails without rehydrating/redrawing unchanged pages.
 - Draw Behind strokes preview into a temporary page-sized stroke layer, then repaint only the active stroke region in final layer order: background, committed `underLayer`, live stroke preview, then normal `layer`. The stroke is replayed once to `underLayer` when it ends. Avoid full-page `renderPage()` calls for every pen segment.
 
 ## Viewport, Panning, And Zoom
