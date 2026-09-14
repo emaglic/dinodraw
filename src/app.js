@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.138";
+const APP_VERSION = "v0.8.139";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -1923,6 +1923,32 @@ async function canvasToPngBytes(sourceCanvas) {
   return new Uint8Array(buffer);
 }
 
+function yieldToBrowser() {
+  return new Promise((resolve) => {
+    if (window.requestAnimationFrame) {
+      window.requestAnimationFrame(() => {
+        window.setTimeout(resolve, 0);
+      });
+      return;
+    }
+
+    window.setTimeout(resolve, 0);
+  });
+}
+
+function releaseTemporaryCanvas(sourceCanvas) {
+  if (!sourceCanvas) {
+    return;
+  }
+
+  sourceCanvas.width = 1;
+  sourceCanvas.height = 1;
+}
+
+function getExportProgressLabel(label, current, total) {
+  return `${label} ${current}/${total}...`;
+}
+
 function getCrcTable() {
   if (getCrcTable.table) {
     return getCrcTable.table;
@@ -3742,10 +3768,16 @@ async function createFlattenedPageCanvas(savedPage) {
   return flattenedCanvas;
 }
 
-async function createPngZipBlob(record) {
+async function createPngZipBlob(record, options = {}) {
   const files = [];
+  const totalPages = record.pages.length;
 
-  for (let index = 0; index < record.pages.length; index += 1) {
+  for (let index = 0; index < totalPages; index += 1) {
+    if (options.onProgress) {
+      options.onProgress(index + 1, totalPages);
+    }
+
+    await yieldToBrowser();
     const pageCanvas = await createFlattenedPageCanvas(record.pages[index]);
     const pageNumber = formatPageNumber(index + 1);
 
@@ -3753,7 +3785,15 @@ async function createPngZipBlob(record) {
       name: `page-${pageNumber}.png`,
       bytes: await canvasToPngBytes(pageCanvas),
     });
+    releaseTemporaryCanvas(pageCanvas);
+    await yieldToBrowser();
   }
+
+  if (options.onZipProgress) {
+    options.onZipProgress(totalPages);
+  }
+
+  await yieldToBrowser();
 
   return {
     blob: createZipBlob(files),
@@ -3799,7 +3839,14 @@ async function exportPngZip(id) {
   }
 
   setSaveStatus("Exporting PNGs...");
-  const file = await createPngZipBlob(record);
+  const file = await createPngZipBlob(record, {
+    onProgress: (current, total) => {
+      setSaveStatus(getExportProgressLabel("Exporting PNGs", current, total));
+    },
+    onZipProgress: () => {
+      setSaveStatus("Building PNG ZIP...");
+    },
+  });
 
   await saveExportFile(file, Promise.resolve(target));
   finishPerformanceTimer(exportPerformanceTimer, {
@@ -3811,10 +3858,16 @@ async function exportPngZip(id) {
   );
 }
 
-async function createPdfExportBlob(record) {
+async function createPdfExportBlob(record, options = {}) {
   const pageImages = [];
+  const totalPages = record.pages.length;
 
-  for (let index = 0; index < record.pages.length; index += 1) {
+  for (let index = 0; index < totalPages; index += 1) {
+    if (options.onProgress) {
+      options.onProgress(index + 1, totalPages);
+    }
+
+    await yieldToBrowser();
     const pageCanvas = await createFlattenedPageCanvas(record.pages[index]);
 
     pageImages.push({
@@ -3823,7 +3876,15 @@ async function createPdfExportBlob(record) {
       height: pageCanvas.height,
       bytes: getCanvasRgbBytes(pageCanvas),
     });
+    releaseTemporaryCanvas(pageCanvas);
+    await yieldToBrowser();
   }
+
+  if (options.onPdfProgress) {
+    options.onPdfProgress(totalPages);
+  }
+
+  await yieldToBrowser();
 
   return {
     blob: createPdfBlob(pageImages),
@@ -3869,7 +3930,14 @@ async function exportPdf(id) {
   }
 
   setSaveStatus("Exporting PDF...");
-  const file = await createPdfExportBlob(record);
+  const file = await createPdfExportBlob(record, {
+    onProgress: (current, total) => {
+      setSaveStatus(getExportProgressLabel("Exporting PDF", current, total));
+    },
+    onPdfProgress: () => {
+      setSaveStatus("Building PDF...");
+    },
+  });
 
   await saveExportFile(file, Promise.resolve(target));
   finishPerformanceTimer(exportPerformanceTimer, {

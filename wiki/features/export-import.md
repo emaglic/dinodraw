@@ -30,6 +30,7 @@ Import should continue accepting:
 - Current ZIP filename is `[filename]-png-pages.zip`.
 - ZIP creation is implemented directly in browser JavaScript with local headers, central directory records, CRC32, and stored/uncompressed file entries.
 - `canvas.toBlob()` is preferred, with a `toDataURL()` fallback.
+- PNG export updates save status with page progress and yields between pages so large exports are less likely to freeze the UI.
 
 ## PDF Export
 
@@ -40,6 +41,7 @@ Import should continue accepting:
 - Current PDF filename is `[filename].pdf`.
 - PDF creation is implemented directly in browser JavaScript as a simple PDF 1.4 document.
 - PDF page image data is written as raw DeviceRGB bytes from the flattened canvas, not as compressed PNG/JPEG data.
+- PDF export updates save status with page progress and yields between pages so large exports are less likely to freeze the UI.
 
 ## Import Requirements
 

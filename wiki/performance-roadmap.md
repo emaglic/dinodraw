@@ -16,6 +16,7 @@ This page tracks the large-document performance plan so work can continue across
 - Done: canvas-preservation fix after lazy hydration. History snapshots must not reset canvas dimensions and wipe committed strokes.
 - Done: large-document debug harness and opt-in performance logging.
 - Done: safe split page autosave is enabled with IndexedDB version `5`, page-record verification, and legacy full-document fallback.
+- Done: PNG/PDF export progress updates and browser-yielding between pages.
 
 ## Chunk 0: Commit Current Work
 
@@ -100,7 +101,7 @@ Regression checks:
 
 ## Chunk 3: Export Responsiveness
 
-Status: planned.
+Status: done.
 
 Goal: keep PNG ZIP and PDF export from freezing the UI on large documents.
 
@@ -110,6 +111,13 @@ Possible implementation:
 - Update save status with progress, such as `Exporting PDF 12/50...`.
 - Keep output format unchanged.
 - Prefer saved raster strings for unhydrated pages instead of forcing all page objects to remain hydrated.
+
+Implemented notes:
+
+- PNG ZIP and PDF export update save status with per-page progress.
+- PNG ZIP and PDF export yield back to the browser between pages.
+- Temporary flattened canvases are released after their page bytes are captured.
+- Final ZIP/PDF assembly still happens locally in browser JavaScript and may have one remaining synchronous assembly step.
 
 Regression checks:
 

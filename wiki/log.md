@@ -493,3 +493,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added split-storage verification before accepting metadata, with legacy full-document fallback if split page writes or verification fail.
 - Kept legacy embedded-page records readable and marked dirty on load so they can be split on the next save.
 - Bumped the app/cache version to `v0.8.138`.
+
+## [2026-09-14] perf | Improved Export Responsiveness
+
+- Updated PNG ZIP and PDF export to show per-page progress in the save status.
+- Added browser yields between exported pages so large exports can repaint/status-update during long local work.
+- Released temporary flattened canvases after each page is encoded/read.
+- Bumped the app/cache version to `v0.8.139`.

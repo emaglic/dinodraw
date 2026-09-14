@@ -1,11 +1,11 @@
-const CACHE_NAME = "dinodraw-v0.8.138";
+const CACHE_NAME = "dinodraw-v0.8.139";
 const PRECACHE_URLS = [
   "./",
   "./index.html",
   "./refresh.html",
-  "./styles.css?v=0.8.138",
-  "./app.js?v=0.8.138",
-  "./manifest.webmanifest?v=0.8.138",
+  "./styles.css?v=0.8.139",
+  "./app.js?v=0.8.139",
+  "./manifest.webmanifest?v=0.8.139",
   "./icon.svg",
   "./vendor/material-symbols/material-symbols-outlined.woff2"
 ];
