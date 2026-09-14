@@ -11,6 +11,7 @@ Agents should read this page first, then only the pages relevant to the task.
 - [Decisions](decisions.md): durable project decisions and tradeoffs.
 - [Testing](testing.md): validation commands, BOOX-sensitive checks, and review checklist.
 - [Known Issues](known-issues.md): open risks, recurring pitfalls, and things to watch.
+- [Performance Roadmap](performance-roadmap.md): chunked large-document performance plan and status.
 - [Log](log.md): chronological wiki maintenance and durable project-memory entries.
 
 ## Feature Pages

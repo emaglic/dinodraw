@@ -476,3 +476,5 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Bumped the app/cache version to `v0.8.135`.
 - Fixed a regression where the lazy-hydration canvas helper reset layer dimensions during history snapshots, clearing each stroke after it was committed.
 - Bumped the app/cache version to `v0.8.136`.
+- Added `wiki/performance-roadmap.md` to preserve the chunked large-document performance plan across sessions.
+- Corrected the Documents wiki page to note that split page storage is currently disabled and dirty-page autosave remains planned follow-up work.
