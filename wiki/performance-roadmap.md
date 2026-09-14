@@ -14,11 +14,12 @@ This page tracks the large-document performance plan so work can continue across
 - Done: lazy page hydration. Documents create lightweight records for all pages on open and decode only the active page immediately.
 - Done: lazy Pages dialog thumbnails. Thumbnail backgrounds appear first; page rasters hydrate/render through visible/idle scheduling.
 - Done: canvas-preservation fix after lazy hydration. History snapshots must not reset canvas dimensions and wipe committed strokes.
+- Done: large-document debug harness and opt-in performance logging.
 - Deferred: split page storage is present in the codebase but disabled with `splitPageStorageEnabled = false`.
 
 ## Chunk 0: Commit Current Work
 
-Status: pending commit.
+Status: done.
 
 Scope:
 
@@ -33,7 +34,7 @@ Regression checks:
 
 ## Chunk 1: Large-Document Harness
 
-Status: planned.
+Status: done.
 
 Goal: make 50+ page performance repeatable instead of relying on hand-created documents.
 
@@ -42,6 +43,15 @@ Possible implementation:
 - Add dev-only console helpers or debug functions, not visible product UI.
 - Generate a document with many pages, backgrounds, and simple marks.
 - Add timing logs for document open, page switch, Pages dialog open, autosave, JSON export, PNG export, and PDF export.
+
+Implemented console helpers:
+
+- On localhost, use `window.dinoDrawDebug` from the browser console.
+- On a non-localhost debug session, open the app with `?dinodrawDebug=1` once to persist the console helper flag.
+- Use `dinoDrawDebug.enablePerformanceLogging()` to log timings.
+- Use `await dinoDrawDebug.createLargeTestDocument({ pageCount: 50 })` to generate and open a test document.
+- Use `dinoDrawDebug.getPerformanceMetrics()` to inspect collected timings.
+- Use `dinoDrawDebug.clearPerformanceMetrics()` to reset the in-memory metric list.
 
 Regression checks:
 

@@ -478,3 +478,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Bumped the app/cache version to `v0.8.136`.
 - Added `wiki/performance-roadmap.md` to preserve the chunked large-document performance plan across sessions.
 - Corrected the Documents wiki page to note that split page storage is currently disabled and dirty-page autosave remains planned follow-up work.
+
+## [2026-09-14] perf | Added Large-Document Debug Harness
+
+- Added opt-in performance logging for document open, page switching, Pages dialog open, autosave, and JSON/PNG/PDF export work.
+- Added `window.dinoDrawDebug` for local/debug sessions with helpers to enable performance logging, inspect metrics, and generate large test documents.
+- Added `dinoDrawDebug.createLargeTestDocument({ pageCount: 50 })` to generate a realistic multi-page local document with separate backgrounds, Draw Behind marks, and normal ink.
+- Bumped the app/cache version to `v0.8.137`.

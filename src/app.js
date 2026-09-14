@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.136";
+const APP_VERSION = "v0.8.137";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -324,6 +324,8 @@ const state = {
   isSavingDocument: false,
   shouldSaveAgain: false,
   deletedPageIds: new Set(),
+  performanceLoggingEnabled: false,
+  performanceMetrics: [],
   toolbarsHidden: false,
   globalSettings: {
     touchDrawingEnabled: true,
@@ -380,6 +382,8 @@ const toolbarDockPreviewDistance = 56;
 const toolbarDockPadding = 8;
 const toolbarCollisionGap = 8;
 const globalSettingsStorageKey = "dinodrawGlobalSettings";
+const performanceLoggingStorageKey = "dinodrawPerformanceLogging";
+const debugConsoleStorageKey = "dinodrawDebug";
 const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
 const databaseVersion = 4;
@@ -459,6 +463,132 @@ function createId() {
     hex.slice(8, 10).join(""),
     hex.slice(10, 16).join(""),
   ].join("-");
+}
+
+function getPerformanceNow() {
+  if (window.performance && window.performance.now) {
+    return window.performance.now();
+  }
+
+  return Date.now();
+}
+
+function getLocationText(part) {
+  try {
+    return String(window.location[part] || "");
+  } catch {
+    return "";
+  }
+}
+
+function hasDebugToken(token) {
+  const search = getLocationText("search");
+  const hash = getLocationText("hash");
+
+  return search.indexOf(token) !== -1 || hash.indexOf(token) !== -1;
+}
+
+function isLocalDebugHost() {
+  const hostname = getLocationText("hostname");
+
+  return (
+    hostname === "" ||
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1"
+  );
+}
+
+function restorePerformanceLoggingPreference() {
+  let savedValue = "";
+
+  try {
+    savedValue = localStorage.getItem(performanceLoggingStorageKey) || "";
+  } catch {
+    savedValue = "";
+  }
+
+  state.performanceLoggingEnabled =
+    savedValue === "true" || hasDebugToken("dinodrawPerf=1");
+}
+
+function setPerformanceLoggingEnabled(isEnabled) {
+  state.performanceLoggingEnabled = Boolean(isEnabled);
+
+  try {
+    localStorage.setItem(
+      performanceLoggingStorageKey,
+      String(state.performanceLoggingEnabled)
+    );
+  } catch {
+    return state.performanceLoggingEnabled;
+  }
+
+  return state.performanceLoggingEnabled;
+}
+
+function getPerformanceMetricDetail(detail = {}) {
+  return {
+    documentId: state.documentId || "",
+    pageCount: state.pages.length,
+    activePageIndex: state.activePageIndex,
+    ...detail,
+  };
+}
+
+function startPerformanceTimer(label, detail = {}) {
+  if (!state.performanceLoggingEnabled) {
+    return null;
+  }
+
+  return {
+    label,
+    detail: getPerformanceMetricDetail(detail),
+    startedAt: getPerformanceNow(),
+  };
+}
+
+function finishPerformanceTimer(timer, detail = {}) {
+  if (!timer) {
+    return null;
+  }
+
+  const duration = getPerformanceNow() - timer.startedAt;
+  const metric = {
+    label: timer.label,
+    duration,
+    durationMs: Math.round(duration * 10) / 10,
+    recordedAt: new Date().toISOString(),
+    detail: {
+      ...timer.detail,
+      ...getPerformanceMetricDetail(detail),
+    },
+  };
+
+  state.performanceMetrics.push(metric);
+
+  if (state.performanceMetrics.length > 200) {
+    state.performanceMetrics.shift();
+  }
+
+  console.info(
+    `[DinoDraw perf] ${metric.label}: ${metric.durationMs}ms`,
+    metric.detail
+  );
+
+  return metric;
+}
+
+function getDebugConsoleStatus() {
+  return {
+    version: APP_VERSION,
+    performanceLoggingEnabled: state.performanceLoggingEnabled,
+    performanceMetricCount: state.performanceMetrics.length,
+    documentId: state.documentId,
+    documentName: state.documentName,
+    pageCount: state.pages.length,
+    activePageIndex: state.activePageIndex,
+  };
 }
 
 function createDocumentUuid() {
@@ -1468,6 +1598,156 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
         drawing: "",
       },
     ],
+  };
+}
+
+function normalizeDebugInteger(value, fallback, minimum, maximum) {
+  const number = Math.floor(Number(value || fallback));
+
+  if (!isFinite(number)) {
+    return fallback;
+  }
+
+  return Math.min(maximum, Math.max(minimum, number));
+}
+
+function createDebugLayerDataUrl(width, height, drawLayer) {
+  const layer = document.createElement("canvas");
+  const layerContext = layer.getContext("2d");
+
+  layer.width = width;
+  layer.height = height;
+  drawLayer(layerContext, width, height);
+
+  return getCanvasDataUrl(layer);
+}
+
+function createDebugUnderDrawing(index, width, height) {
+  if (index % 3 === 1) {
+    return "";
+  }
+
+  return createDebugLayerDataUrl(width, height, (layerContext) => {
+    const y = Math.round(height * (0.28 + (index % 5) * 0.08));
+
+    layerContext.globalAlpha = 0.45;
+    layerContext.strokeStyle = index % 2 === 0 ? "#d6b400" : "#008c8c";
+    layerContext.lineWidth = 30;
+    layerContext.lineCap = "round";
+    layerContext.beginPath();
+    layerContext.moveTo(Math.round(width * 0.12), y);
+    layerContext.lineTo(Math.round(width * 0.88), y + (index % 2 === 0 ? 8 : -8));
+    layerContext.stroke();
+    layerContext.globalAlpha = 1;
+  });
+}
+
+function createDebugNormalDrawing(index, pageNumber, width, height) {
+  return createDebugLayerDataUrl(width, height, (layerContext) => {
+    const margin = Math.max(36, Math.round(Math.min(width, height) * 0.06));
+    const color = colors[(index % (colors.length - 1)) + 1][1];
+
+    layerContext.strokeStyle = "#000000";
+    layerContext.lineWidth = 4;
+    layerContext.lineCap = "round";
+    layerContext.lineJoin = "round";
+    layerContext.beginPath();
+    layerContext.moveTo(margin, margin + (index % 7) * 8);
+    layerContext.bezierCurveTo(
+      Math.round(width * 0.35),
+      Math.round(height * 0.2),
+      Math.round(width * 0.58),
+      Math.round(height * 0.72),
+      width - margin,
+      Math.round(height * 0.45)
+    );
+    layerContext.stroke();
+
+    layerContext.strokeStyle = color;
+    layerContext.lineWidth = 6;
+    layerContext.beginPath();
+    layerContext.moveTo(margin, height - margin);
+    layerContext.lineTo(width - margin, margin);
+    layerContext.stroke();
+
+    layerContext.fillStyle = "#000000";
+    layerContext.font = "bold 42px sans-serif";
+    layerContext.fillText(`Page ${pageNumber}`, margin, margin + 58);
+    layerContext.font = "24px sans-serif";
+    layerContext.fillText("DinoDraw performance test", margin, margin + 96);
+  });
+}
+
+function createDebugSavedPage(index, width, height) {
+  const pageNumber = index + 1;
+  const backgrounds = ["blank", "ruled", "graph"];
+
+  return {
+    pageId: createId(),
+    background: backgrounds[index % backgrounds.length],
+    width,
+    height,
+    underDrawing: createDebugUnderDrawing(index, width, height),
+    drawing: createDebugNormalDrawing(index, pageNumber, width, height),
+  };
+}
+
+async function createLargeTestDocument(options = {}) {
+  const pageSize = getCurrentViewportSize();
+  const pageCount = normalizeDebugInteger(options.pageCount, 50, 1, 200);
+  const width = normalizeDebugInteger(options.width, pageSize.width, 320, 4096);
+  const height = normalizeDebugInteger(options.height, pageSize.height, 320, 4096);
+  const name =
+    typeof options.name === "string" && options.name.trim()
+      ? options.name.trim()
+      : `Performance Test ${pageCount} pages`;
+  const now = new Date().toISOString();
+  const uuid = createDocumentUuid();
+  const generationTimer = startPerformanceTimer("debug create large document", {
+    requestedPageCount: pageCount,
+    width,
+    height,
+  });
+  const pages = [];
+
+  setSaveStatus(`Creating ${pageCount}-page test document...`);
+  await flushDocumentSave();
+
+  for (let index = 0; index < pageCount; index += 1) {
+    pages.push(createDebugSavedPage(index, width, height));
+  }
+
+  const record = {
+    id: uuid,
+    uuid,
+    name,
+    folderId: resolveExistingFolderId(options.folderId || state.currentFolderId),
+    createdAt: now,
+    updatedAt: now,
+    lastOpenedAt: now,
+    appVersion: APP_VERSION,
+    activePageIndex: 0,
+    settings: getNewDocumentSettings(),
+    pageIds: pages.map((page) => page.pageId),
+    pageCount: pages.length,
+    pages,
+  };
+
+  await saveFullDocumentRecord(record);
+  await refreshDocuments();
+  await loadDocument(record);
+  finishPerformanceTimer(generationTimer, {
+    documentId: record.id,
+    pageCount: pages.length,
+  });
+  setSaveStatus(`Created ${pageCount}-page test document`);
+
+  return {
+    id: record.id,
+    name: record.name,
+    pageCount: pages.length,
+    width,
+    height,
   };
 }
 
@@ -2805,6 +3085,11 @@ async function saveCurrentDocument() {
   state.saveTimer = null;
   state.isSavingDocument = true;
   setSaveStatus("Saving...");
+  const saveDirtyPageCount = state.pages.filter((page) => page.isDirty).length;
+  const savePerformanceTimer = startPerformanceTimer("autosave", {
+    splitPageStorageEnabled,
+    dirtyPageCount: saveDirtyPageCount,
+  });
 
   state.savePromise = (async () => {
     try {
@@ -2873,6 +3158,10 @@ async function saveCurrentDocument() {
         console.error(fallbackError);
       }
     } finally {
+      finishPerformanceTimer(savePerformanceTimer, {
+        splitPageStorageEnabled,
+        dirtyPageCount: saveDirtyPageCount,
+      });
       state.isSavingDocument = false;
       state.savePromise = null;
 
@@ -2924,6 +3213,11 @@ async function loadDocument(record, shouldHideLibrary = true) {
     return;
   }
 
+  const loadPerformanceTimer = startPerformanceTimer("document open", {
+    documentId: record.id || "",
+    sourcePageCount: getDocumentPageCount(record),
+  });
+
   await flushDocumentSave();
   state.isLoadingDocument = true;
   state.pageActivationToken += 1;
@@ -2967,6 +3261,11 @@ async function loadDocument(record, shouldHideLibrary = true) {
   renderWorkspace();
   setSaveStatus(`Saved ${formatDateLabel(state.documentUpdatedAt)}`);
   await refreshDocuments();
+  finishPerformanceTimer(loadPerformanceTimer, {
+    documentId: state.documentId || "",
+    pageCount: state.pages.length,
+    hydratedPageCount: state.pages.filter(isPageHydrated).length,
+  });
 
   if (shouldHideLibrary) {
     hideDocumentScreen();
@@ -3304,15 +3603,26 @@ async function exportDocument(id) {
     return;
   }
 
+  const exportPerformanceTimer = startPerformanceTimer("JSON export", {
+    documentId: id,
+  });
   const record = await getRecordForExport(id);
 
   if (!record) {
+    finishPerformanceTimer(exportPerformanceTimer, {
+      failed: true,
+      pageCount: 0,
+    });
     return;
   }
 
   const file = createDinoDrawBlob(record);
 
   await saveExportFile(file, Promise.resolve(target));
+  finishPerformanceTimer(exportPerformanceTimer, {
+    pageCount: record.pages ? record.pages.length : 0,
+    bytes: file.blob.size,
+  });
   setSaveStatus("Exported document");
 }
 
@@ -3406,9 +3716,16 @@ async function exportPngZip(id) {
     return;
   }
 
+  const exportPerformanceTimer = startPerformanceTimer("PNG export", {
+    documentId: id || state.documentId,
+  });
   const record = await getRecordForExport(id || state.documentId);
 
   if (!record || !record.pages || record.pages.length === 0) {
+    finishPerformanceTimer(exportPerformanceTimer, {
+      failed: true,
+      exportPageCount: 0,
+    });
     setSaveStatus("No document");
     return;
   }
@@ -3417,6 +3734,10 @@ async function exportPngZip(id) {
   const file = await createPngZipBlob(record);
 
   await saveExportFile(file, Promise.resolve(target));
+  finishPerformanceTimer(exportPerformanceTimer, {
+    exportPageCount: file.pageCount,
+    bytes: file.blob.size,
+  });
   setSaveStatus(
     `Exported ${file.pageCount} PNG${file.pageCount === 1 ? "" : "s"}`
   );
@@ -3465,9 +3786,16 @@ async function exportPdf(id) {
     return;
   }
 
+  const exportPerformanceTimer = startPerformanceTimer("PDF export", {
+    documentId: id || state.documentId,
+  });
   const record = await getRecordForExport(id || state.documentId);
 
   if (!record || !record.pages || record.pages.length === 0) {
+    finishPerformanceTimer(exportPerformanceTimer, {
+      failed: true,
+      exportPageCount: 0,
+    });
     setSaveStatus("No document");
     return;
   }
@@ -3476,6 +3804,10 @@ async function exportPdf(id) {
   const file = await createPdfExportBlob(record);
 
   await saveExportFile(file, Promise.resolve(target));
+  finishPerformanceTimer(exportPerformanceTimer, {
+    exportPageCount: file.pageCount,
+    bytes: file.blob.size,
+  });
   setSaveStatus(
     `Exported ${file.pageCount} PDF page${file.pageCount === 1 ? "" : "s"}`
   );
@@ -3979,6 +4311,54 @@ function updateGlobalSettings(settings = {}) {
   saveGlobalSettings();
   syncGlobalSettingsControls();
   updateToolbarVisibility();
+}
+
+function shouldInstallDebugConsole() {
+  let savedValue = "";
+
+  try {
+    savedValue = localStorage.getItem(debugConsoleStorageKey) || "";
+  } catch {
+    savedValue = "";
+  }
+
+  return (
+    isLocalDebugHost() ||
+    savedValue === "true" ||
+    hasDebugToken("dinodrawDebug=1")
+  );
+}
+
+function installDebugConsole() {
+  if (!shouldInstallDebugConsole()) {
+    return;
+  }
+
+  if (hasDebugToken("dinodrawDebug=1")) {
+    try {
+      localStorage.setItem(debugConsoleStorageKey, "true");
+    } catch {
+      // Ignore persistence failures; the console API still works this session.
+    }
+  }
+
+  window.dinoDrawDebug = {
+    status: getDebugConsoleStatus,
+    enablePerformanceLogging: () => {
+      setPerformanceLoggingEnabled(true);
+      return getDebugConsoleStatus();
+    },
+    disablePerformanceLogging: () => {
+      setPerformanceLoggingEnabled(false);
+      return getDebugConsoleStatus();
+    },
+    getPerformanceMetrics: () => state.performanceMetrics.slice(),
+    clearPerformanceMetrics: () => {
+      state.performanceMetrics = [];
+      return getDebugConsoleStatus();
+    },
+    createLargeTestDocument,
+  };
 }
 
 function updateDocumentToolbarVisibility(key, isEnabled) {
@@ -7873,9 +8253,15 @@ async function setActivePage(index) {
   commitPendingImage();
   commitSelection();
   const activationToken = state.pageActivationToken + 1;
+  const previousPageIndex = state.activePageIndex;
+  const nextPageIndex = Math.max(0, Math.min(index, state.pages.length - 1));
+  const pageSwitchPerformanceTimer = startPerformanceTimer("page switch", {
+    fromPageIndex: previousPageIndex,
+    toPageIndex: nextPageIndex,
+  });
 
   state.pageActivationToken = activationToken;
-  state.activePageIndex = Math.max(0, Math.min(index, state.pages.length - 1));
+  state.activePageIndex = nextPageIndex;
   syncBackgroundInputs();
   updatePageControls();
   renderWorkspace();
@@ -7886,6 +8272,10 @@ async function setActivePage(index) {
     await hydratePage(page);
 
     if (activationToken !== state.pageActivationToken) {
+      finishPerformanceTimer(pageSwitchPerformanceTimer, {
+        stale: true,
+        toPageIndex: nextPageIndex,
+      });
       return;
     }
 
@@ -7897,7 +8287,15 @@ async function setActivePage(index) {
     updatePageControls();
     renderWorkspace();
     scheduleDocumentSave();
+    finishPerformanceTimer(pageSwitchPerformanceTimer, {
+      hydrated: isPageHydrated(page),
+      toPageIndex: nextPageIndex,
+    });
   } catch (error) {
+    finishPerformanceTimer(pageSwitchPerformanceTimer, {
+      failed: true,
+      toPageIndex: nextPageIndex,
+    });
     setSaveStatus("Page load failed");
     console.error(error);
   }
@@ -8282,6 +8680,8 @@ function openPageDialog() {
     return;
   }
 
+  const pagesPerformanceTimer = startPerformanceTimer("pages dialog open");
+
   commitPendingShape();
   commitPendingImage();
   commitSelection();
@@ -8289,10 +8689,18 @@ function openPageDialog() {
 
   if (pageDialog.showModal) {
     pageDialog.showModal();
+    finishPerformanceTimer(pagesPerformanceTimer, {
+      renderedRows: state.pages.length,
+      hydratedPageCount: state.pages.filter(isPageHydrated).length,
+    });
     return;
   }
 
   pageDialog.setAttribute("open", "");
+  finishPerformanceTimer(pagesPerformanceTimer, {
+    renderedRows: state.pages.length,
+    hydratedPageCount: state.pages.filter(isPageHydrated).length,
+  });
 }
 
 function syncBackgroundInputs() {
@@ -10782,6 +11190,8 @@ async function initializeApp() {
   ensureVersionBadge();
   restorePresets();
   restoreGlobalSettings();
+  restorePerformanceLoggingPreference();
+  installDebugConsole();
   buildPresetColorGrid();
   buildShapeColorGrid(shapeStrokeColorGrid, "strokeColor");
   buildShapeColorGrid(shapeFillColorGrid, "fillColor");
