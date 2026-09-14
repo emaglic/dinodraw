@@ -471,3 +471,8 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Bumped the app/cache version to `v0.8.133`.
 - Disabled split-page storage by default and restored the legacy full-document save path while keeping database version `4` compatible with tablets that already attempted the upgrade.
 - Bumped the app/cache version to `v0.8.134`.
+- Added lazy page hydration so opening large documents decodes only the active page immediately while clean unopened pages retain their saved raster strings.
+- Changed the Pages dialog to render thumbnails through visible/idle scheduling instead of painting every page thumbnail synchronously.
+- Bumped the app/cache version to `v0.8.135`.
+- Fixed a regression where the lazy-hydration canvas helper reset layer dimensions during history snapshots, clearing each stroke after it was committed.
+- Bumped the app/cache version to `v0.8.136`.

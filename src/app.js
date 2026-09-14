@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.134";
+const APP_VERSION = "v0.8.136";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -276,6 +276,9 @@ const state = {
   pendingPanGesture: null,
   panGesture: null,
   renderFrame: null,
+  pageActivationToken: 0,
+  pageThumbnailObserver: null,
+  pageThumbnailRenderToken: 0,
   tooltipTimer: null,
   tooltipTarget: null,
   tooltipPressX: 0,
@@ -1256,11 +1259,36 @@ function formatPageNumber(number) {
 }
 
 function getCanvasDataUrl(layer) {
-  if (!layer.width || !layer.height) {
+  if (!layer || !layer.width || !layer.height) {
     return "";
   }
 
   return layer.toDataURL("image/png");
+}
+
+function isPageHydrated(page) {
+  return Boolean(
+    page &&
+      page.isHydrated &&
+      page.underLayer &&
+      page.layer &&
+      page.underContext &&
+      page.context
+  );
+}
+
+function getPageLayerDataUrl(page, layerName) {
+  if (!page) {
+    return "";
+  }
+
+  if (isPageHydrated(page)) {
+    return getCanvasDataUrl(layerName === "under" ? page.underLayer : page.layer);
+  }
+
+  return layerName === "under"
+    ? page.savedUnderDrawing || ""
+    : page.savedDrawing || "";
 }
 
 function markPageDirty(page = getActivePage()) {
@@ -1297,8 +1325,8 @@ function serializePageRecord(page, index, now = new Date().toISOString()) {
     background: page.background,
     width: getPageWidth(page),
     height: getPageHeight(page),
-    underDrawing: getCanvasDataUrl(page.underLayer),
-    drawing: getCanvasDataUrl(page.layer),
+    underDrawing: getPageLayerDataUrl(page, "under"),
+    drawing: getPageLayerDataUrl(page, "normal"),
     updatedAt: now,
   };
 }
@@ -1452,8 +1480,8 @@ function serializeCurrentDocument() {
       background: page.background,
       width: getPageWidth(page),
       height: getPageHeight(page),
-      underDrawing: getCanvasDataUrl(page.underLayer),
-      drawing: getCanvasDataUrl(page.layer),
+      underDrawing: getPageLayerDataUrl(page, "under"),
+      drawing: getPageLayerDataUrl(page, "normal"),
     })),
   };
 }
@@ -1906,58 +1934,157 @@ async function saveExportFile(file, targetPromise) {
   return true;
 }
 
-async function createPageFromSavedPage(savedPage = {}, options = {}) {
-  const underImage = await loadImage(savedPage.underDrawing);
-  const image = await loadImage(savedPage.drawing);
-  const fallbackWidth =
-    (image && image.width) ||
-    (underImage && underImage.width) ||
-    canvas.width ||
-    window.innerWidth;
-  const fallbackHeight =
-    (image && image.height) ||
-    (underImage && underImage.height) ||
-    canvas.height ||
-    window.innerHeight;
-  const page = createPage(
-    savedPage.background || "blank",
-    savedPage.width || fallbackWidth,
-    savedPage.height || fallbackHeight
-  );
+function createPageFromSavedPage(savedPage = {}, options = {}) {
+  const fallbackWidth = canvas.width || window.innerWidth;
+  const fallbackHeight = canvas.height || window.innerHeight;
+  const pageWidth = normalizePageDimension(savedPage.width, fallbackWidth);
+  const pageHeight = normalizePageDimension(savedPage.height, fallbackHeight);
 
-  page.id = options.pageId || savedPage.pageId || createId();
-  page.isDirty = Boolean(options.isDirty);
-  page.dirtyVersion = page.isDirty ? 1 : 0;
+  return {
+    id: options.pageId || savedPage.pageId || createId(),
+    background: savedPage.background || "blank",
+    width: pageWidth,
+    height: pageHeight,
+    isDirty: Boolean(options.isDirty),
+    dirtyVersion: options.isDirty ? 1 : 0,
+    zoom: 1,
+    panX: 0,
+    panY: 0,
+    underLayer: null,
+    underContext: null,
+    layer: null,
+    context: null,
+    hasSavedWidth: Boolean(savedPage.width),
+    hasSavedHeight: Boolean(savedPage.height),
+    savedUnderDrawing: savedPage.underDrawing || "",
+    savedDrawing: savedPage.drawing || "",
+    isHydrated: false,
+    hydratePromise: null,
+    history: {
+      undo: [],
+      redo: [],
+    },
+  };
+}
 
-  if (underImage) {
-    page.underContext.drawImage(
-      underImage,
-      0,
-      0,
-      savedPage.width || underImage.width,
-      savedPage.height || underImage.height,
-      0,
-      0,
-      getPageWidth(page),
-      getPageHeight(page)
-    );
+function ensurePageLayerCanvases(page) {
+  if (!page) {
+    return;
   }
 
-  if (image) {
-    page.context.drawImage(
-      image,
-      0,
-      0,
-      savedPage.width || image.width,
-      savedPage.height || image.height,
-      0,
-      0,
-      getPageWidth(page),
-      getPageHeight(page)
-    );
+  const pageWidth = getPageWidth(page);
+  const pageHeight = getPageHeight(page);
+
+  if (!page.underLayer) {
+    page.underLayer = document.createElement("canvas");
+    page.underLayer.width = pageWidth;
+    page.underLayer.height = pageHeight;
   }
 
-  return page;
+  if (!page.layer) {
+    page.layer = document.createElement("canvas");
+    page.layer.width = pageWidth;
+    page.layer.height = pageHeight;
+  }
+
+  if (page.underLayer.width !== pageWidth || page.underLayer.height !== pageHeight) {
+    const previousUnderLayer = cloneCanvas(page.underLayer);
+
+    page.underLayer.width = pageWidth;
+    page.underLayer.height = pageHeight;
+    page.underContext = page.underLayer.getContext("2d");
+    page.underContext.drawImage(previousUnderLayer, 0, 0);
+  } else {
+    page.underContext = page.underLayer.getContext("2d");
+  }
+
+  if (page.layer.width !== pageWidth || page.layer.height !== pageHeight) {
+    const previousLayer = cloneCanvas(page.layer);
+
+    page.layer.width = pageWidth;
+    page.layer.height = pageHeight;
+    page.context = page.layer.getContext("2d");
+    page.context.drawImage(previousLayer, 0, 0);
+  } else {
+    page.context = page.layer.getContext("2d");
+  }
+}
+
+async function hydratePage(page) {
+  if (!page || isPageHydrated(page)) {
+    return page;
+  }
+
+  if (page.hydratePromise) {
+    return page.hydratePromise;
+  }
+
+  page.hydratePromise = (async () => {
+    const underDrawing = page.savedUnderDrawing || "";
+    const drawing = page.savedDrawing || "";
+    const underImage = await loadImage(underDrawing);
+    const image = await loadImage(drawing);
+    const imageWidth =
+      (image && image.width) ||
+      (underImage && underImage.width) ||
+      canvas.width ||
+      window.innerWidth;
+    const imageHeight =
+      (image && image.height) ||
+      (underImage && underImage.height) ||
+      canvas.height ||
+      window.innerHeight;
+    const width = normalizePageDimension(
+      page.hasSavedWidth ? page.width : imageWidth,
+      imageWidth
+    );
+    const height = normalizePageDimension(
+      page.hasSavedHeight ? page.height : imageHeight,
+      imageHeight
+    );
+
+    page.width = width;
+    page.height = height;
+    ensurePageLayerCanvases(page);
+    page.underContext.clearRect(0, 0, page.underLayer.width, page.underLayer.height);
+    page.context.clearRect(0, 0, page.layer.width, page.layer.height);
+
+    if (underImage) {
+      page.underContext.drawImage(
+        underImage,
+        0,
+        0,
+        page.hasSavedWidth ? width : underImage.width,
+        page.hasSavedHeight ? height : underImage.height,
+        0,
+        0,
+        getPageWidth(page),
+        getPageHeight(page)
+      );
+    }
+
+    if (image) {
+      page.context.drawImage(
+        image,
+        0,
+        0,
+        page.hasSavedWidth ? width : image.width,
+        page.hasSavedHeight ? height : image.height,
+        0,
+        0,
+        getPageWidth(page),
+        getPageHeight(page)
+      );
+    }
+
+    page.savedUnderDrawing = "";
+    page.savedDrawing = "";
+    page.isHydrated = true;
+    page.hydratePromise = null;
+    return page;
+  })();
+
+  return page.hydratePromise;
 }
 
 function setSaveStatus(message) {
@@ -2784,7 +2911,12 @@ async function flushDocumentSave() {
 function resetPageHistory(page) {
   page.history.undo = [];
   page.history.redo = [];
-  pushHistorySnapshot(page);
+
+  if (isPageHydrated(page)) {
+    page.history.undo.push(createPageSnapshot(page));
+  }
+
+  updateHistoryControls();
 }
 
 async function loadDocument(record, shouldHideLibrary = true) {
@@ -2794,6 +2926,7 @@ async function loadDocument(record, shouldHideLibrary = true) {
 
   await flushDocumentSave();
   state.isLoadingDocument = true;
+  state.pageActivationToken += 1;
   prepareDocumentRecord(record);
   clearTemporaryCanvasState();
   state.documentId = record.id;
@@ -2812,7 +2945,7 @@ async function loadDocument(record, shouldHideLibrary = true) {
   state.deletedPageIds.clear();
 
   for (const savedPage of savedPages.pages) {
-    const page = await createPageFromSavedPage(savedPage, {
+    const page = createPageFromSavedPage(savedPage, {
       isDirty: savedPages.isLegacyEmbeddedRecord,
       pageId: savedPage.pageId,
     });
@@ -2824,7 +2957,8 @@ async function loadDocument(record, shouldHideLibrary = true) {
     0,
     Math.min(Number(record.activePageIndex || 0), state.pages.length - 1)
   );
-  state.pages.forEach(resetPageHistory);
+  await hydratePage(getActivePage());
+  resetPageHistory(getActivePage());
   state.isLoadingDocument = false;
 
   updateDocumentSubtitle();
@@ -3558,7 +3692,10 @@ function getPageWidth(page) {
     return getCurrentViewportSize().width;
   }
 
-  return normalizePageDimension(page.width, page.layer.width);
+  return normalizePageDimension(
+    page.width,
+    page.layer ? page.layer.width : getCurrentViewportSize().width
+  );
 }
 
 function getPageHeight(page) {
@@ -3566,7 +3703,10 @@ function getPageHeight(page) {
     return getCurrentViewportSize().height;
   }
 
-  return normalizePageDimension(page.height, page.layer.height);
+  return normalizePageDimension(
+    page.height,
+    page.layer ? page.layer.height : getCurrentViewportSize().height
+  );
 }
 
 function getMinPageZoom(page) {
@@ -3616,6 +3756,12 @@ function createPage(background = "blank", width, height, pageId = createId()) {
     underContext: underLayer.getContext("2d"),
     layer,
     context: layer.getContext("2d"),
+    hasSavedWidth: true,
+    hasSavedHeight: true,
+    savedUnderDrawing: "",
+    savedDrawing: "",
+    isHydrated: true,
+    hydratePromise: null,
     history: {
       undo: [],
       redo: [],
@@ -3629,9 +3775,12 @@ function getActivePage() {
 
 function cloneCanvas(source) {
   const clone = document.createElement("canvas");
-  clone.width = source.width;
-  clone.height = source.height;
-  clone.getContext("2d").drawImage(source, 0, 0);
+  clone.width = source ? source.width : 1;
+  clone.height = source ? source.height : 1;
+
+  if (source) {
+    clone.getContext("2d").drawImage(source, 0, 0);
+  }
 
   return clone;
 }
@@ -3641,6 +3790,8 @@ function cloneNullableCanvas(source) {
 }
 
 function createPageSnapshot(page) {
+  ensurePageLayerCanvases(page);
+
   return {
     background: page.background,
     width: getPageWidth(page),
@@ -3651,6 +3802,7 @@ function createPageSnapshot(page) {
 }
 
 function restorePageSnapshot(page, snapshot) {
+  ensurePageLayerCanvases(page);
   page.background = snapshot.background;
   const width = Math.max(
     getPageWidth(page),
@@ -3681,10 +3833,14 @@ function restorePageSnapshot(page, snapshot) {
   page.context = page.layer.getContext("2d");
   page.context.clearRect(0, 0, page.layer.width, page.layer.height);
   page.context.drawImage(snapshot.layer, 0, 0);
+  page.savedUnderDrawing = "";
+  page.savedDrawing = "";
+  page.isHydrated = true;
+  page.hydratePromise = null;
 }
 
 function pushHistorySnapshot(page = getActivePage()) {
-  if (!page) {
+  if (!page || !isPageHydrated(page)) {
     return;
   }
 
@@ -4141,8 +4297,14 @@ function renderPage() {
   drawViewportBackground();
   setVisibleContextPageTransform(page);
   drawBackground(page, context, getPageWidth(page), getPageHeight(page));
-  context.drawImage(page.underLayer, 0, 0);
-  context.drawImage(page.layer, 0, 0);
+
+  if (page.underLayer) {
+    context.drawImage(page.underLayer, 0, 0);
+  }
+
+  if (page.layer) {
+    context.drawImage(page.layer, 0, 0);
+  }
 }
 
 function drawShapePath(targetContext, shape) {
@@ -7442,6 +7604,14 @@ function startCanvasAction(event) {
     return;
   }
 
+  if (!isPageHydrated(getActivePage())) {
+    if (event.cancelable) {
+      event.preventDefault();
+    }
+
+    return;
+  }
+
   if (
     state.pendingImage &&
     !state.isDrawing &&
@@ -7698,15 +7868,39 @@ function updatePageControls() {
   }
 }
 
-function setActivePage(index) {
+async function setActivePage(index) {
   commitPendingShape();
   commitPendingImage();
   commitSelection();
+  const activationToken = state.pageActivationToken + 1;
+
+  state.pageActivationToken = activationToken;
   state.activePageIndex = Math.max(0, Math.min(index, state.pages.length - 1));
   syncBackgroundInputs();
   updatePageControls();
   renderWorkspace();
-  scheduleDocumentSave();
+
+  try {
+    const page = getActivePage();
+
+    await hydratePage(page);
+
+    if (activationToken !== state.pageActivationToken) {
+      return;
+    }
+
+    if (page && page.history.undo.length === 0) {
+      resetPageHistory(page);
+    }
+
+    syncBackgroundInputs();
+    updatePageControls();
+    renderWorkspace();
+    scheduleDocumentSave();
+  } catch (error) {
+    setSaveStatus("Page load failed");
+    console.error(error);
+  }
 }
 
 function addPage() {
@@ -7762,6 +7956,8 @@ function addPageAtPlacement(placement) {
 
 function closePageDialog() {
   closePageMenus();
+  disconnectPageThumbnailObserver();
+  state.pageThumbnailRenderToken += 1;
 
   if (pageDialog.open && pageDialog.close) {
     pageDialog.close();
@@ -7771,7 +7967,7 @@ function closePageDialog() {
   pageDialog.removeAttribute("open");
 }
 
-function drawPageThumbnail(page, thumbnail) {
+function preparePageThumbnail(page, thumbnail) {
   const sourceWidth = getPageWidth(page);
   const sourceHeight = getPageHeight(page);
   const previewWidth = 180;
@@ -7784,8 +7980,119 @@ function drawPageThumbnail(page, thumbnail) {
   thumbnail.width = previewWidth;
   thumbnail.height = previewHeight;
   drawBackground(page, thumbnailContext, previewWidth, previewHeight);
-  thumbnailContext.drawImage(page.underLayer, 0, 0, previewWidth, previewHeight);
-  thumbnailContext.drawImage(page.layer, 0, 0, previewWidth, previewHeight);
+
+  return thumbnailContext;
+}
+
+function drawPageThumbnail(page, thumbnail) {
+  const thumbnailContext = preparePageThumbnail(page, thumbnail);
+
+  if (!isPageHydrated(page)) {
+    return;
+  }
+
+  thumbnailContext.drawImage(page.underLayer, 0, 0, thumbnail.width, thumbnail.height);
+  thumbnailContext.drawImage(page.layer, 0, 0, thumbnail.width, thumbnail.height);
+}
+
+function requestDeferredPageThumbnailRender(callback) {
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(callback, { timeout: 800 });
+    return;
+  }
+
+  window.setTimeout(callback, 0);
+}
+
+async function renderPageThumbnail(page, thumbnail, renderToken) {
+  if (
+    renderToken !== state.pageThumbnailRenderToken ||
+    !thumbnail ||
+    !thumbnail.isConnected
+  ) {
+    return;
+  }
+
+  await hydratePage(page);
+
+  if (
+    renderToken !== state.pageThumbnailRenderToken ||
+    !thumbnail.isConnected
+  ) {
+    return;
+  }
+
+  drawPageThumbnail(page, thumbnail);
+}
+
+function schedulePageThumbnailRender(page, thumbnail, renderToken) {
+  requestDeferredPageThumbnailRender(() => {
+    renderPageThumbnail(page, thumbnail, renderToken).catch((error) => {
+      setSaveStatus("Thumbnail failed");
+      console.error(error);
+    });
+  });
+}
+
+function disconnectPageThumbnailObserver() {
+  if (state.pageThumbnailObserver) {
+    state.pageThumbnailObserver.disconnect();
+    state.pageThumbnailObserver = null;
+  }
+}
+
+function getPageThumbnailObserver(renderToken) {
+  if (!window.IntersectionObserver) {
+    return null;
+  }
+
+  if (state.pageThumbnailObserver) {
+    return state.pageThumbnailObserver;
+  }
+
+  state.pageThumbnailObserver = new IntersectionObserver(
+    (entries, observer) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) {
+          return;
+        }
+
+        const thumbnail = entry.target;
+        const index = Number(thumbnail.dataset.pageIndex);
+        const page = state.pages[index];
+
+        observer.unobserve(thumbnail);
+
+        if (page) {
+          schedulePageThumbnailRender(page, thumbnail, renderToken);
+        }
+      });
+    },
+    {
+      root: pageList,
+      rootMargin: "240px",
+    }
+  );
+
+  return state.pageThumbnailObserver;
+}
+
+function queuePageThumbnailRender(page, thumbnail, index, renderToken) {
+  preparePageThumbnail(page, thumbnail);
+
+  if (isPageHydrated(page) || index === state.activePageIndex) {
+    schedulePageThumbnailRender(page, thumbnail, renderToken);
+    return;
+  }
+
+  const observer = getPageThumbnailObserver(renderToken);
+
+  if (observer) {
+    observer.observe(thumbnail);
+    return;
+  }
+
+  schedulePageThumbnailRender(page, thumbnail, renderToken);
 }
 
 function positionPageActionMenu(anchor) {
@@ -7910,6 +8217,8 @@ function deletePage(index) {
 
 function renderPageList() {
   closePageMenus();
+  disconnectPageThumbnailObserver();
+  state.pageThumbnailRenderToken += 1;
   pageList.textContent = "";
 
   if (state.pages.length === 0) {
@@ -7920,6 +8229,8 @@ function renderPageList() {
     pageList.appendChild(empty);
     return;
   }
+
+  const renderToken = state.pageThumbnailRenderToken;
 
   state.pages.forEach((page, index) => {
     const row = document.createElement("article");
@@ -7940,7 +8251,7 @@ function renderPageList() {
     pageNumber.textContent = `Page ${index + 1}`;
     thumbnail.className = "page-thumbnail";
     thumbnail.setAttribute("aria-hidden", "true");
-    drawPageThumbnail(page, thumbnail);
+    thumbnail.dataset.pageIndex = String(index);
     menuWrap.className = "page-menu-wrap";
     menuButton.className = "page-menu-button";
     menuButton.type = "button";
@@ -7962,6 +8273,7 @@ function renderPageList() {
     shell.append(jumpButton, menuWrap);
     row.appendChild(shell);
     pageList.appendChild(row);
+    queuePageThumbnailRender(page, thumbnail, index, renderToken);
   });
 }
 

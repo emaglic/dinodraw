@@ -40,6 +40,7 @@ Dino Draw is a static web app implemented with plain HTML, CSS, and vanilla Java
 - `documents` stores document metadata and page order. `documentPages` stores per-page raster data so autosave can rewrite only changed pages.
 - Documents are listed by last opened date, most recent first within the current folder.
 - Missing document `folderId` values resolve to the top-level `My Documents` library folder for compatibility with existing saved documents.
+- Opening a document creates lightweight page records for all pages, then decodes canvas pixels only for the active page. Clean unopened pages keep their saved raster strings until they are opened, exported, saved as dirty pages, or needed for a thumbnail.
 
 ## Rendering Model
 
@@ -55,6 +56,8 @@ Render and export order:
 3. normal `layer`
 
 Eraser and lasso operations should affect both drawing layers together. Backgrounds should not be baked into normal drawing data.
+
+During lazy page hydration, the visible renderer can temporarily draw only the page background. Editing input is ignored until the active page's canvases are ready.
 
 ## Runtime State
 

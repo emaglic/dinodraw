@@ -9,6 +9,8 @@ The drawing engine lives mostly in `src/app.js`, with canvas markup in `src/inde
 - Input uses `pointermove`; `pointerrawupdate` can deliver too many events for e-ink browser rendering after BOOX/browser updates.
 - Drawing latency on BOOX is more important than decorative rendering.
 - The main visible canvas is a composited display surface. Per-page drawing data lives on offscreen page canvases.
+- Restored documents hydrate page canvases lazily. Only the active page is decoded on open; other pages keep their saved raster strings until page activation, export/save serialization, or visible thumbnail rendering needs them.
+- The Pages dialog prepares thumbnail backgrounds immediately, then hydrates/renders thumbnails through IntersectionObserver and idle callbacks so large documents do not block the UI while opening the page manager.
 - Live pen feedback is drawn directly onto the already-rendered main canvas. A separate transparent canvas remains hidden because some e-ink browser/firmware combinations can composite transparent canvases as opaque blank layers. Brush strokes keep their accepted page-space points while moving, then replay one permanent stroke to the target page layer on pointer up.
 
 ## Page Model
@@ -172,6 +174,7 @@ Current code ignores non-primary pointers for drawing, shape, and lasso starts. 
 - Pointer capture is used during active drawing/shape/lasso actions.
 - Stroke handling caches the canvas bounds for the duration of a stroke so coalesced events do not repeatedly read layout.
 - Stroke handling caches the page viewport transform for the duration of a stroke so fixed-page zoom/pan math is not recalculated for every pen sample.
+- Drawing input is ignored while a newly selected page is still hydrating; once its canvases are ready, history is seeded and the page is rendered.
 - Stroke and lasso movement consume only the latest coalesced pointer event. Replaying the full coalesced backlog can make BOOX/e-ink latency increase the longer a continuous gesture runs.
 - Live stroke and lasso movement are lightly time-throttled to favor low visible latency over preserving every dense hardware sample on BOOX/e-ink browsers.
 - Shape, image, and lasso-selection transforms are throttled more aggressively than ink, then catch up to the final pointer position on pointer up.
