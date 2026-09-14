@@ -485,3 +485,11 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Added `window.dinoDrawDebug` for local/debug sessions with helpers to enable performance logging, inspect metrics, and generate large test documents.
 - Added `dinoDrawDebug.createLargeTestDocument({ pageCount: 50 })` to generate a realistic multi-page local document with separate backgrounds, Draw Behind marks, and normal ink.
 - Bumped the app/cache version to `v0.8.137`.
+
+## [2026-09-14] perf | Re-enabled Split Page Autosave
+
+- Bumped IndexedDB to version `5` and ensured the `documentPages` store/index exists during upgrade.
+- Re-enabled split page storage so autosave writes document metadata and dirty page records instead of the full embedded-page document.
+- Added split-storage verification before accepting metadata, with legacy full-document fallback if split page writes or verification fail.
+- Kept legacy embedded-page records readable and marked dirty on load so they can be split on the next save.
+- Bumped the app/cache version to `v0.8.138`.

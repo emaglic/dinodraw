@@ -35,9 +35,9 @@ Dino Draw is a static web app implemented with plain HTML, CSS, and vanilla Java
 
 - Historical IndexedDB database name: `booxDrawingDocuments`.
 - Do not rename the database unless a migration is implemented.
-- Current database version: `4`.
+- Current database version: `5`.
 - Current object stores: `documents`, `documentPages`, and `folders`.
-- `documents` stores document metadata and page order. `documentPages` stores per-page raster data so autosave can rewrite only changed pages.
+- `documents` stores document metadata and page order. `documentPages` stores per-page raster data so autosave can rewrite only changed pages. Legacy embedded-page document records remain readable as a fallback.
 - Documents are listed by last opened date, most recent first within the current folder.
 - Missing document `folderId` values resolve to the top-level `My Documents` library folder for compatibility with existing saved documents.
 - Opening a document creates lightweight page records for all pages, then decodes canvas pixels only for the active page. Clean unopened pages keep their saved raster strings until they are opened, exported, saved as dirty pages, or needed for a thumbnail.

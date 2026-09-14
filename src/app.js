@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.137";
+const APP_VERSION = "v0.8.138";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -386,12 +386,12 @@ const performanceLoggingStorageKey = "dinodrawPerformanceLogging";
 const debugConsoleStorageKey = "dinodrawDebug";
 const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
-const databaseVersion = 4;
+const databaseVersion = 5;
 const documentStoreName = "documents";
 const folderStoreName = "folders";
 const pageStoreName = "documentPages";
 const pageDocumentIndexName = "documentId";
-const splitPageStorageEnabled = false;
+const splitPageStorageEnabled = true;
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
@@ -651,22 +651,20 @@ function openDatabase() {
         db.createObjectStore(folderStoreName, { keyPath: "id" });
       }
 
-      if (splitPageStorageEnabled) {
-        let pageStore = null;
+      let pageStore = null;
 
-        if (db.objectStoreNames.contains(pageStoreName)) {
-          pageStore = request.transaction.objectStore(pageStoreName);
-        } else {
-          pageStore = db.createObjectStore(pageStoreName, {
-            keyPath: "id",
-          });
-        }
+      if (db.objectStoreNames.contains(pageStoreName)) {
+        pageStore = request.transaction.objectStore(pageStoreName);
+      } else {
+        pageStore = db.createObjectStore(pageStoreName, {
+          keyPath: "id",
+        });
+      }
 
-        if (!pageStore.indexNames.contains(pageDocumentIndexName)) {
-          pageStore.createIndex(pageDocumentIndexName, "documentId", {
-            unique: false,
-          });
-        }
+      if (!pageStore.indexNames.contains(pageDocumentIndexName)) {
+        pageStore.createIndex(pageDocumentIndexName, "documentId", {
+          unique: false,
+        });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -905,6 +903,40 @@ async function getDocumentPageRecords(documentId) {
   });
 }
 
+async function verifySplitDocumentStorage(record) {
+  const pageIds = clonePageIds(record && record.pageIds);
+
+  if (!record || !record.id) {
+    throw new Error("Split storage verification failed: missing document id.");
+  }
+
+  if (pageIds.length === 0) {
+    throw new Error("Split storage verification failed: missing page ids.");
+  }
+
+  const pageRecords = await getDocumentPageRecords(record.id);
+  const pageRecordsById = new Map();
+
+  pageRecords.forEach((pageRecord) => {
+    pageRecordsById.set(pageRecord.pageId, pageRecord);
+  });
+
+  for (const pageId of pageIds) {
+    const pageRecord = pageRecordsById.get(pageId);
+
+    if (!pageRecord || pageRecord.documentId !== record.id) {
+      throw new Error(
+        `Split storage verification failed: missing page ${pageId}.`
+      );
+    }
+  }
+
+  return {
+    expectedPageCount: pageIds.length,
+    storedPageCount: pageRecords.length,
+  };
+}
+
 async function putDocumentPage(record) {
   const store = await getDocumentPageStore("readwrite");
 
@@ -967,9 +999,11 @@ async function saveFullDocumentRecord(record) {
       await putDocumentPage(pageRecord);
     }
 
+    await verifySplitDocumentStorage(metadata);
     await putDocument(metadata);
     return metadata;
   } catch (error) {
+    console.error(error);
     await putDocument(record);
     return record;
   }
@@ -1025,18 +1059,50 @@ async function getSavedPagesForRecord(record) {
     record,
     await getDocumentPageRecords(record.id)
   );
-  const pages = pageRecords.map((pageRecord) => ({
-    pageId: pageRecord.pageId,
-    background: pageRecord.background || "blank",
-    width: pageRecord.width,
-    height: pageRecord.height,
-    underDrawing: pageRecord.underDrawing || "",
-    drawing: pageRecord.drawing || "",
-  }));
+  const pageIds = clonePageIds(record.pageIds);
+  const recordsById = new Map();
+
+  pageRecords.forEach((pageRecord) => {
+    recordsById.set(pageRecord.pageId, pageRecord);
+  });
+
+  let hasMissingPageRecord = false;
+  const orderedPageIds =
+    pageIds.length > 0
+      ? pageIds
+      : pageRecords.map((pageRecord) => pageRecord.pageId);
+  const pages = orderedPageIds.map((pageId) => {
+    const pageRecord = recordsById.get(pageId);
+
+    if (!pageRecord) {
+      hasMissingPageRecord = true;
+      console.error(
+        `Missing page record ${pageId} for document ${record.id}.`
+      );
+
+      return {
+        pageId,
+        background: "blank",
+        width: canvas.width || window.innerWidth,
+        height: canvas.height || window.innerHeight,
+        underDrawing: "",
+        drawing: "",
+      };
+    }
+
+    return {
+      pageId: pageRecord.pageId,
+      background: pageRecord.background || "blank",
+      width: pageRecord.width,
+      height: pageRecord.height,
+      underDrawing: pageRecord.underDrawing || "",
+      drawing: pageRecord.drawing || "",
+    };
+  });
 
   return {
     pages: pages.length > 0 ? pages : [{ background: "blank", drawing: "" }],
-    isLegacyEmbeddedRecord: false,
+    isLegacyEmbeddedRecord: hasMissingPageRecord,
   };
 }
 
@@ -3127,15 +3193,17 @@ async function saveCurrentDocument() {
         await putDocumentPage(
           serializePageRecord(entry.page, entry.index, now)
         );
-
-        if (Number(entry.page.dirtyVersion || 0) === entry.dirtyVersion) {
-          entry.page.isDirty = false;
-        }
       }
 
+      await verifySplitDocumentStorage(record);
       await putDocument(record);
       state.documentUpdatedAt = record.updatedAt;
       state.documentLastOpenedAt = record.lastOpenedAt;
+      dirtyPages.forEach((entry) => {
+        if (Number(entry.page.dirtyVersion || 0) === entry.dirtyVersion) {
+          entry.page.isDirty = false;
+        }
+      });
       deletedPageIds.forEach((pageId) => state.deletedPageIds.delete(pageId));
       setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
       await refreshDocuments();

@@ -56,10 +56,12 @@ The Instructions guide should remain local/offline, full-screen, readable on tab
 - Current object stores: `documents`, `documentPages`, and `folders`.
 - Save behavior should include all pages, backgrounds, `underLayer`, normal `layer`, and document settings.
 - Saves are debounced by `scheduleDocumentSave()`, currently with a default delay of `700ms`.
-- `saveCurrentDocument()` currently uses the legacy full-document save path because split page storage is disabled with `splitPageStorageEnabled = false`. The split-storage implementation remains in the codebase and is tracked as planned follow-up work in the performance roadmap.
+- `saveCurrentDocument()` writes document metadata and only dirty page records when split page storage is available.
+- Split saves verify that each metadata `pageId` has a stored page record before the split metadata is accepted.
+- If split save or verification fails, saving falls back to a legacy full-document record with embedded `pages`.
 - If a save is already in progress, the code sets `shouldSaveAgain` so another save is scheduled after the current write finishes.
 - `flushDocumentSave()` is used before document switching, exporting, renaming, deleting, and creating new documents.
-- Old records with embedded `pages` remain readable. Splitting them into `documentPages` is deferred while split page storage is disabled.
+- Old records with embedded `pages` remain readable and are marked dirty on load so they can be split into `documentPages` on the next save.
 
 ## Document Record Shape
 

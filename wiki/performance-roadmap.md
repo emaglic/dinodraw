@@ -15,7 +15,7 @@ This page tracks the large-document performance plan so work can continue across
 - Done: lazy Pages dialog thumbnails. Thumbnail backgrounds appear first; page rasters hydrate/render through visible/idle scheduling.
 - Done: canvas-preservation fix after lazy hydration. History snapshots must not reset canvas dimensions and wipe committed strokes.
 - Done: large-document debug harness and opt-in performance logging.
-- Deferred: split page storage is present in the codebase but disabled with `splitPageStorageEnabled = false`.
+- Done: safe split page autosave is enabled with IndexedDB version `5`, page-record verification, and legacy full-document fallback.
 
 ## Chunk 0: Commit Current Work
 
@@ -62,7 +62,7 @@ Regression checks:
 
 ## Chunk 2: Safe Split Page Autosave
 
-Status: planned.
+Status: done.
 
 Goal: restore dirty-page-only autosave without risking existing local documents.
 
@@ -80,6 +80,14 @@ Possible implementation:
 - Verify page order/count against page records after split saves.
 - Fall back to legacy full-document save on split-storage failure.
 - Avoid deleting recoverable embedded page data until split records are known-good, if practical.
+
+Implemented notes:
+
+- IndexedDB version `5` ensures the `documentPages` store and `documentId` index exist even for browsers that reached version `4` while split storage was disabled.
+- Split full saves and autosaves verify that every metadata `pageId` has a matching page record before accepting split metadata.
+- Dirty page flags are cleared only after split page writes, verification, and metadata save succeed.
+- Split save failures fall back to legacy embedded-page document records.
+- Split reads preserve expected page count/order with blank placeholders if a page record is missing.
 
 Regression checks:
 
