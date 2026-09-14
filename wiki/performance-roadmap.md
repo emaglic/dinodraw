@@ -18,6 +18,7 @@ This page tracks the large-document performance plan so work can continue across
 - Done: safe split page autosave is enabled with IndexedDB version `5`, page-record verification, and legacy full-document fallback.
 - Done: PNG/PDF export progress updates and browser-yielding between pages.
 - Done: in-memory page thumbnail cache with dirty/background/document invalidation.
+- Done: conservative page memory eviction for clean inactive pages.
 
 ## Chunk 0: Commit Current Work
 
@@ -157,7 +158,7 @@ Regression checks:
 
 ## Chunk 5: Page Memory Eviction
 
-Status: planned.
+Status: done.
 
 Goal: prevent long sessions from keeping every hydrated page canvas in memory.
 
@@ -167,6 +168,14 @@ Possible implementation:
 - Keep active page, nearby pages, dirty pages, and pages with meaningful undo history hydrated.
 - Evict only clean, inactive pages after their raster strings have been saved or refreshed.
 - Keep the first version conservative: never evict dirty pages or pages with active undo history.
+
+Implemented notes:
+
+- Pages track `lastAccessedAt` when hydrated/accessed.
+- Eviction keeps the active page and one neighboring page on either side hydrated.
+- Dirty pages, pages with meaningful undo/redo history, and pages currently hydrating are not evicted.
+- Eviction serializes clean page layers back into saved raster strings, clears non-meaningful history snapshots, and releases hydrated canvas layers.
+- Eviction runs after successful saves, page switches, and thumbnail rendering.
 
 Regression checks:
 

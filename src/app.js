@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.140";
+const APP_VERSION = "v0.8.141";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -397,6 +397,7 @@ const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
 const historyLimit = 30;
+const pageEvictionRetainRadius = 1;
 const colors = [
   ["Black", "#000000"],
   ["Graphite", "#4a4a4a"],
@@ -2344,11 +2345,18 @@ function createPageFromSavedPage(savedPage = {}, options = {}) {
     savedDrawing: savedPage.drawing || "",
     isHydrated: false,
     hydratePromise: null,
+    lastAccessedAt: 0,
     history: {
       undo: [],
       redo: [],
     },
   };
+}
+
+function markPageAccessed(page) {
+  if (page) {
+    page.lastAccessedAt = Date.now();
+  }
 }
 
 function ensurePageLayerCanvases(page) {
@@ -2396,6 +2404,7 @@ function ensurePageLayerCanvases(page) {
 
 async function hydratePage(page) {
   if (!page || isPageHydrated(page)) {
+    markPageAccessed(page);
     return page;
   }
 
@@ -2465,10 +2474,76 @@ async function hydratePage(page) {
     page.savedDrawing = "";
     page.isHydrated = true;
     page.hydratePromise = null;
+    markPageAccessed(page);
     return page;
   })();
 
   return page.hydratePromise;
+}
+
+function releasePageCanvasLayers(page) {
+  if (!page) {
+    return;
+  }
+
+  releaseTemporaryCanvas(page.underLayer);
+  releaseTemporaryCanvas(page.layer);
+  page.underLayer = null;
+  page.underContext = null;
+  page.layer = null;
+  page.context = null;
+  page.isHydrated = false;
+  page.hydratePromise = null;
+}
+
+function pageHasMeaningfulHistory(page) {
+  return Boolean(
+    page &&
+      page.history &&
+      (page.history.redo.length > 0 || page.history.undo.length > 1)
+  );
+}
+
+function isPageEligibleForEviction(page, index) {
+  return Boolean(
+    page &&
+      isPageHydrated(page) &&
+      !page.isDirty &&
+      !page.hydratePromise &&
+      !pageHasMeaningfulHistory(page) &&
+      Math.abs(index - state.activePageIndex) > pageEvictionRetainRadius
+  );
+}
+
+function evictPageCanvases(page) {
+  if (!page || !isPageHydrated(page)) {
+    return false;
+  }
+
+  page.savedUnderDrawing = getCanvasDataUrl(page.underLayer);
+  page.savedDrawing = getCanvasDataUrl(page.layer);
+  page.hasSavedWidth = true;
+  page.hasSavedHeight = true;
+  page.history.undo = [];
+  page.history.redo = [];
+  releasePageCanvasLayers(page);
+  return true;
+}
+
+function evictInactivePageCanvases() {
+  let evictedCount = 0;
+
+  state.pages.forEach((page, index) => {
+    if (!isPageEligibleForEviction(page, index)) {
+      return;
+    }
+
+    if (evictPageCanvases(page)) {
+      evictedCount += 1;
+    }
+  });
+
+  return evictedCount;
 }
 
 function setSaveStatus(message) {
@@ -3209,6 +3284,7 @@ async function saveCurrentDocument() {
         state.deletedPageIds.clear();
         setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
         await refreshDocuments();
+        evictInactivePageCanvases();
         return;
       }
 
@@ -3245,6 +3321,7 @@ async function saveCurrentDocument() {
       deletedPageIds.forEach((pageId) => state.deletedPageIds.delete(pageId));
       setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
       await refreshDocuments();
+      evictInactivePageCanvases();
     } catch (error) {
       try {
         const fallbackRecord = serializeCurrentDocument();
@@ -3258,6 +3335,7 @@ async function saveCurrentDocument() {
         state.deletedPageIds.clear();
         setSaveStatus(`Saved ${formatDateLabel(fallbackRecord.updatedAt)}`);
         await refreshDocuments();
+        evictInactivePageCanvases();
       } catch (fallbackError) {
         setSaveStatus("Save failed");
         console.error(error);
@@ -4244,6 +4322,7 @@ function createPage(background = "blank", width, height, pageId = createId()) {
     savedDrawing: "",
     isHydrated: true,
     hydratePromise: null,
+    lastAccessedAt: Date.now(),
     history: {
       undo: [],
       redo: [],
@@ -8422,6 +8501,7 @@ async function setActivePage(index) {
     const page = getActivePage();
 
     await hydratePage(page);
+    markPageAccessed(page);
 
     if (activationToken !== state.pageActivationToken) {
       finishPerformanceTimer(pageSwitchPerformanceTimer, {
@@ -8439,6 +8519,7 @@ async function setActivePage(index) {
     updatePageControls();
     renderWorkspace();
     scheduleDocumentSave();
+    evictInactivePageCanvases();
     finishPerformanceTimer(pageSwitchPerformanceTimer, {
       hydrated: isPageHydrated(page),
       toPageIndex: nextPageIndex,
@@ -8622,6 +8703,7 @@ async function renderPageThumbnail(page, thumbnail, renderToken) {
 
   drawPageThumbnail(page, thumbnail);
   cachePageThumbnail(page, thumbnail);
+  evictInactivePageCanvases();
 }
 
 function schedulePageThumbnailRender(page, thumbnail, renderToken) {

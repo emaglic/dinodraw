@@ -508,3 +508,11 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Cleared thumbnail cache on document load and removed cache entries for deleted pages.
 - Marked undo/redo restores dirty so split-page autosave and thumbnail invalidation capture restored pixels.
 - Bumped the app/cache version to `v0.8.140`.
+
+## [2026-09-14] perf | Evicted Clean Inactive Page Canvases
+
+- Added conservative page canvas eviction for clean inactive pages outside the active-page neighbor window.
+- Kept dirty pages, actively hydrating pages, and pages with meaningful undo/redo history hydrated.
+- Serialized evicted page layers back to saved raster strings before releasing canvas layers and non-meaningful history snapshots.
+- Ran eviction after successful saves, page switches, and thumbnail rendering.
+- Bumped the app/cache version to `v0.8.141`.

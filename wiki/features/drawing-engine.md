@@ -11,6 +11,7 @@ The drawing engine lives mostly in `src/app.js`, with canvas markup in `src/inde
 - The main visible canvas is a composited display surface. Per-page drawing data lives on offscreen page canvases.
 - Restored documents hydrate page canvases lazily. Only the active page is decoded on open; other pages keep their saved raster strings until page activation, export/save serialization, or visible thumbnail rendering needs them.
 - The Pages dialog prepares thumbnail backgrounds immediately, then hydrates/renders thumbnails through IntersectionObserver and idle callbacks so large documents do not block the UI while opening the page manager.
+- Clean inactive pages can evict hydrated canvas layers after their raster strings are refreshed. Eviction keeps the active page and immediate neighbors hydrated, and skips dirty pages or pages with meaningful undo/redo history.
 - Live pen feedback is drawn directly onto the already-rendered main canvas. A separate transparent canvas remains hidden because some e-ink browser/firmware combinations can composite transparent canvases as opaque blank layers. Brush strokes keep their accepted page-space points while moving, then replay one permanent stroke to the target page layer on pointer up.
 
 ## Page Model
