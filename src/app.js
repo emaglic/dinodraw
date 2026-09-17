@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.141";
+const APP_VERSION = "v0.8.151";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -59,6 +59,22 @@ const documentScreen = document.querySelector("[data-document-screen]");
 const documentTitle = document.querySelector("[data-document-title]");
 const documentSubtitle = document.querySelector("[data-document-subtitle]");
 const documentBreadcrumbs = document.querySelector("[data-document-breadcrumbs]");
+const storageStatus = document.querySelector("[data-storage-status]");
+const storageStatusTitle = document.querySelector("[data-storage-status-title]");
+const storageStatusMessage = document.querySelector("[data-storage-status-message]");
+const storageStatusSummary = document.querySelector("[data-storage-status-summary]");
+const storageChooseFolderButton = document.querySelector(
+  "[data-storage-choose-folder]"
+);
+const storageForgetFolderButton = document.querySelector(
+  "[data-storage-forget-folder]"
+);
+const storageRecoverLibraryButton = document.querySelector(
+  "[data-storage-recover-library]"
+);
+const storageSaveBrowserButton = document.querySelector(
+  "[data-storage-save-browser]"
+);
 const documentList = document.querySelector("[data-document-list]");
 const documentPanel = document.querySelector(".document-panel");
 const folderBackButton = document.querySelector("[data-folder-back]");
@@ -66,6 +82,9 @@ const documentActionMenu = document.querySelector("[data-document-action-menu]")
 const documentRenameButton = document.querySelector("[data-document-rename]");
 const documentMoveButton = document.querySelector("[data-document-move]");
 const documentExportButton = document.querySelector("[data-document-export]");
+const documentSaveToFolderButton = document.querySelector(
+  "[data-document-save-to-folder]"
+);
 const documentSavePngButton = document.querySelector("[data-document-save-png]");
 const documentSavePdfButton = document.querySelector("[data-document-save-pdf]");
 const documentDeleteButton = document.querySelector("[data-document-delete]");
@@ -89,6 +108,9 @@ const saveDocumentButtons = Array.from(
 );
 const exportDocumentButtons = Array.from(
   document.querySelectorAll("[data-export-document]")
+);
+const saveToFolderButtons = Array.from(
+  document.querySelectorAll("[data-save-to-folder]")
 );
 const exportPngZipButtons = Array.from(
   document.querySelectorAll("[data-export-png-zip]")
@@ -302,6 +324,13 @@ const state = {
   documentUpdatedAt: null,
   documentLastOpenedAt: null,
   documentFolderId: null,
+  documentStorageKind: "browser",
+  documentWorkspaceId: "",
+  documentFileHandleId: "",
+  documentFileName: "",
+  documentRelativePath: "",
+  documentFileLastModifiedAt: "",
+  documentCatalogedAt: "",
   toolbarPositions: {
     main: null,
     presets: null,
@@ -318,6 +347,7 @@ const state = {
   },
   documents: [],
   folders: [],
+  storageSettings: null,
   currentFolderId: null,
   saveTimer: null,
   savePromise: null,
@@ -328,6 +358,7 @@ const state = {
   performanceLoggingEnabled: false,
   performanceMetrics: [],
   toolbarsHidden: false,
+  isValidatingDocumentFiles: false,
   globalSettings: {
     touchDrawingEnabled: true,
     documentIntroDismissed: false,
@@ -387,15 +418,21 @@ const performanceLoggingStorageKey = "dinodrawPerformanceLogging";
 const debugConsoleStorageKey = "dinodrawDebug";
 const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
-const databaseVersion = 5;
+const databaseVersion = 6;
 const documentStoreName = "documents";
 const folderStoreName = "folders";
 const pageStoreName = "documentPages";
+const storageSettingsStoreName = "storageSettings";
+const storageHandleStoreName = "storageHandles";
 const pageDocumentIndexName = "documentId";
+const storageSettingsRecordId = "workspace";
+const workspaceDirectoryHandleId = "workspaceDirectory";
+const documentFileHandlePrefix = "documentFile:";
 const splitPageStorageEnabled = true;
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
+const documentStorageKinds = ["fileSystem", "browser", "draft", "missing"];
 const historyLimit = 30;
 const pageEvictionRetainRadius = 1;
 const colors = [
@@ -613,6 +650,112 @@ function getImportedSourceUuid(source) {
   return String(source.uuid || source.id || "");
 }
 
+function normalizeDocumentStorageKind(value) {
+  const storageKind = String(value || "");
+
+  return documentStorageKinds.indexOf(storageKind) >= 0 ? storageKind : "browser";
+}
+
+function getDocumentStorageKind(record) {
+  return normalizeDocumentStorageKind(record && record.storageKind);
+}
+
+function getDocumentStorageLabel(storageKind) {
+  switch (normalizeDocumentStorageKind(storageKind)) {
+    case "fileSystem":
+      return "Folder";
+    case "draft":
+      return "Draft";
+    case "missing":
+      return "Missing";
+    case "browser":
+    default:
+      return "Browser";
+  }
+}
+
+function getDocumentStorageClass(storageKind) {
+  return normalizeDocumentStorageKind(storageKind).toLowerCase();
+}
+
+function getDocumentStorageTitle(storageKind) {
+  switch (normalizeDocumentStorageKind(storageKind)) {
+    case "fileSystem":
+      return "Saved as a project file in a device folder.";
+    case "draft":
+      return "Temporary work that has not been saved to a project location.";
+    case "missing":
+      return "This project file or folder permission is not currently available.";
+    case "browser":
+    default:
+      return "Saved in this browser. Clearing site data may remove it.";
+  }
+}
+
+function getDocumentStorageDetail(record) {
+  const storageKind = getDocumentStorageKind(record);
+
+  if (storageKind === "fileSystem") {
+    return record.relativePath || record.fileName || "device folder";
+  }
+
+  if (storageKind === "missing") {
+    return record.relativePath || record.fileName
+      ? `missing ${record.relativePath || record.fileName}`
+      : "missing project file";
+  }
+
+  return "";
+}
+
+function normalizeStorageText(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  return text || "";
+}
+
+function normalizeStorageTimestamp(value) {
+  const text = normalizeStorageText(value);
+  const timestamp = Date.parse(text);
+
+  if (text && !isNaN(timestamp)) {
+    return new Date(timestamp).toISOString();
+  }
+
+  return "";
+}
+
+function deleteEmptyStorageField(record, key) {
+  if (!record[key]) {
+    delete record[key];
+  }
+}
+
+function prepareDocumentStorageMetadata(record) {
+  record.storageKind = normalizeDocumentStorageKind(record.storageKind);
+  record.workspaceId = normalizeStorageText(record.workspaceId);
+  record.fileHandleId = normalizeStorageText(record.fileHandleId);
+  record.fileName = normalizeStorageText(record.fileName);
+  record.relativePath = normalizeStorageText(record.relativePath);
+  record.fileLastModifiedAt = normalizeStorageTimestamp(record.fileLastModifiedAt);
+  record.catalogedAt = normalizeStorageTimestamp(record.catalogedAt);
+
+  if (record.storageKind === "fileSystem") {
+    record.workspaceId = record.workspaceId || storageSettingsRecordId;
+    record.fileHandleId =
+      record.fileHandleId || getDocumentFileHandleId(record.id);
+  }
+
+  [
+    "workspaceId",
+    "fileHandleId",
+    "fileName",
+    "relativePath",
+    "fileLastModifiedAt",
+    "catalogedAt",
+  ].forEach((key) => deleteEmptyStorageField(record, key));
+}
+
 function prepareDocumentRecord(record) {
   if (!record) {
     return null;
@@ -625,6 +768,8 @@ function prepareDocumentRecord(record) {
   if (!record.id) {
     record.id = record.uuid;
   }
+
+  prepareDocumentStorageMetadata(record);
 
   return record;
 }
@@ -651,6 +796,14 @@ function openDatabase() {
 
       if (!db.objectStoreNames.contains(folderStoreName)) {
         db.createObjectStore(folderStoreName, { keyPath: "id" });
+      }
+
+      if (!db.objectStoreNames.contains(storageSettingsStoreName)) {
+        db.createObjectStore(storageSettingsStoreName, { keyPath: "id" });
+      }
+
+      if (!db.objectStoreNames.contains(storageHandleStoreName)) {
+        db.createObjectStore(storageHandleStoreName, { keyPath: "id" });
       }
 
       let pageStore = null;
@@ -692,6 +845,312 @@ function getDocumentPageStore(mode) {
   return openDatabase().then(
     (db) => db.transaction(pageStoreName, mode).objectStore(pageStoreName)
   );
+}
+
+function getStorageSettingsStore(mode) {
+  return openDatabase().then(
+    (db) =>
+      db.transaction(storageSettingsStoreName, mode).objectStore(
+        storageSettingsStoreName
+      )
+  );
+}
+
+function getStorageHandleStore(mode) {
+  return openDatabase().then(
+    (db) =>
+      db.transaction(storageHandleStoreName, mode).objectStore(
+        storageHandleStoreName
+      )
+  );
+}
+
+function getDocumentFileHandleId(documentId) {
+  return `${documentFileHandlePrefix}${documentId || ""}`;
+}
+
+function getDocumentFileToken(record) {
+  const text = String((record && (record.uuid || record.id)) || "")
+    .replace(/[^a-z0-9]+/gi, "")
+    .toLowerCase();
+
+  return text ? text.slice(0, 8) : createId().replace(/-/g, "").slice(0, 8);
+}
+
+function getDefaultDocumentFileName(record) {
+  const name = sanitizeFileName((record && record.name) || "document");
+  const token = getDocumentFileToken(record);
+
+  return `${name}-${token}.dinodraw.json`;
+}
+
+function getDefaultStorageSettings(now = new Date().toISOString()) {
+  return {
+    id: storageSettingsRecordId,
+    schemaVersion: 1,
+    preferredStorageKind: "browser",
+    workspaceHandleId: "",
+    workspaceName: "",
+    updatedAt: now,
+  };
+}
+
+function prepareStorageSettingsRecord(record) {
+  const now = new Date().toISOString();
+  const settings = {
+    ...getDefaultStorageSettings(now),
+    ...(record || {}),
+  };
+
+  settings.id = storageSettingsRecordId;
+  settings.schemaVersion = 1;
+  settings.preferredStorageKind = normalizeDocumentStorageKind(
+    settings.preferredStorageKind
+  );
+  if (settings.preferredStorageKind === "missing") {
+    settings.preferredStorageKind = "browser";
+  }
+  settings.workspaceHandleId = normalizeStorageText(settings.workspaceHandleId);
+  settings.workspaceName = normalizeStorageText(settings.workspaceName);
+  settings.updatedAt = normalizeStorageTimestamp(settings.updatedAt) || now;
+
+  return settings;
+}
+
+async function getStorageSettings() {
+  const store = await getStorageSettingsStore("readonly");
+
+  return new Promise((resolve, reject) => {
+    const request = store.get(storageSettingsRecordId);
+
+    request.onsuccess = () =>
+      resolve(prepareStorageSettingsRecord(request.result || null));
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function putStorageSettings(record) {
+  const settings = prepareStorageSettingsRecord(record);
+  const store = await getStorageSettingsStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.put(settings);
+
+    request.onsuccess = () => resolve(settings);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function ensureStorageSettingsRecord() {
+  const settings = await getStorageSettings();
+
+  state.storageSettings = await putStorageSettings(settings);
+  return state.storageSettings;
+}
+
+function prepareStorageHandleRecord(record) {
+  const now = new Date().toISOString();
+  const handleRecord = {
+    id: normalizeStorageText(record && record.id),
+    kind: normalizeStorageText(record && record.kind),
+    name: normalizeStorageText(record && record.name),
+    handle: record ? record.handle : null,
+    createdAt: normalizeStorageTimestamp(record && record.createdAt) || now,
+    updatedAt: normalizeStorageTimestamp(record && record.updatedAt) || now,
+  };
+
+  if (handleRecord.kind !== "directory" && handleRecord.kind !== "file") {
+    handleRecord.kind = "";
+  }
+
+  return handleRecord;
+}
+
+async function getStorageHandleRecord(id) {
+  const handleId = normalizeStorageText(id);
+
+  if (!handleId) {
+    return null;
+  }
+
+  const store = await getStorageHandleStore("readonly");
+
+  return new Promise((resolve, reject) => {
+    const request = store.get(handleId);
+
+    request.onsuccess = () =>
+      resolve(request.result ? prepareStorageHandleRecord(request.result) : null);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function putStorageHandleRecord(record) {
+  const handleRecord = prepareStorageHandleRecord(record);
+
+  if (!handleRecord.id) {
+    throw new Error("Storage handle record is missing an id.");
+  }
+
+  if (!handleRecord.kind) {
+    throw new Error("Storage handle record is missing a handle kind.");
+  }
+
+  if (!handleRecord.handle) {
+    throw new Error("Storage handle record is missing a handle.");
+  }
+
+  const store = await getStorageHandleStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.put(handleRecord);
+
+    request.onsuccess = () => resolve(handleRecord);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function deleteStorageHandleRecord(id) {
+  const handleId = normalizeStorageText(id);
+
+  if (!handleId) {
+    return;
+  }
+
+  const store = await getStorageHandleStore("readwrite");
+
+  return new Promise((resolve, reject) => {
+    const request = store.delete(handleId);
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function getWorkspaceDirectoryHandle(options = {}) {
+  const settings = getWorkspaceStorageSettings();
+  const handleRecord = await getStorageHandleRecord(settings.workspaceHandleId);
+
+  if (!handleRecord || handleRecord.kind !== "directory" || !handleRecord.handle) {
+    throw new Error("No workspace folder is connected.");
+  }
+
+  if (options.requestPermission !== false) {
+    const hasPermission = await requestFileSystemHandlePermission(
+      handleRecord.handle,
+      "readwrite"
+    );
+
+    if (!hasPermission) {
+      throw new Error("Workspace folder permission was denied.");
+    }
+  }
+
+  return handleRecord.handle;
+}
+
+function applyFileSystemMetadata(record, fileName, now) {
+  record.storageKind = "fileSystem";
+  record.workspaceId = storageSettingsRecordId;
+  record.fileHandleId = record.fileHandleId || getDocumentFileHandleId(record.id);
+  record.fileName = fileName;
+  record.relativePath = fileName;
+  record.catalogedAt = now;
+
+  return record;
+}
+
+async function attachFileSystemStorageToRecord(record) {
+  prepareDocumentRecord(record);
+  const directoryHandle = await getWorkspaceDirectoryHandle({
+    requestPermission: true,
+  });
+  const now = new Date().toISOString();
+  const fileName = record.fileName || getDefaultDocumentFileName(record);
+  const fileHandle = await directoryHandle.getFileHandle(fileName, {
+    create: true,
+  });
+
+  record.fileHandleId = record.fileHandleId || getDocumentFileHandleId(record.id);
+  await putStorageHandleRecord({
+    id: record.fileHandleId,
+    kind: "file",
+    name: fileName,
+    handle: fileHandle,
+  });
+
+  return applyFileSystemMetadata(record, fileName, now);
+}
+
+async function getFileHandleForFileSystemRecord(record) {
+  prepareDocumentRecord(record);
+
+  if (getDocumentStorageKind(record) !== "fileSystem") {
+    return null;
+  }
+
+  let handleRecord = await getStorageHandleRecord(record.fileHandleId);
+
+  if (handleRecord && handleRecord.kind === "file" && handleRecord.handle) {
+    return handleRecord.handle;
+  }
+
+  const directoryHandle = await getWorkspaceDirectoryHandle({
+    requestPermission: true,
+  });
+  const fileName = record.fileName || getDefaultDocumentFileName(record);
+  const fileHandle = await directoryHandle.getFileHandle(fileName, {
+    create: true,
+  });
+
+  record.fileHandleId = record.fileHandleId || getDocumentFileHandleId(record.id);
+  record.fileName = fileName;
+  record.relativePath = fileName;
+  await putStorageHandleRecord({
+    id: record.fileHandleId,
+    kind: "file",
+    name: fileName,
+    handle: fileHandle,
+  });
+
+  return fileHandle;
+}
+
+function applyActiveDocumentStorageMetadata(record) {
+  state.documentStorageKind = getDocumentStorageKind(record);
+  state.documentWorkspaceId = normalizeStorageText(record.workspaceId);
+  state.documentFileHandleId = normalizeStorageText(record.fileHandleId);
+  state.documentFileName = normalizeStorageText(record.fileName);
+  state.documentRelativePath = normalizeStorageText(record.relativePath);
+  state.documentFileLastModifiedAt = normalizeStorageTimestamp(
+    record.fileLastModifiedAt
+  );
+  state.documentCatalogedAt = normalizeStorageTimestamp(record.catalogedAt);
+}
+
+async function writeDinoDrawRecordToFileSystem(record) {
+  if (getDocumentStorageKind(record) !== "fileSystem") {
+    return false;
+  }
+
+  const fileHandle = await getFileHandleForFileSystemRecord(record);
+  const hasPermission = await requestFileSystemHandlePermission(
+    fileHandle,
+    "readwrite"
+  );
+
+  if (!hasPermission) {
+    throw new Error("File permission was denied.");
+  }
+
+  const file = createDinoDrawBlob(record);
+
+  await writeBlobToFileHandle(file.blob, fileHandle);
+
+  const now = new Date().toISOString();
+
+  record.fileLastModifiedAt = now;
+  record.catalogedAt = now;
+  return true;
 }
 
 function getAllFromStore(store) {
@@ -1134,7 +1593,7 @@ async function migrateExistingDocumentRecords() {
   const documents = await getAllFromStore(store);
 
   for (const record of documents) {
-    if (!record.uuid || !record.id) {
+    if (!record.uuid || !record.id || !record.storageKind) {
       prepareDocumentRecord(record);
       await putDocument(record);
     }
@@ -1507,12 +1966,36 @@ function markPageDirty(page = getActivePage()) {
   }
 }
 
+function getCurrentDocumentStorageMetadata() {
+  const metadata = {
+    storageKind: normalizeDocumentStorageKind(state.documentStorageKind),
+    workspaceId: normalizeStorageText(state.documentWorkspaceId),
+    fileHandleId: normalizeStorageText(state.documentFileHandleId),
+    fileName: normalizeStorageText(state.documentFileName),
+    relativePath: normalizeStorageText(state.documentRelativePath),
+    fileLastModifiedAt: normalizeStorageTimestamp(state.documentFileLastModifiedAt),
+    catalogedAt: normalizeStorageTimestamp(state.documentCatalogedAt),
+  };
+
+  [
+    "workspaceId",
+    "fileHandleId",
+    "fileName",
+    "relativePath",
+    "fileLastModifiedAt",
+    "catalogedAt",
+  ].forEach((key) => deleteEmptyStorageField(metadata, key));
+
+  return metadata;
+}
+
 function serializeCurrentDocumentMetadata(now = new Date().toISOString()) {
   return {
     id: state.documentId,
     uuid: state.documentUuid || state.documentId || createDocumentUuid(),
     name: state.documentName || "Untitled",
     folderId: resolveExistingFolderId(state.documentFolderId),
+    ...getCurrentDocumentStorageMetadata(),
     createdAt: state.documentCreatedAt || now,
     updatedAt: now,
     lastOpenedAt: state.documentLastOpenedAt || now,
@@ -1523,6 +2006,42 @@ function serializeCurrentDocumentMetadata(now = new Date().toISOString()) {
     pageCount: state.pages.length,
     storageVersion: 2,
   };
+}
+
+function serializeCurrentDocumentPages() {
+  return state.pages.map((page) => ({
+    background: page.background,
+    width: getPageWidth(page),
+    height: getPageHeight(page),
+    underDrawing: getPageLayerDataUrl(page, "under"),
+    drawing: getPageLayerDataUrl(page, "normal"),
+  }));
+}
+
+function copyFileSystemWriteMetadata(target, source) {
+  target.fileLastModifiedAt = normalizeStorageTimestamp(source.fileLastModifiedAt);
+  target.catalogedAt = normalizeStorageTimestamp(source.catalogedAt);
+  target.fileName = normalizeStorageText(source.fileName);
+  target.relativePath = normalizeStorageText(source.relativePath);
+  target.fileHandleId = normalizeStorageText(source.fileHandleId);
+  target.workspaceId = normalizeStorageText(source.workspaceId);
+}
+
+async function writeActiveDocumentToFileSystem(record) {
+  if (getDocumentStorageKind(record) !== "fileSystem") {
+    return false;
+  }
+
+  const fullRecord = {
+    ...record,
+    pages: serializeCurrentDocumentPages(),
+  };
+
+  await writeDinoDrawRecordToFileSystem(fullRecord);
+  copyFileSystemWriteMetadata(record, fullRecord);
+  applyActiveDocumentStorageMetadata(record);
+  await putDocument(record);
+  return true;
 }
 
 function serializePageRecord(page, index, now = new Date().toISOString()) {
@@ -1659,6 +2178,7 @@ function createDocumentRecord(name, folderId = state.currentFolderId) {
     uuid,
     name,
     folderId: resolveExistingFolderId(folderId),
+    storageKind: "browser",
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -1801,6 +2321,7 @@ async function createLargeTestDocument(options = {}) {
     uuid,
     name,
     folderId: resolveExistingFolderId(options.folderId || state.currentFolderId),
+    storageKind: "browser",
     createdAt: now,
     updatedAt: now,
     lastOpenedAt: now,
@@ -1835,13 +2356,7 @@ function serializeCurrentDocument() {
 
   return {
     ...serializeCurrentDocumentMetadata(now),
-    pages: state.pages.map((page) => ({
-      background: page.background,
-      width: getPageWidth(page),
-      height: getPageHeight(page),
-      underDrawing: getPageLayerDataUrl(page, "under"),
-      drawing: getPageLayerDataUrl(page, "normal"),
-    })),
+    pages: serializeCurrentDocumentPages(),
   };
 }
 
@@ -1849,6 +2364,13 @@ function getPortableDocumentRecord(record) {
   const portableRecord = { ...record };
 
   delete portableRecord.folderId;
+  delete portableRecord.storageKind;
+  delete portableRecord.workspaceId;
+  delete portableRecord.fileHandleId;
+  delete portableRecord.fileName;
+  delete portableRecord.relativePath;
+  delete portableRecord.fileLastModifiedAt;
+  delete portableRecord.catalogedAt;
   delete portableRecord.pageIds;
   delete portableRecord.pageCount;
   delete portableRecord.storageVersion;
@@ -2550,6 +3072,656 @@ function setSaveStatus(message) {
   saveStatus.textContent = message;
 }
 
+function getFileSystemStorageSupport() {
+  return Boolean(
+    window.isSecureContext &&
+      typeof window.showDirectoryPicker === "function"
+  );
+}
+
+function getWorkspaceStorageSettings() {
+  return prepareStorageSettingsRecord(state.storageSettings || null);
+}
+
+function hasWorkspaceFolderSelected() {
+  const settings = getWorkspaceStorageSettings();
+
+  return Boolean(settings.workspaceHandleId);
+}
+
+function getWorkspaceFolderName() {
+  const settings = getWorkspaceStorageSettings();
+
+  return settings.workspaceName || "selected folder";
+}
+
+async function requestDirectoryPickerHandle() {
+  try {
+    return await window.showDirectoryPicker({
+      mode: "readwrite",
+      startIn: "documents",
+    });
+  } catch (error) {
+    if (error && error.name === "TypeError") {
+      return window.showDirectoryPicker();
+    }
+
+    throw error;
+  }
+}
+
+async function requestFileSystemHandlePermission(handle, mode) {
+  const options = {
+    mode: mode || "read",
+  };
+
+  if (!handle) {
+    return false;
+  }
+
+  if (typeof handle.queryPermission === "function") {
+    const permission = await handle.queryPermission(options);
+
+    if (permission === "granted") {
+      return true;
+    }
+  }
+
+  if (typeof handle.requestPermission === "function") {
+    return (await handle.requestPermission(options)) === "granted";
+  }
+
+  return true;
+}
+
+async function chooseStorageFolder() {
+  if (!getFileSystemStorageSupport()) {
+    await showAlertDialog(
+      "Folder Storage Unavailable",
+      "This browser cannot grant Dino Draw access to a device folder."
+    );
+    return;
+  }
+
+  try {
+    const directoryHandle = await requestDirectoryPickerHandle();
+    const hasPermission = await requestFileSystemHandlePermission(
+      directoryHandle,
+      "readwrite"
+    );
+
+    if (!hasPermission) {
+      setSaveStatus("Folder permission denied");
+      await showAlertDialog(
+        "Folder Not Connected",
+        "Dino Draw could not get permission to use that folder."
+      );
+      return;
+    }
+
+    const hadWorkspaceFolder = hasWorkspaceFolderSelected();
+
+    if (hadWorkspaceFolder) {
+      await markFileSystemDocumentsMissing();
+    }
+
+    await putStorageHandleRecord({
+      id: workspaceDirectoryHandleId,
+      kind: "directory",
+      name: directoryHandle.name || "Dino Draw folder",
+      handle: directoryHandle,
+    });
+
+    state.storageSettings = await putStorageSettings({
+      ...getWorkspaceStorageSettings(),
+      workspaceHandleId: workspaceDirectoryHandleId,
+      workspaceName: directoryHandle.name || "Dino Draw folder",
+    });
+
+    setSaveStatus(
+      hadWorkspaceFolder
+        ? "Folder changed; previous folder projects marked missing"
+        : "Folder connected"
+    );
+    await refreshDocuments();
+    updateStorageStatus();
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      setSaveStatus("Folder selection canceled");
+      return;
+    }
+
+    setSaveStatus("Folder connection failed");
+    await showAlertDialog(
+      "Folder Connection Failed",
+      "Dino Draw could not save access to that folder."
+    );
+    console.error(error);
+  }
+}
+
+async function markFileSystemDocumentsMissing() {
+  const documents = await getAllDocuments();
+
+  for (const record of documents) {
+    if (getDocumentStorageKind(record) !== "fileSystem") {
+      continue;
+    }
+
+    await markFileSystemRecordMissing(record);
+  }
+}
+
+async function markFileSystemRecordMissing(record) {
+  if (!record || getDocumentStorageKind(record) !== "fileSystem") {
+    return false;
+  }
+
+  if (record.fileHandleId) {
+    await deleteStorageHandleRecord(record.fileHandleId);
+  }
+
+  record.storageKind = "missing";
+  delete record.workspaceId;
+  delete record.fileHandleId;
+  await putDocument(record);
+
+  if (record.id === state.documentId) {
+    applyActiveDocumentStorageMetadata(record);
+  }
+
+  return true;
+}
+
+async function validateFileSystemDocumentRecords(records) {
+  let didUpdate = false;
+
+  for (const record of records) {
+    if (getDocumentStorageKind(record) !== "fileSystem") {
+      continue;
+    }
+
+    try {
+      const handleRecord = await getStorageHandleRecord(record.fileHandleId);
+
+      if (!handleRecord || handleRecord.kind !== "file" || !handleRecord.handle) {
+        didUpdate = (await markFileSystemRecordMissing(record)) || didUpdate;
+        continue;
+      }
+
+      await handleRecord.handle.getFile();
+    } catch (error) {
+      didUpdate = (await markFileSystemRecordMissing(record)) || didUpdate;
+    }
+  }
+
+  return didUpdate;
+}
+
+async function forgetStorageFolder() {
+  try {
+    await markFileSystemDocumentsMissing();
+    await deleteStorageHandleRecord(workspaceDirectoryHandleId);
+    state.storageSettings = await putStorageSettings({
+      ...getWorkspaceStorageSettings(),
+      preferredStorageKind: "browser",
+      workspaceHandleId: "",
+      workspaceName: "",
+    });
+
+    setSaveStatus("Folder forgotten");
+    await refreshDocuments();
+    updateStorageStatus();
+  } catch (error) {
+    setSaveStatus("Folder update failed");
+    console.error(error);
+  }
+}
+
+function isDinoDrawProjectFileName(name) {
+  return /\.dinodraw\.json$/i.test(String(name || ""));
+}
+
+async function getDirectoryHandleChildren(directoryHandle) {
+  const children = [];
+  let iterator = null;
+  let usesEntries = false;
+
+  if (directoryHandle && typeof directoryHandle.values === "function") {
+    iterator = directoryHandle.values();
+  } else if (directoryHandle && typeof directoryHandle.entries === "function") {
+    iterator = directoryHandle.entries();
+    usesEntries = true;
+  }
+
+  if (!iterator || typeof iterator.next !== "function") {
+    return children;
+  }
+
+  while (true) {
+    const result = await iterator.next();
+
+    if (result.done) {
+      break;
+    }
+
+    const value = usesEntries ? result.value[1] : result.value;
+
+    if (value) {
+      children.push(value);
+    }
+  }
+
+  return children;
+}
+
+async function scanDirectoryForDinoDrawFiles(directoryHandle, options = {}) {
+  const maxDepth = Number(options.maxDepth || 6);
+  const maxFiles = Number(options.maxFiles || 500);
+  const files = [];
+
+  async function scanDirectory(handle, path, depth) {
+    if (files.length >= maxFiles || depth > maxDepth) {
+      return;
+    }
+
+    const children = await getDirectoryHandleChildren(handle);
+
+    for (const child of children) {
+      if (files.length >= maxFiles) {
+        break;
+      }
+
+      if (!child || !child.name) {
+        continue;
+      }
+
+      const childPath = path ? `${path}/${child.name}` : child.name;
+
+      if (child.kind === "directory") {
+        await scanDirectory(child, childPath, depth + 1);
+        continue;
+      }
+
+      if (child.kind === "file" && isDinoDrawProjectFileName(child.name)) {
+        files.push({
+          handle: child,
+          name: child.name,
+          relativePath: childPath,
+        });
+      }
+    }
+  }
+
+  await scanDirectory(directoryHandle, "", 0);
+
+  return {
+    files,
+    reachedLimit: files.length >= maxFiles,
+  };
+}
+
+function shouldSkipRecoveredRecord(existingRecord, recoveredRecord) {
+  if (!existingRecord || getDocumentStorageKind(existingRecord) !== "browser") {
+    return false;
+  }
+
+  const existingTime = Date.parse(existingRecord.updatedAt || "");
+  const recoveredTime = Date.parse(recoveredRecord.updatedAt || "");
+
+  return !isNaN(existingTime) && !isNaN(recoveredTime) && existingTime > recoveredTime;
+}
+
+function getRecoverySummaryMessage(result) {
+  const lines = [
+    `Found ${result.found} project file${result.found === 1 ? "" : "s"}.`,
+    `Recovered ${result.recovered}. Updated ${result.updated}. Skipped ${result.skipped}. Failed ${result.failed}.`,
+  ];
+
+  if (result.reachedLimit) {
+    lines.push("The scan stopped at the file limit. Some files may not have been checked.");
+  }
+
+  return lines.join("\n");
+}
+
+async function recoverLibraryFromFolder() {
+  if (!hasWorkspaceFolderSelected()) {
+    await showAlertDialog(
+      "Choose A Folder",
+      "Choose a device folder before recovering the library."
+    );
+    return;
+  }
+
+  await flushDocumentSave();
+  await refreshDocuments();
+  setSaveStatus("Scanning folder...");
+
+  const result = {
+    found: 0,
+    recovered: 0,
+    updated: 0,
+    skipped: 0,
+    failed: 0,
+    reachedLimit: false,
+  };
+
+  try {
+    const directoryHandle = await getWorkspaceDirectoryHandle({
+      requestPermission: true,
+    });
+    const scan = await scanDirectoryForDinoDrawFiles(directoryHandle);
+    const recordsByUuid = new Map();
+    const recoveredUuids = new Set();
+
+    result.found = scan.files.length;
+    result.reachedLimit = scan.reachedLimit;
+    state.documents.forEach((record) => {
+      const uuid = getRecordUuid(record);
+
+      if (uuid) {
+        recordsByUuid.set(uuid, record);
+      }
+    });
+
+    for (const fileEntry of scan.files) {
+      try {
+        const file = await fileEntry.handle.getFile();
+        const text = await readTextFile(file);
+        const parsed = JSON.parse(text);
+        const source = getImportedDocumentSource(parsed);
+
+        if (!source || !Array.isArray(source.pages)) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const sourceUuid = getImportedSourceUuid(source);
+
+        if (sourceUuid && recoveredUuids.has(sourceUuid)) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const existingRecord = sourceUuid
+          ? recordsByUuid.get(sourceUuid)
+          : null;
+        const recordId = existingRecord
+          ? existingRecord.id
+          : sourceUuid || createDocumentUuid();
+        const recordUuid = existingRecord
+          ? getRecordUuid(existingRecord)
+          : sourceUuid || recordId;
+        const record = normalizeImportedDocument(parsed, {
+          id: recordId,
+          uuid: recordUuid,
+          folderId: existingRecord
+            ? existingRecord.folderId
+            : state.currentFolderId,
+          lastOpenedAt: existingRecord
+            ? existingRecord.lastOpenedAt
+            : undefined,
+        });
+
+        if (shouldSkipRecoveredRecord(existingRecord, record)) {
+          result.skipped += 1;
+          continue;
+        }
+
+        const now = new Date().toISOString();
+
+        record.storageKind = "fileSystem";
+        record.workspaceId = storageSettingsRecordId;
+        record.fileHandleId = getDocumentFileHandleId(record.id);
+        record.fileName = fileEntry.name;
+        record.relativePath = fileEntry.relativePath;
+        record.fileLastModifiedAt = file.lastModified
+          ? new Date(file.lastModified).toISOString()
+          : now;
+        record.catalogedAt = now;
+
+        await putStorageHandleRecord({
+          id: record.fileHandleId,
+          kind: "file",
+          name: fileEntry.name,
+          handle: fileEntry.handle,
+        });
+        await saveFullDocumentRecord(record);
+
+        if (record.id === state.documentId) {
+          applyActiveDocumentStorageMetadata(record);
+          state.documentUpdatedAt = record.updatedAt;
+          state.documentLastOpenedAt = record.lastOpenedAt;
+        }
+
+        if (sourceUuid) {
+          recoveredUuids.add(sourceUuid);
+          recordsByUuid.set(sourceUuid, record);
+        }
+
+        if (existingRecord) {
+          result.updated += 1;
+        } else {
+          result.recovered += 1;
+        }
+
+        setSaveStatus(`Recovered ${result.recovered + result.updated}/${result.found}`);
+        await yieldToBrowser();
+      } catch (error) {
+        result.failed += 1;
+        console.error(error);
+      }
+    }
+
+    await refreshDocuments();
+    updateStorageStatus();
+    setSaveStatus("Library recovery finished");
+    await showAlertDialog("Recovery Finished", getRecoverySummaryMessage(result));
+  } catch (error) {
+    setSaveStatus("Recovery failed");
+    await showAlertDialog(
+      "Recovery Failed",
+      "Dino Draw could not scan the selected folder."
+    );
+    console.error(error);
+  }
+}
+
+function getStorageCounts() {
+  const counts = {
+    fileSystem: 0,
+    browser: 0,
+    draft: 0,
+    missing: 0,
+  };
+
+  state.documents.forEach((record) => {
+    const storageKind = getDocumentStorageKind(record);
+
+    counts[storageKind] += 1;
+  });
+
+  return counts;
+}
+
+function getBrowserCacheDocumentRecords(records) {
+  return records.filter((record) => {
+    const storageKind = getDocumentStorageKind(record);
+    return storageKind === "browser" || storageKind === "missing";
+  });
+}
+
+async function saveBrowserProjectsToFolder() {
+  if (!hasWorkspaceFolderSelected()) {
+    await showAlertDialog(
+      "Choose A Folder",
+      "Choose a device folder before saving browser-cached projects there."
+    );
+    return;
+  }
+
+  await flushDocumentSave();
+  await refreshDocuments();
+
+  const browserDocuments = getBrowserCacheDocumentRecords(state.documents);
+
+  if (browserDocuments.length === 0) {
+    setSaveStatus("No browser projects");
+    await showAlertDialog(
+      "No Browser Projects",
+      "There are no browser-cached projects to save to the device folder."
+    );
+    return;
+  }
+
+  const confirmed = await showConfirmDialog(
+    "Save Browser Projects?",
+    `Save ${browserDocuments.length} browser-cached project${
+      browserDocuments.length === 1 ? "" : "s"
+    } to the connected device folder? This includes missing projects that can still open from the browser cache.`,
+    "Save Projects"
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  let saved = 0;
+  let failed = 0;
+
+  for (let index = 0; index < browserDocuments.length; index += 1) {
+    const record = browserDocuments[index];
+
+    setSaveStatus(
+      `Saving browser projects ${index + 1}/${browserDocuments.length}...`
+    );
+
+    if (await saveDocumentToFolder(record.id, { silent: true })) {
+      saved += 1;
+    } else {
+      failed += 1;
+    }
+
+    await yieldToBrowser();
+  }
+
+  await refreshDocuments();
+  updateStorageStatus();
+  setSaveStatus(`Saved ${saved} browser project${saved === 1 ? "" : "s"} to folder`);
+  await showAlertDialog(
+    "Browser Projects Saved",
+    `Saved ${saved}. Failed ${failed}.`
+  );
+}
+
+function getStorageSummaryText() {
+  const counts = getStorageCounts();
+
+  const parts = [];
+
+  if (counts.fileSystem) {
+    parts.push(
+      `${counts.fileSystem} in device folder${
+        counts.fileSystem === 1 ? "" : "s"
+      }`
+    );
+  }
+
+  if (counts.browser || state.documents.length === 0) {
+    parts.push(
+      `${counts.browser} in browser storage`
+    );
+  }
+
+  if (counts.draft) {
+    parts.push(`${counts.draft} draft${counts.draft === 1 ? "" : "s"}`);
+  }
+
+  if (counts.missing) {
+    parts.push(`${counts.missing} missing`);
+  }
+
+  return parts.join(" - ");
+}
+
+function updateStorageStatus() {
+  if (!storageStatus) {
+    return;
+  }
+
+  const supportsFileSystemStorage = getFileSystemStorageSupport();
+  const hasWorkspaceFolder = hasWorkspaceFolderSelected();
+  const workspaceFolderName = getWorkspaceFolderName();
+  const storageCounts = getStorageCounts();
+  const hasBrowserDocuments = storageCounts.browser > 0;
+  const browserCacheCount = storageCounts.browser + storageCounts.missing;
+  const hasBrowserCacheDocuments = browserCacheCount > 0;
+  const hasMissingDocuments = storageCounts.missing > 0;
+
+  storageStatus.dataset.storageSupport = hasWorkspaceFolder
+    ? "connected"
+    : supportsFileSystemStorage
+      ? "available"
+      : "unavailable";
+  storageStatusTitle.textContent = hasWorkspaceFolder
+    ? "Device folder active"
+    : supportsFileSystemStorage
+      ? "Browser storage active - device folder storage available"
+      : "Browser storage active";
+  storageStatusMessage.textContent = hasWorkspaceFolder
+    ? `New drawings save to "${workspaceFolderName}" as project files. Browser-stored drawings can use Save to Folder.`
+    : supportsFileSystemStorage
+      ? "Device folder storage is the recommended durable option. Choose a folder to save new drawings as project files."
+      : "This browser cannot grant Dino Draw direct folder access. Projects are saved inside this browser, and clearing site data may remove them.";
+  storageStatusSummary.textContent = hasMissingDocuments
+    ? hasWorkspaceFolder
+      ? `${getStorageSummaryText()}. Use Recover Library to reconnect disk files or Save Browser Projects to recreate them from browser cache.`
+      : `${getStorageSummaryText()}. Use Recover Library after reconnecting the folder.`
+    : hasBrowserDocuments
+    ? hasWorkspaceFolder
+      ? `${getStorageSummaryText()}. Use Save to Folder for browser-stored drawings.`
+      : `${getStorageSummaryText()}. Export important browser-stored projects as backups.`
+    : getStorageSummaryText();
+
+  if (storageChooseFolderButton) {
+    storageChooseFolderButton.hidden = !supportsFileSystemStorage;
+    storageChooseFolderButton.textContent = hasWorkspaceFolder
+      ? "Change Folder"
+      : "Choose Folder";
+  }
+
+  if (storageForgetFolderButton) {
+    storageForgetFolderButton.hidden =
+      !supportsFileSystemStorage || !hasWorkspaceFolder;
+  }
+
+  if (storageRecoverLibraryButton) {
+    storageRecoverLibraryButton.hidden =
+      !supportsFileSystemStorage || !hasWorkspaceFolder;
+  }
+
+  if (storageSaveBrowserButton) {
+    storageSaveBrowserButton.hidden =
+      !supportsFileSystemStorage || !hasWorkspaceFolder;
+    storageSaveBrowserButton.disabled = !hasBrowserCacheDocuments;
+    storageSaveBrowserButton.textContent = hasBrowserCacheDocuments
+      ? `Save Browser Projects (${browserCacheCount})`
+      : "No Browser Projects";
+    storageSaveBrowserButton.title = hasBrowserCacheDocuments
+      ? "Save browser-stored and missing-but-cached projects to the connected device folder."
+      : "There are no browser-cached projects to save to the connected device folder.";
+  }
+
+  saveToFolderButtons.forEach((button) => {
+    button.disabled = !state.documentId || !hasWorkspaceFolder;
+  });
+
+  if (documentSaveToFolderButton) {
+    documentSaveToFolderButton.disabled = !hasWorkspaceFolder;
+  }
+}
+
 function updateDocumentSubtitle() {
   const currentFolder = getFolderById(state.currentFolderId);
   const folderName = currentFolder
@@ -2573,6 +3745,9 @@ function updateDocumentSubtitle() {
     exportDocumentButtons.forEach((button) => {
       button.disabled = true;
     });
+    saveToFolderButtons.forEach((button) => {
+      button.disabled = true;
+    });
     exportPngZipButtons.forEach((button) => {
       button.disabled = true;
     });
@@ -2589,6 +3764,9 @@ function updateDocumentSubtitle() {
   });
   exportDocumentButtons.forEach((button) => {
     button.disabled = false;
+  });
+  saveToFolderButtons.forEach((button) => {
+    button.disabled = !hasWorkspaceFolderSelected();
   });
   exportPngZipButtons.forEach((button) => {
     button.disabled = false;
@@ -2658,6 +3836,9 @@ function openDocumentActionMenu(id, anchor) {
 
   closeDocumentMenus();
   documentActionMenu.dataset.documentId = id;
+  if (documentSaveToFolderButton) {
+    documentSaveToFolderButton.disabled = !hasWorkspaceFolderSelected();
+  }
   documentActionMenu.classList.remove("is-hidden");
   documentActionMenu.style.left = "-9999px";
   documentActionMenu.style.top = "-9999px";
@@ -3129,6 +4310,7 @@ function renderDocumentList() {
   state.currentFolderId = resolveExistingFolderId(state.currentFolderId);
   updateDocumentSubtitle();
   renderDocumentBreadcrumbs();
+  updateStorageStatus();
 
   const currentFolderId = state.currentFolderId;
   const folders = state.folders.filter(
@@ -3166,6 +4348,8 @@ function renderDocumentList() {
     const actions = document.createElement("div");
     const openButton = document.createElement("button");
     const menuButton = document.createElement("button");
+    const storageBadge = document.createElement("span");
+    const storageKind = getDocumentStorageKind(documentRecord);
 
     row.className = "document-row";
     row.classList.toggle("is-active", documentRecord.id === state.documentId);
@@ -3177,15 +4361,21 @@ function renderDocumentList() {
     icon.setAttribute("aria-hidden", "true");
     icon.textContent = "article";
     label.textContent = documentRecord.name || "Untitled";
+    storageBadge.className = `document-storage-badge is-${getDocumentStorageClass(storageKind)}`;
+    storageBadge.textContent = getDocumentStorageLabel(storageKind);
+    storageBadge.title = getDocumentStorageTitle(storageKind);
     meta.className = "document-meta";
     actions.className = "document-row-actions";
     const pageCount = getDocumentPageCount(documentRecord) || 1;
+    const storageDetail = getDocumentStorageDetail(documentRecord);
 
     meta.textContent = `${pageCount} page${
       pageCount === 1 ? "" : "s"
     } - opened ${formatDateLabel(
       documentRecord.lastOpenedAt || documentRecord.updatedAt
-    )} - edited ${formatDateLabel(documentRecord.updatedAt)}`;
+    )} - edited ${formatDateLabel(documentRecord.updatedAt)}${
+      storageDetail ? ` - ${storageDetail}` : ""
+    }`;
 
     [
       [openButton, "Open"],
@@ -3214,7 +4404,7 @@ function renderDocumentList() {
       openDocumentActionMenu(documentRecord.id, menuButton);
     });
 
-    name.append(icon, label);
+    name.append(icon, label, storageBadge);
     details.append(name, meta);
     actions.append(openButton, menuButton);
     row.append(details, actions);
@@ -3231,6 +4421,18 @@ async function refreshDocuments() {
 
     state.folders = records[0];
     state.documents = records[1];
+
+    if (!state.isValidatingDocumentFiles) {
+      state.isValidatingDocumentFiles = true;
+      try {
+        if (await validateFileSystemDocumentRecords(state.documents)) {
+          state.documents = await getAllDocuments();
+        }
+      } finally {
+        state.isValidatingDocumentFiles = false;
+      }
+    }
+
     renderDocumentList();
   } catch (error) {
     setSaveStatus("Storage unavailable");
@@ -3276,13 +4478,29 @@ async function saveCurrentDocument() {
         const record = serializeCurrentDocument();
 
         await putDocument(record);
+        let savedToFolder = false;
+        let folderSaveError = null;
+
+        try {
+          savedToFolder = await writeActiveDocumentToFileSystem(record);
+        } catch (error) {
+          folderSaveError = error;
+          console.error(error);
+        }
+
         state.documentUpdatedAt = record.updatedAt;
         state.documentLastOpenedAt = record.lastOpenedAt;
         state.pages.forEach((page) => {
           page.isDirty = false;
         });
         state.deletedPageIds.clear();
-        setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
+        setSaveStatus(
+          folderSaveError
+            ? "Folder save failed; browser cache saved"
+            : savedToFolder
+              ? `Saved to folder ${formatDateLabel(record.updatedAt)}`
+              : `Saved ${formatDateLabel(record.updatedAt)}`
+        );
         await refreshDocuments();
         evictInactivePageCanvases();
         return;
@@ -3311,6 +4529,16 @@ async function saveCurrentDocument() {
 
       await verifySplitDocumentStorage(record);
       await putDocument(record);
+      let savedToFolder = false;
+      let folderSaveError = null;
+
+      try {
+        savedToFolder = await writeActiveDocumentToFileSystem(record);
+      } catch (error) {
+        folderSaveError = error;
+        console.error(error);
+      }
+
       state.documentUpdatedAt = record.updatedAt;
       state.documentLastOpenedAt = record.lastOpenedAt;
       dirtyPages.forEach((entry) => {
@@ -3319,7 +4547,13 @@ async function saveCurrentDocument() {
         }
       });
       deletedPageIds.forEach((pageId) => state.deletedPageIds.delete(pageId));
-      setSaveStatus(`Saved ${formatDateLabel(record.updatedAt)}`);
+      setSaveStatus(
+        folderSaveError
+          ? "Folder save failed; browser cache saved"
+          : savedToFolder
+            ? `Saved to folder ${formatDateLabel(record.updatedAt)}`
+            : `Saved ${formatDateLabel(record.updatedAt)}`
+      );
       await refreshDocuments();
       evictInactivePageCanvases();
     } catch (error) {
@@ -3327,13 +4561,29 @@ async function saveCurrentDocument() {
         const fallbackRecord = serializeCurrentDocument();
 
         await putDocument(fallbackRecord);
+        let savedToFolder = false;
+        let folderSaveError = null;
+
+        try {
+          savedToFolder = await writeActiveDocumentToFileSystem(fallbackRecord);
+        } catch (writeError) {
+          folderSaveError = writeError;
+          console.error(writeError);
+        }
+
         state.documentUpdatedAt = fallbackRecord.updatedAt;
         state.documentLastOpenedAt = fallbackRecord.lastOpenedAt;
         state.pages.forEach((page) => {
           page.isDirty = false;
         });
         state.deletedPageIds.clear();
-        setSaveStatus(`Saved ${formatDateLabel(fallbackRecord.updatedAt)}`);
+        setSaveStatus(
+          folderSaveError
+            ? "Folder save failed; browser cache saved"
+            : savedToFolder
+              ? `Saved to folder ${formatDateLabel(fallbackRecord.updatedAt)}`
+              : `Saved ${formatDateLabel(fallbackRecord.updatedAt)}`
+        );
         await refreshDocuments();
         evictInactivePageCanvases();
       } catch (fallbackError) {
@@ -3414,6 +4664,15 @@ async function loadDocument(record, shouldHideLibrary = true) {
   state.documentUpdatedAt = record.updatedAt || state.documentCreatedAt;
   state.documentLastOpenedAt = record.lastOpenedAt || state.documentUpdatedAt;
   state.documentFolderId = resolveExistingFolderId(record.folderId);
+  state.documentStorageKind = getDocumentStorageKind(record);
+  state.documentWorkspaceId = normalizeStorageText(record.workspaceId);
+  state.documentFileHandleId = normalizeStorageText(record.fileHandleId);
+  state.documentFileName = normalizeStorageText(record.fileName);
+  state.documentRelativePath = normalizeStorageText(record.relativePath);
+  state.documentFileLastModifiedAt = normalizeStorageTimestamp(
+    record.fileLastModifiedAt
+  );
+  state.documentCatalogedAt = normalizeStorageTimestamp(record.catalogedAt);
   applyDocumentSettings(record.settings || {});
   applyDocumentToolbarPositions((record.settings || {}).toolbarPositions || {});
 
@@ -3444,7 +4703,11 @@ async function loadDocument(record, shouldHideLibrary = true) {
   updatePageControls();
   syncBackgroundInputs();
   renderWorkspace();
-  setSaveStatus(`Saved ${formatDateLabel(state.documentUpdatedAt)}`);
+  setSaveStatus(
+    state.documentStorageKind === "missing"
+      ? "Project file missing; opened browser cache"
+      : `Saved ${formatDateLabel(state.documentUpdatedAt)}`
+  );
   await refreshDocuments();
   finishPerformanceTimer(loadPerformanceTimer, {
     documentId: state.documentId || "",
@@ -3493,6 +4756,25 @@ async function createNewDocument() {
   const record = createDocumentRecord(name, state.currentFolderId);
 
   record.lastOpenedAt = new Date().toISOString();
+  if (hasWorkspaceFolderSelected()) {
+    try {
+      await attachFileSystemStorageToRecord(record);
+      await writeDinoDrawRecordToFileSystem(record);
+    } catch (error) {
+      if (record.fileHandleId) {
+        await deleteStorageHandleRecord(record.fileHandleId);
+      }
+      record.storageKind = "browser";
+      delete record.workspaceId;
+      delete record.fileHandleId;
+      delete record.fileName;
+      delete record.relativePath;
+      delete record.fileLastModifiedAt;
+      delete record.catalogedAt;
+      setSaveStatus("Folder save failed; using browser storage");
+      console.error(error);
+    }
+  }
   await saveFullDocumentRecord(record);
   await refreshDocuments();
   await loadDocument(record);
@@ -3602,6 +4884,10 @@ async function deleteDocument(id) {
     return;
   }
 
+  if (record.fileHandleId) {
+    await deleteStorageHandleRecord(record.fileHandleId);
+  }
+
   await deleteDocumentRecord(id);
 
   if (state.documentId === id) {
@@ -3614,6 +4900,13 @@ async function deleteDocument(id) {
     state.documentUpdatedAt = null;
     state.documentLastOpenedAt = null;
     state.documentFolderId = null;
+    state.documentStorageKind = "browser";
+    state.documentWorkspaceId = "";
+    state.documentFileHandleId = "";
+    state.documentFileName = "";
+    state.documentRelativePath = "";
+    state.documentFileLastModifiedAt = "";
+    state.documentCatalogedAt = "";
     state.deletedPageIds.clear();
     applyDocumentToolbarPositions();
     clearPageThumbnailCache();
@@ -3737,6 +5030,68 @@ async function getRecordForExport(id) {
   }
 
   return getFullDocumentRecord(id);
+}
+
+async function saveDocumentToFolder(id, options = {}) {
+  if (!id) {
+    setSaveStatus("No document");
+    return false;
+  }
+
+  if (!hasWorkspaceFolderSelected()) {
+    if (!options.silent) {
+      await showAlertDialog(
+        "Choose A Folder",
+        "Choose a device folder before saving a project file there."
+      );
+    }
+    return false;
+  }
+
+  const record = await getRecordForExport(id);
+
+  if (!record) {
+    setSaveStatus("No document");
+    return false;
+  }
+
+  const originalStorageKind = getDocumentStorageKind(record);
+  const originalFileHandleId = normalizeStorageText(record.fileHandleId);
+
+  try {
+    await attachFileSystemStorageToRecord(record);
+    await writeDinoDrawRecordToFileSystem(record);
+    await saveFullDocumentRecord(record);
+
+    if (id === state.documentId) {
+      applyActiveDocumentStorageMetadata(record);
+      state.documentUpdatedAt = record.updatedAt;
+      state.documentLastOpenedAt = record.lastOpenedAt;
+    }
+
+    await refreshDocuments();
+    if (!options.silent) {
+      setSaveStatus("Saved to folder");
+    }
+    return true;
+  } catch (error) {
+    if (
+      originalStorageKind !== "fileSystem" &&
+      record.fileHandleId &&
+      record.fileHandleId !== originalFileHandleId
+    ) {
+      await deleteStorageHandleRecord(record.fileHandleId);
+    }
+    if (!options.silent) {
+      setSaveStatus("Save to folder failed");
+      await showAlertDialog(
+        "Save To Folder Failed",
+        "Dino Draw could not save this project to the selected folder."
+      );
+    }
+    console.error(error);
+    return false;
+  }
 }
 
 function getKnownDocumentName(id) {
@@ -4083,6 +5438,7 @@ function normalizeImportedDocument(parsed, options = {}) {
     uuid,
     name: `${source.name || "Imported document"}`,
     folderId: resolveExistingFolderId(folderId),
+    storageKind: "browser",
     createdAt: source.createdAt || now,
     updatedAt: normalizeTimestamp(
       source.updatedAt || source.modifiedAt,
@@ -11504,6 +12860,7 @@ async function initializeApp() {
   resizeCanvas();
 
   try {
+    await ensureStorageSettingsRecord();
     await migrateExistingDocumentRecords();
     await refreshDocuments();
     updateDocumentSubtitle();
@@ -11627,6 +12984,14 @@ exportDocumentButtons.forEach((button) => {
     });
   });
 });
+saveToFolderButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    saveDocumentToFolder(state.documentId).catch((error) => {
+      setSaveStatus("Save to folder failed");
+      console.error(error);
+    });
+  });
+});
 exportPngZipButtons.forEach((button) => {
   button.addEventListener("click", () => {
     exportPngZip().catch((error) => {
@@ -11718,6 +13083,48 @@ documentScreen.addEventListener("click", (event) => {
   }
 });
 documentPanel.addEventListener("scroll", closeDocumentMenus);
+if (storageChooseFolderButton) {
+  storageChooseFolderButton.addEventListener("click", () => {
+    chooseStorageFolder().catch((error) => {
+      setSaveStatus("Folder connection failed");
+      console.error(error);
+    });
+  });
+}
+if (storageRecoverLibraryButton) {
+  storageRecoverLibraryButton.addEventListener("click", () => {
+    recoverLibraryFromFolder().catch((error) => {
+      setSaveStatus("Recovery failed");
+      console.error(error);
+    });
+  });
+}
+if (storageSaveBrowserButton) {
+  storageSaveBrowserButton.addEventListener("click", () => {
+    saveBrowserProjectsToFolder().catch((error) => {
+      setSaveStatus("Save browser projects failed");
+      console.error(error);
+    });
+  });
+}
+if (storageForgetFolderButton) {
+  storageForgetFolderButton.addEventListener("click", async () => {
+    const confirmed = await showConfirmDialog(
+      "Forget Device Folder?",
+      "Dino Draw will forget this folder permission. Current browser-stored projects will not be deleted.",
+      "Forget Folder"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    forgetStorageFolder().catch((error) => {
+      setSaveStatus("Folder update failed");
+      console.error(error);
+    });
+  });
+}
 documentRenameButton.addEventListener("click", () => {
   const id = documentActionMenu.dataset.documentId;
 
@@ -11742,6 +13149,15 @@ documentExportButton.addEventListener("click", () => {
   closeDocumentMenus();
   exportDocument(id).catch((error) => {
     setSaveStatus("Export failed");
+    console.error(error);
+  });
+});
+documentSaveToFolderButton.addEventListener("click", () => {
+  const id = documentActionMenu.dataset.documentId;
+
+  closeDocumentMenus();
+  saveDocumentToFolder(id).catch((error) => {
+    setSaveStatus("Save to folder failed");
     console.error(error);
   });
 });

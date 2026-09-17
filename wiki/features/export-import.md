@@ -10,6 +10,7 @@ Export/import behavior is implemented mostly in `src/app.js`.
 - User-facing button text should be `Export`.
 - Avoid reviving old `DrawDoc` user-facing text.
 - Current wrapped export shape is `{ format, formatVersion, exportedAt, document }`; exported document records include `uuid`.
+- Local storage metadata such as `storageKind`, workspace IDs, handle IDs, file names, relative paths, and catalog timestamps should be stripped from editable exports so project files stay portable.
 - Current `formatVersion` is `1`.
 - Export calls `flushDocumentSave()` first when exporting the active document, then serializes current in-memory state.
 - Exports try the native Save As picker when `showSaveFilePicker()` is available in a secure context. If the picker is unavailable or blocked before it opens, exports fall back to the browser download behavior. If the user cancels the picker, the export is cancelled and does not fall back to automatic download.

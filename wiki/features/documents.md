@@ -26,13 +26,19 @@ Document behavior is implemented mostly in `src/app.js`, with markup in `src/ind
 - Existing records with no `uuid` are migrated in place on app startup without changing `updatedAt`.
 - Documents are listed by last opened date, most recent first.
 - The current folder title appears above the folder-scoped action row.
+- A storage status panel appears above the document list. In Phase 1 of the file-system storage roadmap, it reports whether File System Access APIs are available and clarifies that current projects are still saved in browser storage.
+- In Phase 3, the storage status panel includes Choose/Change Folder and Forget Folder controls where `showDirectoryPicker()` is available in a secure context.
+- In Phase 4, new drawings become disk-backed when a workspace folder is connected. Existing browser-backed drawings can use Save to Folder from the document menu or Settings.
+- In Phase 5, Recover Library scans the connected workspace folder for `.dinodraw.json` files and rebuilds the IndexedDB catalog/cache by document `uuid`.
+- In Phase 6, the storage status panel includes Save Browser Projects when a connected folder exists. It shows the browser-cache project count when work remains, including missing records that can still open from the browser cache, and disables itself when there are no browser-cached projects to move. Missing-file records get priority recovery guidance.
 - The New Drawing, New Folder, and Import Doc buttons sit together at the bottom of the Documents panel and may stack on small screens.
 - Link-style breadcrumbs show the current folder path and navigate back to `My Documents` or parent folders. Breadcrumb levels are separated with `keyboard_arrow_right` icons.
 - Folder rows appear before document rows in the current folder and include Open plus a three-dot menu.
 - Folder and document rows include a left-side type icon, title, metadata, an Open button, and a three-dot menu for secondary actions.
 - Metadata should include page count, opened date, and edited date, including the year.
+- File-backed and missing document rows append their file path/name to the metadata line when available.
 - The document row three-dot menu is text-only.
-- Expected document row actions include Move, Rename, Export, Save PNG, Save PDF, and Delete.
+- Expected document row actions include Move, Rename, Export, Save to Folder, Save PNG, Save PDF, and Delete.
 - Expected folder row actions include Rename, Move, and Delete. Deleting a folder moves direct child folders and documents up one level rather than deleting document content.
 - Rows can be dragged from their body onto folder rows, breadcrumbs, `My Documents`, or the parent/back target to move them. Dragging requires a short press-and-hold; movement before the hold manually scrolls the document panel so straight vertical swipes remain usable. The Move menu remains the fallback path.
 
@@ -51,9 +57,15 @@ The Instructions guide should remain local/offline, full-screen, readable on tab
 
 ## Saving
 
-- Local document saving uses IndexedDB.
+- Browser-backed document saving uses IndexedDB.
+- Phase 1 storage clarity is implemented: document records include `storageKind`, existing records default to `browser`, and document rows show a storage badge.
+- Phase 2 schema work is implemented: IndexedDB version `6` adds `storageSettings` and `storageHandles` stores for future device-folder handles and workspace preferences.
+- Phase 3 folder selection is implemented: `storageSettings.workspaceHandleId` points to the selected workspace directory handle record, and `storageSettings.workspaceName` stores the display name.
+- Phase 4 disk-backed saving is implemented: new drawings save to `.dinodraw.json` files when a workspace folder is connected, and existing browser-backed drawings can be converted with Save to Folder. IndexedDB remains a catalog/cache for disk-backed drawings.
+- Phase 5 recovery is implemented: Recover Library scans the connected folder recursively for `.dinodraw.json` files, updates existing same-UUID records, and creates new file-backed records for projects missing from IndexedDB.
+- Phase 6 mixed-storage management is implemented: Save Browser Projects bulk-converts remaining browser-backed drawings and missing-but-cached drawings, missing-file records show recovery guidance, and rows include storage path/name detail.
 - Current historical database name: `booxDrawingDocuments`.
-- Current object stores: `documents`, `documentPages`, and `folders`.
+- Current object stores: `documents`, `documentPages`, `folders`, `storageSettings`, and `storageHandles`.
 - Save behavior should include all pages, backgrounds, `underLayer`, normal `layer`, and document settings.
 - Saves are debounced by `scheduleDocumentSave()`, currently with a default delay of `700ms`.
 - `saveCurrentDocument()` writes document metadata and only dirty page records when split page storage is available.
@@ -62,6 +74,11 @@ The Instructions guide should remain local/offline, full-screen, readable on tab
 - If a save is already in progress, the code sets `shouldSaveAgain` so another save is scheduled after the current write finishes.
 - `flushDocumentSave()` is used before document switching, exporting, renaming, deleting, and creating new documents.
 - Old records with embedded `pages` remain readable and are marked dirty on load so they can be split into `documentPages` on the next save.
+- Forgetting or changing a workspace folder marks file-backed catalog records as `missing` and removes stored handles without deleting disk files. Run Recover Library after reconnecting the folder that contains those project files.
+- Refreshing the document list validates file-backed handles. If a disk file was deleted or can no longer be read, Dino Draw marks that catalog record as `missing`.
+- Deleting a file-backed document currently removes Dino Draw's catalog/cache and stored file handle, but does not physically delete the disk file.
+- Recovery skips a disk file when an existing browser-backed same-UUID document has a newer `updatedAt` timestamp.
+- Opening a missing record uses the browser cache and updates the save status to warn that the project file is missing. Save Browser Projects can write missing-but-cached records back into the connected device folder.
 
 ## Document Record Shape
 
@@ -71,6 +88,13 @@ Current local records include:
 - `uuid`
 - `name`
 - `folderId`
+- `storageKind`
+- `workspaceId`
+- `fileHandleId`
+- `fileName`
+- `relativePath`
+- `fileLastModifiedAt`
+- `catalogedAt`
 - `createdAt`
 - `updatedAt`
 - `lastOpenedAt`
@@ -82,7 +106,7 @@ Current local records include:
 
 `settings` includes eraser size, active preset index, brush presets, shape config, and regular toolbar positions.
 
-Editable DinoDraw JSON exports still use the portable full-document format with `pages`. Import splits that portable format back into document metadata and separate page records in IndexedDB.
+Editable DinoDraw JSON exports still use the portable full-document format with `pages`. Import splits that portable format back into document metadata and separate page records in IndexedDB. Local storage metadata such as `storageKind`, workspace IDs, handle IDs, file names, relative paths, and catalog timestamps should not be included in portable exports.
 
 `settings.toolbarPositions` stores per-document position records for:
 

@@ -12,6 +12,7 @@ Agents should read this page first, then only the pages relevant to the task.
 - [Testing](testing.md): validation commands, BOOX-sensitive checks, and review checklist.
 - [Known Issues](known-issues.md): open risks, recurring pitfalls, and things to watch.
 - [Performance Roadmap](performance-roadmap.md): chunked large-document performance plan and status.
+- [File System Storage Roadmap](filesystem-storage-roadmap.md): durable on-disk project storage plan and phase status.
 - [Log](log.md): chronological wiki maintenance and durable project-memory entries.
 
 ## Feature Pages

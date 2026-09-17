@@ -61,12 +61,19 @@ Each page can have its own background. When you add a new page, it starts with t
 
 ## Saving And Exporting
 
-Dino Draw saves documents locally in your browser.
+Dino Draw saves editable documents locally. The Documents screen shows the active storage mode and marks each document with a storage badge such as `Browser` or `Folder`.
+
+When device-folder storage is supported by the browser, Dino Draw can connect to a chosen folder. New drawings then save as editable `.dinodraw.json` files in that folder. Existing browser-stored drawings can be moved there with `Save to Folder`.
+
+If browser storage is cleared, choose the same device folder again and use `Recover Library` to rebuild the document list from `.dinodraw.json` project files.
 
 Inside a document, open Settings from the main toolbar to find document actions:
 
 - `Save` stores the current document locally.
 - `Export` downloads an editable Dino Draw document file.
+- `Save to Folder` saves a browser-stored document into the connected device folder.
+- `Save Browser Projects` saves all remaining browser-stored drawings into the connected folder.
+- `Recover Library` scans the connected folder for editable Dino Draw project files.
 - `Save PNG` downloads the pages as PNG image files.
 - `Save PDF` downloads the pages as a PDF.
 
@@ -91,6 +98,6 @@ For the best offline experience, use Dino Draw from an HTTPS site or from localh
 
 ## Privacy
 
-Dino Draw is local-first. Your documents are saved in the browser on the device you are using unless you choose to export or share them.
+Dino Draw is local-first. Current editable documents are saved in the browser on the device you are using unless you choose to export or share them.
 
 Clearing browser storage, site data, or cache may remove locally saved documents, so export important work periodically.

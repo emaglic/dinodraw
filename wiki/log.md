@@ -516,3 +516,83 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Serialized evicted page layers back to saved raster strings before releasing canvas layers and non-meaningful history snapshots.
 - Ran eviction after successful saves, page switches, and thumbnail rendering.
 - Bumped the app/cache version to `v0.8.141`.
+
+## [2026-09-16] storage | Started File System Storage Roadmap
+
+- Added `wiki/filesystem-storage-roadmap.md` to track durable device-folder storage work across sessions.
+- Started Phase 1 by adding storage support detection, a Documents-screen storage status panel, and document storage badges.
+- Defaulted existing and new editable documents to `storageKind: "browser"` while preserving the existing IndexedDB save path.
+- Kept portable DinoDraw exports free of local storage metadata.
+- Bumped the app/cache version to `v0.8.142`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 2
+
+- Bumped IndexedDB to version `6`.
+- Added `storageSettings` and `storageHandles` object stores for future workspace preferences and File System Access handles.
+- Added document metadata normalization for workspace/file handle IDs, filenames, relative paths, file modified timestamps, and catalog timestamps.
+- Preserved storage metadata across document load/save while keeping editable exports portable.
+- Bumped the app/cache version to `v0.8.143`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 3
+
+- Added Choose/Change Folder and Forget Folder controls to the Documents storage status panel.
+- Used `showDirectoryPicker({ mode: "readwrite" })` where available and persisted the selected workspace directory handle in IndexedDB.
+- Stored the selected folder name and handle ID in `storageSettings`.
+- Updated storage status messaging to show a connected device folder without claiming current projects are disk-backed.
+- Bumped the app/cache version to `v0.8.144`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 4
+
+- Made new drawings disk-backed when a workspace folder is connected.
+- Added Save to Folder actions in Settings and the document row menu to convert browser-backed drawings.
+- Wrote disk-backed documents as portable `.dinodraw.json` files while keeping IndexedDB as the catalog/cache.
+- Preserved conservative disk behavior: forgetting a folder or deleting a catalog entry removes stored handles but does not physically delete project files from disk.
+- Bumped the app/cache version to `v0.8.145`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 5
+
+- Added Recover Library to the storage status panel.
+- Implemented recursive scanning of the connected workspace folder for `.dinodraw.json` project files.
+- Rebuilt IndexedDB document/page records from recovered files by `uuid`, including storing file handles and file-backed metadata.
+- Skipped recovery when an existing browser-backed same-UUID record is newer than the disk file.
+- Bumped the app/cache version to `v0.8.146`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 6
+
+- Added Save Browser Projects to bulk-convert browser-backed drawings when a workspace folder is connected.
+- Added missing-file priority guidance in the storage status summary.
+- Added file path/name detail to file-backed and missing document rows.
+- Warned in save status when opening a missing record from browser cache.
+- Bumped the app/cache version to `v0.8.147`.
+
+## [2026-09-16] storage | Completed File System Storage Phase 7 Docs
+
+- Marked Phase 7 complete in the file-system storage roadmap as a docs/guardrails pass after `v0.8.147`.
+- Added a File System Storage checklist to `wiki/testing.md` for folder setup, disk-backed save, migration, recovery, missing records, and BOOX/browser validation.
+- Added File System Access target-browser risks to `wiki/known-issues.md`.
+- Did not bump the app version because no app code, UI, service worker, cacheable asset, or visible app behavior changed.
+
+## [2026-09-16] storage | Fixed Workspace Folder Change State
+
+- Fixed changing the connected device folder so previously file-backed catalog records are marked `missing` instead of continuing to show `Folder`.
+- Reused the same missing-record behavior as Forget Folder: stored file handles are removed, disk files are not deleted, and Recover Library can reconnect records from the selected folder.
+- Bumped the app/cache version to `v0.8.148`.
+
+## [2026-09-16] storage | Validated Deleted Disk Files
+
+- Added document-list refresh validation for file-backed records.
+- If a stored file handle is missing or `getFile()` fails, Dino Draw now marks the record `missing` and removes the stale file handle.
+- Added the external-delete case to the File System Storage test checklist.
+- Bumped the app/cache version to `v0.8.149`.
+
+## [2026-09-16] storage | Clarified Bulk Browser Project Save
+
+- Kept Save Browser Projects visible whenever a device folder is connected, instead of hiding it when no browser-backed projects remain.
+- Added a browser-project count to the button label and disabled it with a clear empty state when there is nothing to migrate.
+- Bumped the app/cache version to `v0.8.150`.
+
+## [2026-09-16] storage | Included Missing Cached Projects In Bulk Save
+
+- Updated Save Browser Projects to include missing records that still have browser-cached project data.
+- Updated missing-file guidance so users can choose Recover Library to reconnect existing files or Save Browser Projects to recreate files from browser cache.
+- Bumped the app/cache version to `v0.8.151`.
