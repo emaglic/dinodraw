@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.165";
+const APP_VERSION = "v0.8.167";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -448,6 +448,7 @@ const workspaceDirectoryHandleId = "workspaceDirectory";
 const documentFileHandlePrefix = "documentFile:";
 const folderDirectoryHandlePrefix = "folderDirectory:";
 const workspaceRootFolderIdPrefix = "workspaceRootFolder:";
+const workspaceRootFolderId = `${workspaceRootFolderIdPrefix}${storageSettingsRecordId}`;
 const splitPageStorageEnabled = true;
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
@@ -1333,7 +1334,7 @@ async function attachFileSystemStorageToRecord(record) {
   return applyFileSystemMetadata(record, fileName, relativePath, now);
 }
 
-async function getFileHandleForFileSystemRecord(record) {
+async function getFileHandleForFileSystemRecord(record, options = {}) {
   prepareDocumentRecord(record);
 
   if (getDocumentStorageKind(record) !== "fileSystem") {
@@ -1350,7 +1351,7 @@ async function getFileHandleForFileSystemRecord(record) {
   const directoryPath = getRelativeDirectoryPath(record.relativePath);
   const directoryHandle = await getDirectoryHandleForRelativePath(directoryPath, {
     create: false,
-    requestPermission: true,
+    requestPermission: options.requestPermission !== false,
   });
   const fileHandle = await directoryHandle.getFileHandle(fileName, {
     create: false,
@@ -1381,18 +1382,37 @@ function applyActiveDocumentStorageMetadata(record) {
   state.documentCatalogedAt = normalizeStorageTimestamp(record.catalogedAt);
 }
 
-async function writeDinoDrawRecordToFileSystem(record) {
+async function writeDinoDrawRecordToFileSystem(record, options = {}) {
   if (getDocumentStorageKind(record) !== "fileSystem") {
     return false;
   }
 
-  const fileHandle = await getFileHandleForFileSystemRecord(record);
+  const shouldRequestPermission = options.requestPermission !== false;
+  let fileHandle = null;
+
+  try {
+    fileHandle = await getFileHandleForFileSystemRecord(record, {
+      requestPermission: shouldRequestPermission,
+    });
+  } catch (error) {
+    if (!shouldRequestPermission) {
+      return false;
+    }
+
+    throw error;
+  }
+
   const hasPermission = await requestFileSystemHandlePermission(
     fileHandle,
-    "readwrite"
+    "readwrite",
+    { requestPermission: shouldRequestPermission }
   );
 
   if (!hasPermission) {
+    if (!shouldRequestPermission) {
+      return false;
+    }
+
     throw new Error("File permission was denied.");
   }
 
@@ -2343,7 +2363,7 @@ function copyFileSystemWriteMetadata(target, source) {
   target.workspaceId = normalizeStorageText(source.workspaceId);
 }
 
-async function writeActiveDocumentToFileSystem(record) {
+async function writeActiveDocumentToFileSystem(record, options = {}) {
   if (getDocumentStorageKind(record) !== "fileSystem") {
     return false;
   }
@@ -2353,7 +2373,9 @@ async function writeActiveDocumentToFileSystem(record) {
     pages: serializeCurrentDocumentPages(),
   };
 
-  await writeDinoDrawRecordToFileSystem(fullRecord);
+  await writeDinoDrawRecordToFileSystem(fullRecord, {
+    requestPermission: options.requestPermission !== false,
+  });
   copyFileSystemWriteMetadata(record, fullRecord);
   applyActiveDocumentStorageMetadata(record);
   await putDocument(record);
@@ -3419,14 +3441,147 @@ function isWorkspaceRootFolder(folder) {
   return Boolean(folder && folder.workspaceRoot === true);
 }
 
+function isWorkspaceRootFolderCandidate(folder) {
+  return Boolean(
+    folder &&
+      (isWorkspaceRootFolder(folder) ||
+        normalizeStorageText(folder.id).indexOf(workspaceRootFolderIdPrefix) === 0 ||
+        (getFolderStorageKind(folder) === "fileSystem" &&
+          normalizeStorageText(folder.directoryHandleId) ===
+            workspaceDirectoryHandleId &&
+          !normalizeStorageText(folder.relativePath)))
+  );
+}
+
+function getNormalizedFolderRelativePath(folder) {
+  return joinRelativePath(splitRelativePath(folder && folder.relativePath));
+}
+
 function findActiveWorkspaceRootFolder() {
   return (
     state.folders.find(
       (folder) =>
-        isWorkspaceRootFolder(folder) &&
+        folder.id === workspaceRootFolderId &&
+        isWorkspaceRootFolderCandidate(folder)
+    ) ||
+    state.folders.find(
+      (folder) =>
+        isWorkspaceRootFolderCandidate(folder) &&
         getFolderStorageKind(folder) === "fileSystem"
     ) || null
   );
+}
+
+async function mergeFolderRecords(canonicalFolder, duplicateIds) {
+  if (!canonicalFolder || duplicateIds.length === 0) {
+    return false;
+  }
+
+  let changed = false;
+  const duplicateIdSet = new Set(duplicateIds);
+
+  for (const folder of state.folders) {
+    if (duplicateIdSet.has(resolveExistingFolderId(folder.parentId))) {
+      folder.parentId = canonicalFolder.id;
+      folder.updatedAt = new Date().toISOString();
+      await putFolder(folder);
+      changed = true;
+    }
+  }
+
+  for (const record of state.documents) {
+    if (duplicateIdSet.has(resolveExistingFolderId(record.folderId))) {
+      record.folderId = canonicalFolder.id;
+      await putDocument(record);
+      changed = true;
+
+      if (record.id === state.documentId) {
+        state.documentFolderId = canonicalFolder.id;
+      }
+    }
+  }
+
+  for (const duplicateId of duplicateIds) {
+    await deleteFolderRecord(duplicateId);
+    changed = true;
+
+    if (state.currentFolderId === duplicateId) {
+      state.currentFolderId = canonicalFolder.id;
+    }
+
+    if (state.documentFolderId === duplicateId) {
+      state.documentFolderId = canonicalFolder.id;
+    }
+  }
+
+  state.folders = state.folders.filter((folder) => !duplicateIdSet.has(folder.id));
+
+  return changed;
+}
+
+async function mergeWorkspaceRootFolderRecords(canonicalFolder) {
+  if (!canonicalFolder) {
+    return false;
+  }
+
+  const duplicateIds = state.folders
+    .filter(
+      (folder) =>
+        folder.id !== canonicalFolder.id &&
+        isWorkspaceRootFolderCandidate(folder)
+    )
+    .map((folder) => folder.id);
+
+  if (duplicateIds.length === 0) {
+    return false;
+  }
+
+  return mergeFolderRecords(canonicalFolder, duplicateIds);
+}
+
+async function mergeDuplicateFileSystemFolders() {
+  const foldersByPath = new Map();
+  let changed = false;
+
+  state.folders.forEach((folder) => {
+    if (
+      isWorkspaceRootFolderCandidate(folder) ||
+      getFolderStorageKind(folder) !== "fileSystem"
+    ) {
+      return;
+    }
+
+    const relativePath = getNormalizedFolderRelativePath(folder);
+
+    if (!relativePath) {
+      return;
+    }
+
+    if (!foldersByPath.has(relativePath)) {
+      foldersByPath.set(relativePath, []);
+    }
+
+    foldersByPath.get(relativePath).push(folder);
+  });
+
+  for (const folders of foldersByPath.values()) {
+    if (folders.length < 2) {
+      continue;
+    }
+
+    folders.sort((a, b) =>
+      String(a.createdAt || a.updatedAt || "").localeCompare(
+        String(b.createdAt || b.updatedAt || "")
+      )
+    );
+
+    const canonicalFolder = folders[0];
+    const duplicateIds = folders.slice(1).map((folder) => folder.id);
+
+    changed = (await mergeFolderRecords(canonicalFolder, duplicateIds)) || changed;
+  }
+
+  return changed;
 }
 
 function isFolderInsideWorkspaceRoot(folderId) {
@@ -3447,17 +3602,28 @@ async function ensureWorkspaceRootFolder() {
 
   const now = new Date().toISOString();
   const name = getWorkspaceRootFolderName();
-  let folder = findActiveWorkspaceRootFolder();
+  const existingFolder = findActiveWorkspaceRootFolder();
+  let folder =
+    state.folders.find((item) => item.id === workspaceRootFolderId) ||
+    existingFolder;
 
   if (!folder) {
     folder = {
-      id: `${workspaceRootFolderIdPrefix}${createId()}`,
+      id: workspaceRootFolderId,
       name,
       parentId: null,
       createdAt: now,
       updatedAt: now,
       storageKind: "fileSystem",
       workspaceRoot: true,
+    };
+    state.folders.push(folder);
+  }
+
+  if (folder.id !== workspaceRootFolderId) {
+    folder = {
+      ...folder,
+      id: workspaceRootFolderId,
     };
     state.folders.push(folder);
   }
@@ -3472,6 +3638,7 @@ async function ensureWorkspaceRootFolder() {
   folder.workspaceRoot = true;
 
   await putFolder(folder);
+  await mergeWorkspaceRootFolderRecords(folder);
   return folder;
 }
 
@@ -3545,8 +3712,8 @@ async function requestDirectoryPickerHandle() {
   }
 }
 
-async function requestFileSystemHandlePermission(handle, mode) {
-  const options = {
+async function requestFileSystemHandlePermission(handle, mode, options = {}) {
+  const permissionOptions = {
     mode: mode || "read",
   };
 
@@ -3555,15 +3722,29 @@ async function requestFileSystemHandlePermission(handle, mode) {
   }
 
   if (typeof handle.queryPermission === "function") {
-    const permission = await handle.queryPermission(options);
+    const permission = await handle.queryPermission(permissionOptions);
 
     if (permission === "granted") {
       return true;
     }
+
+    if (
+      permission === "denied" ||
+      options.requestPermission === false
+    ) {
+      return false;
+    }
+  }
+
+  if (
+    options.requestPermission !== false &&
+    typeof handle.requestPermission === "function"
+  ) {
+    return (await handle.requestPermission(permissionOptions)) === "granted";
   }
 
   if (typeof handle.requestPermission === "function") {
-    return (await handle.requestPermission(options)) === "granted";
+    return false;
   }
 
   return true;
@@ -5079,8 +5260,10 @@ function renderDocumentList() {
   syncDocumentListScrollArea();
 }
 
-async function refreshDocuments() {
+async function refreshDocuments(options = {}) {
   try {
+    const shouldValidateFileSystemRecords =
+      options.validateFileSystemRecords !== false;
     const records = await Promise.all([getAllFolders(), getAllDocuments()]);
 
     state.folders = records[0];
@@ -5089,7 +5272,13 @@ async function refreshDocuments() {
     if (hasWorkspaceFolderSelected()) {
       const rootFolder = await ensureWorkspaceRootFolder();
 
-      if (rootFolder && (await rehomeWorkspaceRootRecords(rootFolder.id))) {
+      const didRepairDuplicateFolders = await mergeDuplicateFileSystemFolders();
+
+      if (
+        rootFolder &&
+        ((await rehomeWorkspaceRootRecords(rootFolder.id)) ||
+          didRepairDuplicateFolders)
+      ) {
         const refreshedRecords = await Promise.all([
           getAllFolders(),
           getAllDocuments(),
@@ -5100,7 +5289,7 @@ async function refreshDocuments() {
       }
     }
 
-    if (!state.isValidatingDocumentFiles) {
+    if (shouldValidateFileSystemRecords && !state.isValidatingDocumentFiles) {
       state.isValidatingDocumentFiles = true;
       try {
         if (await validateFileSystemFolderRecords(state.folders)) {
@@ -5133,7 +5322,7 @@ function scheduleDocumentSave(delay = 700) {
   }, delay);
 }
 
-async function saveCurrentDocument() {
+async function saveCurrentDocument(options = {}) {
   if (state.isLoadingDocument || !state.documentId || state.pages.length === 0) {
     return;
   }
@@ -5147,6 +5336,8 @@ async function saveCurrentDocument() {
   state.saveTimer = null;
   state.isSavingDocument = true;
   setSaveStatus("Saving...");
+  const shouldRequestFileSystemPermission =
+    options.requestFileSystemPermission === true;
   const saveDirtyPageCount = state.pages.filter((page) => page.isDirty).length;
   const savePerformanceTimer = startPerformanceTimer("autosave", {
     splitPageStorageEnabled,
@@ -5163,7 +5354,9 @@ async function saveCurrentDocument() {
         let folderSaveError = null;
 
         try {
-          savedToFolder = await writeActiveDocumentToFileSystem(record);
+          savedToFolder = await writeActiveDocumentToFileSystem(record, {
+            requestPermission: shouldRequestFileSystemPermission,
+          });
         } catch (error) {
           folderSaveError = error;
           console.error(error);
@@ -5182,7 +5375,9 @@ async function saveCurrentDocument() {
               ? `Saved to folder ${formatDateLabel(record.updatedAt)}`
               : `Saved ${formatDateLabel(record.updatedAt)}`
         );
-        await refreshDocuments();
+        await refreshDocuments({
+          validateFileSystemRecords: shouldRequestFileSystemPermission,
+        });
         evictInactivePageCanvases();
         return;
       }
@@ -5214,7 +5409,9 @@ async function saveCurrentDocument() {
       let folderSaveError = null;
 
       try {
-        savedToFolder = await writeActiveDocumentToFileSystem(record);
+        savedToFolder = await writeActiveDocumentToFileSystem(record, {
+          requestPermission: shouldRequestFileSystemPermission,
+        });
       } catch (error) {
         folderSaveError = error;
         console.error(error);
@@ -5235,7 +5432,9 @@ async function saveCurrentDocument() {
             ? `Saved to folder ${formatDateLabel(record.updatedAt)}`
             : `Saved ${formatDateLabel(record.updatedAt)}`
       );
-      await refreshDocuments();
+      await refreshDocuments({
+        validateFileSystemRecords: shouldRequestFileSystemPermission,
+      });
       evictInactivePageCanvases();
     } catch (error) {
       try {
@@ -5246,7 +5445,9 @@ async function saveCurrentDocument() {
         let folderSaveError = null;
 
         try {
-          savedToFolder = await writeActiveDocumentToFileSystem(fallbackRecord);
+          savedToFolder = await writeActiveDocumentToFileSystem(fallbackRecord, {
+            requestPermission: shouldRequestFileSystemPermission,
+          });
         } catch (writeError) {
           folderSaveError = writeError;
           console.error(writeError);
@@ -5265,7 +5466,9 @@ async function saveCurrentDocument() {
               ? `Saved to folder ${formatDateLabel(fallbackRecord.updatedAt)}`
               : `Saved ${formatDateLabel(fallbackRecord.updatedAt)}`
         );
-        await refreshDocuments();
+        await refreshDocuments({
+          validateFileSystemRecords: shouldRequestFileSystemPermission,
+        });
         evictInactivePageCanvases();
       } catch (fallbackError) {
         setSaveStatus("Save failed");
@@ -5297,7 +5500,7 @@ async function saveDocumentNow() {
   }
 
   await flushDocumentSave();
-  await saveCurrentDocument();
+  await saveCurrentDocument({ requestFileSystemPermission: true });
 }
 
 async function flushDocumentSave() {

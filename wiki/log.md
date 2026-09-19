@@ -688,3 +688,17 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Changed file-system-backed document and folder storage badges from `Folder` to `Device`.
 - Updated storage docs and testing notes to use the new `Device` badge label.
 - Bumped the app/cache version to `v0.8.165`.
+
+## [2026-09-18] storage | Quieted Autosave Device Permission Checks
+
+- Changed autosave to write device-backed project files only when file-system permission is already granted, avoiding repeated permission prompts on BOOX after each canvas edit.
+- Kept explicit storage actions such as Save, Save to Folder, Use Device Storage, and folder scans allowed to request permission.
+- Skipped file-system validation during quiet autosave document-list refreshes so validation does not re-trigger background permission prompts.
+- Bumped the app/cache version to `v0.8.166`.
+
+## [2026-09-18] storage | Repaired Duplicate Device Folder Rows
+
+- Replaced random mounted-device-root folder ids with a canonical workspace root id.
+- Added startup/refresh repair that merges duplicate mounted device roots and duplicate file-backed folder rows with the same device relative path.
+- Reparents child folders and documents to the kept folder row before deleting duplicate library rows.
+- Bumped the app/cache version to `v0.8.167`.
