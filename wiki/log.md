@@ -596,3 +596,95 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Updated Save Browser Projects to include missing records that still have browser-cached project data.
 - Updated missing-file guidance so users can choose Recover Library to reconnect existing files or Save Browser Projects to recreate files from browser cache.
 - Bumped the app/cache version to `v0.8.151`.
+
+## [2026-09-17] storage | Streamlined Documents Storage Panel
+
+- Moved the storage panel below the intro card and above the Documents section.
+- Changed the storage panel into a collapsed-by-default accordion with folder controls inside the expanded area.
+- Renamed Save Browser Projects to Import Browser Projects and Forget Folder to Use Browser Storage.
+- Made folder selection automatically scan for existing `.dinodraw.json` project files, with Rescan Folder kept as a manual fallback.
+- Bumped the app/cache version to `v0.8.152`.
+
+## [2026-09-17] storage | Moved Storage Controls To Dialog
+
+- Replaced the Documents storage accordion with a compact storage status row and gear button.
+- Added a Storage Settings dialog for folder setup, browser-project import, folder rescans, and switching back to browser storage.
+- Kept selected folder details visible in the compact row when device folder storage is active.
+- Bumped the app/cache version to `v0.8.153`.
+
+## [2026-09-17] storage | Clarified Storage Method Row
+
+- Changed the Documents storage row to show `Storage Method: Browser` or `Storage Method: Device`.
+- Added check-circle and circle-X indicators for device storage availability when browser storage is active.
+- Kept the connected folder name as the detail line when device storage is active.
+- Bumped the app/cache version to `v0.8.154`.
+
+## [2026-09-17] storage | Added Modal Storage Mode Summary
+
+- Added `Storage Mode: Browser` or `Storage Mode: Device` to the Storage Settings dialog.
+- Show the selected folder beneath the storage mode when device storage is active.
+- Bumped the app/cache version to `v0.8.155`.
+
+## [2026-09-17] storage | Flattened Storage Settings Modal
+
+- Removed the Storage subheading and inner outlined card from the Storage Settings dialog.
+- Moved storage mode, folder detail, guidance, summary, and actions directly into the modal body.
+- Bumped the app/cache version to `v0.8.156`.
+
+## [2026-09-17] storage | Trimmed Storage Settings Copy
+
+- Removed the extra explanatory storage message from the Storage Settings dialog.
+- Kept the dialog focused on storage mode, folder detail, summary, and actions.
+- Bumped the app/cache version to `v0.8.157`.
+
+## [2026-09-17] storage | Clarified Storage Summary Counts
+
+- Updated storage summary counts to say `document` or `documents`, such as `2 documents in device folders`.
+- Bumped the app/cache version to `v0.8.158`.
+
+## [2026-09-17] storage | Added Device-Backed Folder Metadata
+
+- Added storage metadata and Browser/Folder/Missing badges for virtual folder rows.
+- Updated folder selection and Rescan Folder to recreate virtual folders from disk subdirectory paths.
+- Updated new device-backed drawings to save into matching subfolders for the current Dino Draw folder.
+- Updated new folder creation while device storage is active to create matching device subdirectories when possible.
+- Mark file-backed folders missing when switching to browser storage, changing the workspace folder, or losing the matching disk path.
+- Bumped the app/cache version to `v0.8.159`.
+
+## [2026-09-17] storage | Moved Device Files With Documents
+
+- Updated document Move and drag/drop move so file-backed documents are written into the destination device subfolder.
+- Remove the old project file after the moved file is written successfully.
+- Bumped the app/cache version to `v0.8.160`.
+
+## [2026-09-17] storage | Refined Storage Settings Controls
+
+- Changed the Storage Settings summary from inline text to stacked storage-count chips.
+- Moved Rescan Folder to an autorenew icon button beside the connected folder name.
+- Added Material Symbols icons to Change Folder, Import Browser Projects, and Use Browser Storage.
+- Bumped the app/cache version to `v0.8.161`.
+
+## [2026-09-17] storage | Clarified Device Storage Setup Action
+
+- Changed the browser-mode storage setup button from Choose Folder to Use Device Storage.
+- Confirmed Import Browser Projects remains hidden until a device folder is connected.
+- Bumped the app/cache version to `v0.8.162`.
+
+## [2026-09-17] storage | Enforced Browser-Mode Import Visibility
+
+- Simplified Import Browser Projects visibility so it only appears when a device folder is active.
+- Added explicit hidden styling for Storage Settings action buttons.
+- Bumped the app/cache version to `v0.8.163`.
+
+## [2026-09-17] storage | Mounted Device Folder In Documents
+
+- Added a protected top-level folder row for the active device-storage folder so browser-backed root content stays visually separate from device-backed projects.
+- Updated folder scans, recovery, new device-backed drawings, and new device-backed folders to place content inside the mounted folder row.
+- Kept the mounted folder openable and droppable while hiding ordinary rename, move, and delete folder actions for that row.
+- Bumped the app/cache version to `v0.8.164`.
+
+## [2026-09-17] storage | Renamed Folder Badges To Device
+
+- Changed file-system-backed document and folder storage badges from `Folder` to `Device`.
+- Updated storage docs and testing notes to use the new `Device` badge label.
+- Bumped the app/cache version to `v0.8.165`.

@@ -12,10 +12,10 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="./manifest.webmanifest?v=0.8.151">
+    <link rel="manifest" href="./manifest.webmanifest?v=0.8.165">
     <link rel="icon" href="./icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="./icon.svg">
-    <link rel="stylesheet" href="./styles.css?v=0.8.151">
+    <link rel="stylesheet" href="./styles.css?v=0.8.165">
   </head>
   <body>
     <main class="app-shell">
@@ -234,7 +234,7 @@
       </div>
 
       <div class="save-status" data-save-status aria-live="polite">No document</div>
-      <div class="version-badge" aria-label="Version">v0.8.151</div>
+      <div class="version-badge" aria-label="Version">v0.8.165</div>
     </main>
 
     <section class="document-screen" data-document-screen aria-labelledby="document-title">
@@ -242,7 +242,7 @@
         <div class="document-brand" aria-label="Dino Draw">
           <img src="./icon.svg" alt="" aria-hidden="true">
           <div>Dino Draw</div>
-          <small data-brand-version>v0.8.151</small>
+          <small data-brand-version>v0.8.165</small>
         </div>
         <button class="icon-button document-help-button is-hidden" type="button" data-document-help data-open-guide aria-label="Open instructions" title="Help">
           <span class="material-symbols-outlined" aria-hidden="true">help</span>
@@ -262,6 +262,19 @@
           <button class="document-button document-button-primary" type="button" data-open-guide>Instructions</button>
         </div>
 
+        <section class="storage-status" data-storage-status aria-live="polite">
+          <span class="storage-status-icon material-symbols-outlined" aria-hidden="true">folder_managed</span>
+          <div class="storage-status-copy">
+            <div class="storage-status-title" data-storage-status-title>Checking storage...</div>
+            <div class="storage-status-detail" data-storage-status-detail>
+              <span class="storage-status-detail-icon material-symbols-outlined" data-storage-status-detail-icon aria-hidden="true"></span>
+              <span data-storage-status-detail-text></span>
+            </div>
+          </div>
+          <button class="icon-button storage-settings-button" type="button" data-storage-settings aria-label="Open storage settings" title="Storage settings">
+            <span class="material-symbols-outlined" aria-hidden="true">settings</span>
+          </button>
+        </section>
         <header class="document-header">
           <div class="document-heading">
             <h1 id="document-title" data-document-title>Documents</h1>
@@ -276,20 +289,6 @@
         </header>
 
         <nav class="document-breadcrumbs" data-document-breadcrumbs aria-label="Current folder"></nav>
-        <section class="storage-status" data-storage-status aria-live="polite">
-          <div class="storage-status-icon material-symbols-outlined" aria-hidden="true">folder_managed</div>
-          <div class="storage-status-copy">
-            <div class="storage-status-title" data-storage-status-title>Checking storage...</div>
-            <div class="storage-status-message" data-storage-status-message></div>
-            <div class="storage-status-summary" data-storage-status-summary></div>
-            <div class="storage-status-actions">
-              <button class="document-button document-button-primary" type="button" data-storage-choose-folder hidden>Choose Folder</button>
-              <button class="document-button" type="button" data-storage-save-browser hidden>Save Browser Projects</button>
-              <button class="document-button" type="button" data-storage-recover-library hidden>Recover Library</button>
-              <button class="document-button" type="button" data-storage-forget-folder hidden>Forget Folder</button>
-            </div>
-          </div>
-        </section>
         <div class="document-list" data-document-list></div>
         <div class="document-start-row">
           <button class="document-button document-button-primary" type="button" data-new-document>New Drawing</button>
@@ -395,10 +394,10 @@
               <li>Settings opens page paper, device settings, document actions, and toolbar reset.</li>
               <li>Page Paper changes the current page background to blank, ruled, or graph.</li>
               <li>The Documents screen shows whether projects are saved in browser storage or a device folder.</li>
-              <li>Choose Folder connects a device folder when the browser supports it. New drawings then save there as editable project files.</li>
+              <li>Use Device Storage connects a device folder when the browser supports it. New drawings then save there as editable project files.</li>
               <li>Use Save to Folder to move a browser-stored drawing into the connected device folder.</li>
-              <li>Use Save Browser Projects to move all remaining browser-stored drawings into the connected folder.</li>
-              <li>Use Recover Library after reconnecting a folder to rebuild the document list from project files.</li>
+              <li>Use Import Browser Projects to move all remaining browser-stored drawings into the connected folder.</li>
+              <li>Choosing a folder automatically scans for existing project files and recreates matching folders from device subfolders. Use Rescan Folder if files are added outside Dino Draw.</li>
               <li>Browser-stored projects can be removed if browser site data is cleared, so export important work.</li>
               <li>Export saves an editable DinoDraw document file.</li>
               <li>Save PNG and Save PDF create shareable flattened copies.</li>
@@ -596,6 +595,40 @@
       </form>
     </dialog>
 
+    <dialog class="settings-dialog storage-dialog" id="storage-dialog" aria-labelledby="storage-title">
+      <form method="dialog" class="settings-panel">
+        <header class="settings-header">
+          <h1 id="storage-title">Storage Settings</h1>
+          <button class="icon-button" type="submit" aria-label="Close storage settings" title="Close">
+            <span class="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </header>
+
+        <div class="storage-settings-mode" data-storage-settings-mode>Storage Mode: Browser</div>
+        <div class="storage-settings-folder-row" data-storage-settings-folder-row hidden>
+          <div class="storage-settings-folder" data-storage-settings-folder></div>
+          <button class="icon-button storage-rescan-button" type="button" data-storage-recover-library aria-label="Rescan Folder" title="Rescan Folder" hidden>
+            <span class="material-symbols-outlined" aria-hidden="true">autorenew</span>
+          </button>
+        </div>
+        <div class="storage-status-summary" data-storage-status-summary></div>
+        <div class="storage-status-actions">
+          <button class="document-button document-button-primary" type="button" data-storage-choose-folder hidden>
+            <span class="material-symbols-outlined storage-action-icon" aria-hidden="true">folder_open</span>
+            <span data-storage-choose-folder-label>Use Device Storage</span>
+          </button>
+          <button class="document-button" type="button" data-storage-save-browser hidden>
+            <span class="material-symbols-outlined storage-action-icon" aria-hidden="true">publish</span>
+            <span data-storage-save-browser-label>Import Browser Projects</span>
+          </button>
+          <button class="document-button" type="button" data-storage-forget-folder hidden>
+            <span class="material-symbols-outlined storage-action-icon" aria-hidden="true">database</span>
+            <span>Use Browser Storage</span>
+          </button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog class="settings-dialog eraser-dialog" id="eraser-dialog" aria-labelledby="eraser-title">
       <form method="dialog" class="settings-panel">
         <header class="settings-header">
@@ -779,7 +812,7 @@
         }
       });
     </script>
-    <script src="./app.js?v=0.8.151"></script>
+    <script src="./app.js?v=0.8.165"></script>
     <script>
       if ("serviceWorker" in navigator) {
         var didReloadForServiceWorker = false;
@@ -794,7 +827,7 @@
         });
 
         window.addEventListener("load", function () {
-          navigator.serviceWorker.register("./service-worker.js?v=0.8.151", {
+          navigator.serviceWorker.register("./service-worker.js?v=0.8.165", {
             updateViaCache: "none"
           }).then(function (registration) {
             if (registration.waiting) {

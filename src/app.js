@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.151";
+const APP_VERSION = "v0.8.165";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -61,10 +61,24 @@ const documentSubtitle = document.querySelector("[data-document-subtitle]");
 const documentBreadcrumbs = document.querySelector("[data-document-breadcrumbs]");
 const storageStatus = document.querySelector("[data-storage-status]");
 const storageStatusTitle = document.querySelector("[data-storage-status-title]");
-const storageStatusMessage = document.querySelector("[data-storage-status-message]");
+const storageStatusDetailIcon = document.querySelector(
+  "[data-storage-status-detail-icon]"
+);
+const storageStatusDetailText = document.querySelector(
+  "[data-storage-status-detail-text]"
+);
+const storageSettingsButton = document.querySelector("[data-storage-settings]");
+const storageSettingsMode = document.querySelector("[data-storage-settings-mode]");
+const storageSettingsFolderRow = document.querySelector(
+  "[data-storage-settings-folder-row]"
+);
+const storageSettingsFolder = document.querySelector("[data-storage-settings-folder]");
 const storageStatusSummary = document.querySelector("[data-storage-status-summary]");
 const storageChooseFolderButton = document.querySelector(
   "[data-storage-choose-folder]"
+);
+const storageChooseFolderLabel = document.querySelector(
+  "[data-storage-choose-folder-label]"
 );
 const storageForgetFolderButton = document.querySelector(
   "[data-storage-forget-folder]"
@@ -74,6 +88,9 @@ const storageRecoverLibraryButton = document.querySelector(
 );
 const storageSaveBrowserButton = document.querySelector(
   "[data-storage-save-browser]"
+);
+const storageSaveBrowserLabel = document.querySelector(
+  "[data-storage-save-browser-label]"
 );
 const documentList = document.querySelector("[data-document-list]");
 const documentPanel = document.querySelector(".document-panel");
@@ -207,6 +224,7 @@ const pageIndicator = document.querySelector("[data-page-indicator]");
 const pageDialog = document.querySelector("#page-dialog");
 const addPageDialog = document.querySelector("#add-page-dialog");
 const zoomDialog = document.querySelector("#zoom-dialog");
+const storageDialog = document.querySelector("#storage-dialog");
 const zoomRangeInput = document.querySelector("[data-zoom-range]");
 const zoomRangeOutput = document.querySelector("[data-zoom-range-output]");
 const zoomPercentInput = document.querySelector("[data-zoom-percent-input]");
@@ -428,11 +446,14 @@ const pageDocumentIndexName = "documentId";
 const storageSettingsRecordId = "workspace";
 const workspaceDirectoryHandleId = "workspaceDirectory";
 const documentFileHandlePrefix = "documentFile:";
+const folderDirectoryHandlePrefix = "folderDirectory:";
+const workspaceRootFolderIdPrefix = "workspaceRootFolder:";
 const splitPageStorageEnabled = true;
 const exportFormat = "dinodraw-document";
 const legacyExportFormat = "boox-drawing-document";
 const exportFormatVersion = 1;
 const documentStorageKinds = ["fileSystem", "browser", "draft", "missing"];
+const folderStorageKinds = ["fileSystem", "browser", "missing"];
 const historyLimit = 30;
 const pageEvictionRetainRadius = 1;
 const colors = [
@@ -663,7 +684,7 @@ function getDocumentStorageKind(record) {
 function getDocumentStorageLabel(storageKind) {
   switch (normalizeDocumentStorageKind(storageKind)) {
     case "fileSystem":
-      return "Folder";
+      return "Device";
     case "draft":
       return "Draft";
     case "missing":
@@ -703,6 +724,58 @@ function getDocumentStorageDetail(record) {
     return record.relativePath || record.fileName
       ? `missing ${record.relativePath || record.fileName}`
       : "missing project file";
+  }
+
+  return "";
+}
+
+function normalizeFolderStorageKind(value) {
+  const storageKind = String(value || "");
+
+  return folderStorageKinds.indexOf(storageKind) >= 0 ? storageKind : "browser";
+}
+
+function getFolderStorageKind(record) {
+  return normalizeFolderStorageKind(record && record.storageKind);
+}
+
+function getFolderStorageLabel(storageKind) {
+  switch (normalizeFolderStorageKind(storageKind)) {
+    case "fileSystem":
+      return "Device";
+    case "missing":
+      return "Missing";
+    case "browser":
+    default:
+      return "Browser";
+  }
+}
+
+function getFolderStorageClass(storageKind) {
+  return normalizeFolderStorageKind(storageKind).toLowerCase();
+}
+
+function getFolderStorageTitle(storageKind) {
+  switch (normalizeFolderStorageKind(storageKind)) {
+    case "fileSystem":
+      return "Backed by a device folder.";
+    case "missing":
+      return "This device folder is not currently available.";
+    case "browser":
+    default:
+      return "A virtual folder stored in this browser.";
+  }
+}
+
+function getFolderStorageDetail(record) {
+  const storageKind = getFolderStorageKind(record);
+
+  if (storageKind === "fileSystem") {
+    return record.relativePath || "device folder";
+  }
+
+  if (storageKind === "missing") {
+    return record.relativePath ? `missing ${record.relativePath}` : "missing folder";
   }
 
   return "";
@@ -770,6 +843,48 @@ function prepareDocumentRecord(record) {
   }
 
   prepareDocumentStorageMetadata(record);
+
+  return record;
+}
+
+function prepareFolderRecord(record) {
+  if (!record) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+
+  record.id = String(record.id || createId());
+  record.name = normalizeStorageText(record.name) || "Untitled folder";
+  record.parentId = normalizeFolderId(record.parentId);
+  record.createdAt = normalizeStorageTimestamp(record.createdAt) || now;
+  record.updatedAt = normalizeStorageTimestamp(record.updatedAt) || record.createdAt;
+  record.storageKind = normalizeFolderStorageKind(record.storageKind);
+  record.workspaceId = normalizeStorageText(record.workspaceId);
+  record.directoryHandleId = normalizeStorageText(record.directoryHandleId);
+  record.relativePath = normalizeStorageText(record.relativePath);
+  record.catalogedAt = normalizeStorageTimestamp(record.catalogedAt);
+  record.workspaceRoot = record.workspaceRoot === true;
+
+  if (record.storageKind === "fileSystem") {
+    record.workspaceId = record.workspaceId || storageSettingsRecordId;
+    record.directoryHandleId =
+      record.directoryHandleId ||
+      (record.workspaceRoot
+        ? workspaceDirectoryHandleId
+        : getFolderDirectoryHandleId(record.id));
+  }
+
+  [
+    "workspaceId",
+    "directoryHandleId",
+    "relativePath",
+    "catalogedAt",
+  ].forEach((key) => deleteEmptyStorageField(record, key));
+
+  if (!record.workspaceRoot) {
+    delete record.workspaceRoot;
+  }
 
   return record;
 }
@@ -867,6 +982,10 @@ function getStorageHandleStore(mode) {
 
 function getDocumentFileHandleId(documentId) {
   return `${documentFileHandlePrefix}${documentId || ""}`;
+}
+
+function getFolderDirectoryHandleId(folderId) {
+  return `${folderDirectoryHandlePrefix}${folderId || ""}`;
 }
 
 function getDocumentFileToken(record) {
@@ -1048,12 +1167,142 @@ async function getWorkspaceDirectoryHandle(options = {}) {
   return handleRecord.handle;
 }
 
-function applyFileSystemMetadata(record, fileName, now) {
+function sanitizeDirectoryName(name) {
+  return sanitizeFileName(name || "folder");
+}
+
+function splitRelativePath(relativePath) {
+  return normalizeStorageText(relativePath)
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function joinRelativePath(parts) {
+  return parts.filter(Boolean).join("/");
+}
+
+function getRelativeDirectoryPath(relativePath) {
+  const parts = splitRelativePath(relativePath);
+
+  parts.pop();
+
+  return joinRelativePath(parts);
+}
+
+function getFolderDevicePathSegment(folder) {
+  if (isWorkspaceRootFolder(folder)) {
+    return "";
+  }
+
+  if (getFolderStorageKind(folder) !== "browser" && folder.relativePath) {
+    return splitRelativePath(folder.relativePath).pop();
+  }
+
+  return sanitizeDirectoryName(folder.name || "folder");
+}
+
+function getFolderDeviceRelativePath(folderId) {
+  const path = getFolderPath(folderId);
+
+  if (path.length === 0) {
+    return "";
+  }
+
+  return joinRelativePath(path.map((folder) => getFolderDevicePathSegment(folder)));
+}
+
+async function getDirectoryHandleForRelativePath(relativePath, options = {}) {
+  let directoryHandle = await getWorkspaceDirectoryHandle({
+    requestPermission: options.requestPermission !== false,
+  });
+
+  for (const part of splitRelativePath(relativePath)) {
+    directoryHandle = await directoryHandle.getDirectoryHandle(part, {
+      create: Boolean(options.create),
+    });
+  }
+
+  return directoryHandle;
+}
+
+async function attachFileSystemStorageToFolder(record, options = {}) {
+  prepareFolderRecord(record);
+
+  if (isWorkspaceRootFolder(record)) {
+    await getWorkspaceDirectoryHandle({
+      requestPermission: options.requestPermission !== false,
+    });
+    record.storageKind = "fileSystem";
+    record.workspaceId = storageSettingsRecordId;
+    record.directoryHandleId = workspaceDirectoryHandleId;
+    record.relativePath = "";
+    record.catalogedAt = new Date().toISOString();
+    record.workspaceRoot = true;
+    return record;
+  }
+
+  const parentPath = options.parentPath !== undefined
+    ? normalizeStorageText(options.parentPath)
+    : getFolderDeviceRelativePath(record.parentId);
+  const directoryName = options.directoryName || sanitizeDirectoryName(record.name);
+  const relativePath = joinRelativePath([parentPath, directoryName]);
+  const directoryHandle = await getDirectoryHandleForRelativePath(relativePath, {
+    create: true,
+    requestPermission: true,
+  });
+  const now = new Date().toISOString();
+
+  record.storageKind = "fileSystem";
+  record.workspaceId = storageSettingsRecordId;
+  record.directoryHandleId =
+    record.directoryHandleId || getFolderDirectoryHandleId(record.id);
+  record.relativePath = relativePath;
+  record.catalogedAt = now;
+
+  await putStorageHandleRecord({
+    id: record.directoryHandleId,
+    kind: "directory",
+    name: directoryName,
+    handle: directoryHandle,
+  });
+
+  return record;
+}
+
+async function ensureFolderStorageForVirtualPath(folderId) {
+  const path = getFolderPath(folderId);
+  let parentPath = "";
+
+  for (const folder of path) {
+    const directoryName = getFolderDevicePathSegment(folder);
+    const relativePath = joinRelativePath([parentPath, directoryName]);
+
+    if (
+      getFolderStorageKind(folder) !== "fileSystem" ||
+      normalizeStorageText(folder.relativePath) !== relativePath
+    ) {
+      await attachFileSystemStorageToFolder(folder, {
+        parentPath,
+        directoryName,
+      });
+      folder.updatedAt = new Date().toISOString();
+      await putFolder(folder);
+    }
+
+    parentPath = relativePath;
+  }
+
+  return parentPath;
+}
+
+function applyFileSystemMetadata(record, fileName, relativePath, now) {
   record.storageKind = "fileSystem";
   record.workspaceId = storageSettingsRecordId;
   record.fileHandleId = record.fileHandleId || getDocumentFileHandleId(record.id);
   record.fileName = fileName;
-  record.relativePath = fileName;
+  record.relativePath = relativePath || fileName;
   record.catalogedAt = now;
 
   return record;
@@ -1061,11 +1310,14 @@ function applyFileSystemMetadata(record, fileName, now) {
 
 async function attachFileSystemStorageToRecord(record) {
   prepareDocumentRecord(record);
-  const directoryHandle = await getWorkspaceDirectoryHandle({
+  const directoryPath = await ensureFolderStorageForVirtualPath(record.folderId);
+  const directoryHandle = await getDirectoryHandleForRelativePath(directoryPath, {
+    create: true,
     requestPermission: true,
   });
   const now = new Date().toISOString();
   const fileName = record.fileName || getDefaultDocumentFileName(record);
+  const relativePath = joinRelativePath([directoryPath, fileName]);
   const fileHandle = await directoryHandle.getFileHandle(fileName, {
     create: true,
   });
@@ -1078,7 +1330,7 @@ async function attachFileSystemStorageToRecord(record) {
     handle: fileHandle,
   });
 
-  return applyFileSystemMetadata(record, fileName, now);
+  return applyFileSystemMetadata(record, fileName, relativePath, now);
 }
 
 async function getFileHandleForFileSystemRecord(record) {
@@ -1094,17 +1346,19 @@ async function getFileHandleForFileSystemRecord(record) {
     return handleRecord.handle;
   }
 
-  const directoryHandle = await getWorkspaceDirectoryHandle({
+  const fileName = record.fileName || getDefaultDocumentFileName(record);
+  const directoryPath = getRelativeDirectoryPath(record.relativePath);
+  const directoryHandle = await getDirectoryHandleForRelativePath(directoryPath, {
+    create: false,
     requestPermission: true,
   });
-  const fileName = record.fileName || getDefaultDocumentFileName(record);
   const fileHandle = await directoryHandle.getFileHandle(fileName, {
-    create: true,
+    create: false,
   });
 
   record.fileHandleId = record.fileHandleId || getDocumentFileHandleId(record.id);
   record.fileName = fileName;
-  record.relativePath = fileName;
+  record.relativePath = joinRelativePath([directoryPath, fileName]);
   await putStorageHandleRecord({
     id: record.fileHandleId,
     kind: "file",
@@ -1153,6 +1407,54 @@ async function writeDinoDrawRecordToFileSystem(record) {
   return true;
 }
 
+async function removeFileSystemEntryAtRelativePath(relativePath) {
+  const parts = splitRelativePath(relativePath);
+  const fileName = parts.pop();
+
+  if (!fileName) {
+    return false;
+  }
+
+  const directoryHandle = await getDirectoryHandleForRelativePath(
+    joinRelativePath(parts),
+    {
+      create: false,
+      requestPermission: true,
+    }
+  );
+
+  if (typeof directoryHandle.removeEntry !== "function") {
+    return false;
+  }
+
+  await directoryHandle.removeEntry(fileName);
+  return true;
+}
+
+async function moveFileSystemDocumentRecordToFolder(record, destinationId) {
+  const oldRelativePath = normalizeStorageText(record.relativePath);
+  const oldFileName =
+    normalizeStorageText(record.fileName) ||
+    splitRelativePath(oldRelativePath).pop() ||
+    getDefaultDocumentFileName(record);
+
+  record.folderId = hasWorkspaceFolderSelected()
+    ? await getDeviceStorageTargetFolderId(destinationId)
+    : resolveExistingFolderId(destinationId);
+  record.fileName = oldFileName;
+  await attachFileSystemStorageToRecord(record);
+  await writeDinoDrawRecordToFileSystem(record);
+  await saveFullDocumentRecord(record);
+
+  if (oldRelativePath && oldRelativePath !== record.relativePath) {
+    removeFileSystemEntryAtRelativePath(oldRelativePath).catch((error) => {
+      console.warn("Could not remove old project file after move.", error);
+    });
+  }
+
+  return record;
+}
+
 function getAllFromStore(store) {
   return new Promise((resolve, reject) => {
     if (store.getAll) {
@@ -1199,6 +1501,7 @@ async function getAllFolders() {
   const store = await getFolderStore("readonly");
   const folders = await getAllFromStore(store);
 
+  folders.forEach(prepareFolderRecord);
   folders.sort((a, b) =>
     String(a.name || "").localeCompare(String(b.name || ""))
   );
@@ -1223,7 +1526,7 @@ async function getFolder(id) {
   return new Promise((resolve, reject) => {
     const request = store.get(id);
 
-    request.onsuccess = () => resolve(request.result || null);
+    request.onsuccess = () => resolve(prepareFolderRecord(request.result) || null);
     request.onerror = () => reject(request.error);
   });
 }
@@ -1241,6 +1544,7 @@ async function putDocument(record) {
 }
 
 async function putFolder(record) {
+  prepareFolderRecord(record);
   const store = await getFolderStore("readwrite");
 
   return new Promise((resolve, reject) => {
@@ -1596,6 +1900,18 @@ async function migrateExistingDocumentRecords() {
     if (!record.uuid || !record.id || !record.storageKind) {
       prepareDocumentRecord(record);
       await putDocument(record);
+    }
+  }
+}
+
+async function migrateExistingFolderRecords() {
+  const store = await getFolderStore("readonly");
+  const folders = await getAllFromStore(store);
+
+  for (const record of folders) {
+    if (!record.storageKind) {
+      prepareFolderRecord(record);
+      await putFolder(record);
     }
   }
 }
@@ -3095,6 +3411,125 @@ function getWorkspaceFolderName() {
   return settings.workspaceName || "selected folder";
 }
 
+function getWorkspaceRootFolderName() {
+  return getWorkspaceFolderName() || "Device Folder";
+}
+
+function isWorkspaceRootFolder(folder) {
+  return Boolean(folder && folder.workspaceRoot === true);
+}
+
+function findActiveWorkspaceRootFolder() {
+  return (
+    state.folders.find(
+      (folder) =>
+        isWorkspaceRootFolder(folder) &&
+        getFolderStorageKind(folder) === "fileSystem"
+    ) || null
+  );
+}
+
+function isFolderInsideWorkspaceRoot(folderId) {
+  const rootFolder = findActiveWorkspaceRootFolder();
+  const targetId = resolveExistingFolderId(folderId);
+
+  if (!rootFolder || !targetId) {
+    return false;
+  }
+
+  return getFolderPath(targetId).some((folder) => folder.id === rootFolder.id);
+}
+
+async function ensureWorkspaceRootFolder() {
+  if (!hasWorkspaceFolderSelected()) {
+    return null;
+  }
+
+  const now = new Date().toISOString();
+  const name = getWorkspaceRootFolderName();
+  let folder = findActiveWorkspaceRootFolder();
+
+  if (!folder) {
+    folder = {
+      id: `${workspaceRootFolderIdPrefix}${createId()}`,
+      name,
+      parentId: null,
+      createdAt: now,
+      updatedAt: now,
+      storageKind: "fileSystem",
+      workspaceRoot: true,
+    };
+    state.folders.push(folder);
+  }
+
+  folder.name = name;
+  folder.parentId = null;
+  folder.storageKind = "fileSystem";
+  folder.workspaceId = storageSettingsRecordId;
+  folder.directoryHandleId = workspaceDirectoryHandleId;
+  folder.relativePath = "";
+  folder.catalogedAt = folder.catalogedAt || now;
+  folder.workspaceRoot = true;
+
+  await putFolder(folder);
+  return folder;
+}
+
+async function rehomeWorkspaceRootRecords(rootFolderId) {
+  const rootId = resolveExistingFolderId(rootFolderId);
+  let changed = false;
+
+  if (!rootId) {
+    return false;
+  }
+
+  for (const folder of state.folders) {
+    if (
+      folder.id !== rootId &&
+      getFolderStorageKind(folder) === "fileSystem" &&
+      resolveExistingFolderId(folder.parentId) === null
+    ) {
+      folder.parentId = rootId;
+      folder.updatedAt = new Date().toISOString();
+      await putFolder(folder);
+      changed = true;
+    }
+  }
+
+  for (const record of state.documents) {
+    if (
+      getDocumentStorageKind(record) === "fileSystem" &&
+      resolveExistingFolderId(record.folderId) === null
+    ) {
+      record.folderId = rootId;
+      await putDocument(record);
+      changed = true;
+
+      if (state.documentId === record.id) {
+        state.documentFolderId = rootId;
+      }
+    }
+  }
+
+  return changed;
+}
+
+async function getDeviceStorageTargetFolderId(preferredFolderId) {
+  const rootFolder = await ensureWorkspaceRootFolder();
+
+  if (!rootFolder) {
+    return resolveExistingFolderId(preferredFolderId);
+  }
+
+  const targetFolderId = resolveExistingFolderId(preferredFolderId);
+
+  if (targetFolderId && isFolderInsideWorkspaceRoot(targetFolderId)) {
+    return targetFolderId;
+  }
+
+  return rootFolder.id;
+}
+
 async function requestDirectoryPickerHandle() {
   try {
     return await window.showDirectoryPicker({
@@ -3162,7 +3597,7 @@ async function chooseStorageFolder() {
     const hadWorkspaceFolder = hasWorkspaceFolderSelected();
 
     if (hadWorkspaceFolder) {
-      await markFileSystemDocumentsMissing();
+      await markFileSystemLibraryMissing();
     }
 
     await putStorageHandleRecord({
@@ -3185,6 +3620,16 @@ async function chooseStorageFolder() {
     );
     await refreshDocuments();
     updateStorageStatus();
+    await recoverLibraryFromFolder({
+      emptyStatus: hadWorkspaceFolder
+        ? "Folder changed; no project files found"
+        : "Folder connected",
+      silentWhenEmpty: true,
+      successStatus: hadWorkspaceFolder
+        ? "Folder changed and scanned"
+        : "Folder connected and scanned",
+      successTitle: "Folder Scan Finished",
+    });
   } catch (error) {
     if (error && error.name === "AbortError") {
       setSaveStatus("Folder selection canceled");
@@ -3198,6 +3643,40 @@ async function chooseStorageFolder() {
     );
     console.error(error);
   }
+}
+
+async function markFileSystemLibraryMissing() {
+  await markFileSystemFoldersMissing();
+  await markFileSystemDocumentsMissing();
+}
+
+async function markFileSystemFoldersMissing() {
+  const folders = await getAllFolders();
+
+  for (const folder of folders) {
+    if (getFolderStorageKind(folder) !== "fileSystem") {
+      continue;
+    }
+
+    await markFileSystemFolderMissing(folder);
+  }
+}
+
+async function markFileSystemFolderMissing(folder) {
+  if (!folder || getFolderStorageKind(folder) !== "fileSystem") {
+    return false;
+  }
+
+  if (folder.directoryHandleId) {
+    await deleteStorageHandleRecord(folder.directoryHandleId);
+  }
+
+  folder.storageKind = "missing";
+  delete folder.workspaceId;
+  delete folder.directoryHandleId;
+  await putFolder(folder);
+
+  return true;
 }
 
 async function markFileSystemDocumentsMissing() {
@@ -3258,9 +3737,42 @@ async function validateFileSystemDocumentRecords(records) {
   return didUpdate;
 }
 
+async function validateFileSystemFolderRecords(records) {
+  let didUpdate = false;
+
+  for (const folder of records) {
+    if (getFolderStorageKind(folder) !== "fileSystem") {
+      continue;
+    }
+
+    try {
+      const directoryHandle = await getDirectoryHandleForRelativePath(
+        folder.relativePath,
+        {
+          create: false,
+          requestPermission: true,
+        }
+      );
+
+      folder.directoryHandleId =
+        folder.directoryHandleId || getFolderDirectoryHandleId(folder.id);
+      await putStorageHandleRecord({
+        id: folder.directoryHandleId,
+        kind: "directory",
+        name: splitRelativePath(folder.relativePath).pop() || folder.name,
+        handle: directoryHandle,
+      });
+    } catch (error) {
+      didUpdate = (await markFileSystemFolderMissing(folder)) || didUpdate;
+    }
+  }
+
+  return didUpdate;
+}
+
 async function forgetStorageFolder() {
   try {
-    await markFileSystemDocumentsMissing();
+    await markFileSystemLibraryMissing();
     await deleteStorageHandleRecord(workspaceDirectoryHandleId);
     state.storageSettings = await putStorageSettings({
       ...getWorkspaceStorageSettings(),
@@ -3269,7 +3781,7 @@ async function forgetStorageFolder() {
       workspaceName: "",
     });
 
-    setSaveStatus("Folder forgotten");
+    setSaveStatus("Using browser storage");
     await refreshDocuments();
     updateStorageStatus();
   } catch (error) {
@@ -3361,6 +3873,76 @@ async function scanDirectoryForDinoDrawFiles(directoryHandle, options = {}) {
   };
 }
 
+function findFolderByRelativePath(relativePath) {
+  const normalizedPath = joinRelativePath(splitRelativePath(relativePath));
+
+  if (!normalizedPath) {
+    return null;
+  }
+
+  return (
+    state.folders.find(
+      (folder) =>
+        getFolderStorageKind(folder) === "fileSystem" &&
+        joinRelativePath(splitRelativePath(folder.relativePath)) === normalizedPath
+    ) || null
+  );
+}
+
+function findFolderByParentAndName(parentId, name) {
+  const normalizedParentId = resolveExistingFolderId(parentId);
+  const normalizedName = normalizeStorageText(name).toLowerCase();
+
+  return (
+    state.folders.find(
+      (folder) =>
+        resolveExistingFolderId(folder.parentId) === normalizedParentId &&
+        normalizeStorageText(folder.name).toLowerCase() === normalizedName
+    ) || null
+  );
+}
+
+async function ensureVirtualFoldersForDevicePath(relativeDirectoryPath) {
+  const parts = splitRelativePath(relativeDirectoryPath);
+  const rootFolder = await ensureWorkspaceRootFolder();
+  let parentId = rootFolder ? rootFolder.id : null;
+  let currentPath = "";
+
+  for (const part of parts) {
+    currentPath = joinRelativePath([currentPath, part]);
+
+    let folder =
+      findFolderByRelativePath(currentPath) ||
+      findFolderByParentAndName(parentId, part);
+    const now = new Date().toISOString();
+
+    if (!folder) {
+      folder = {
+        id: createId(),
+        name: part,
+        parentId,
+        createdAt: now,
+        updatedAt: now,
+      };
+      state.folders.push(folder);
+    }
+
+    folder.parentId = parentId;
+    folder.storageKind = "fileSystem";
+    folder.workspaceId = storageSettingsRecordId;
+    folder.directoryHandleId =
+      folder.directoryHandleId || getFolderDirectoryHandleId(folder.id);
+    folder.relativePath = currentPath;
+    folder.catalogedAt = folder.catalogedAt || now;
+    folder.updatedAt = folder.updatedAt || now;
+
+    await putFolder(folder);
+    parentId = folder.id;
+  }
+
+  return parentId;
+}
+
 function shouldSkipRecoveredRecord(existingRecord, recoveredRecord) {
   if (!existingRecord || getDocumentStorageKind(existingRecord) !== "browser") {
     return false;
@@ -3385,7 +3967,7 @@ function getRecoverySummaryMessage(result) {
   return lines.join("\n");
 }
 
-async function recoverLibraryFromFolder() {
+async function recoverLibraryFromFolder(options = {}) {
   if (!hasWorkspaceFolderSelected()) {
     await showAlertDialog(
       "Choose A Folder",
@@ -3453,12 +4035,13 @@ async function recoverLibraryFromFolder() {
         const recordUuid = existingRecord
           ? getRecordUuid(existingRecord)
           : sourceUuid || recordId;
+        const recoveredFolderId = await ensureVirtualFoldersForDevicePath(
+          getRelativeDirectoryPath(fileEntry.relativePath)
+        );
         const record = normalizeImportedDocument(parsed, {
           id: recordId,
           uuid: recordUuid,
-          folderId: existingRecord
-            ? existingRecord.folderId
-            : state.currentFolderId,
+          folderId: recoveredFolderId,
           lastOpenedAt: existingRecord
             ? existingRecord.lastOpenedAt
             : undefined,
@@ -3516,12 +4099,20 @@ async function recoverLibraryFromFolder() {
 
     await refreshDocuments();
     updateStorageStatus();
-    setSaveStatus("Library recovery finished");
-    await showAlertDialog("Recovery Finished", getRecoverySummaryMessage(result));
-  } catch (error) {
-    setSaveStatus("Recovery failed");
+    if (options.silentWhenEmpty && result.found === 0) {
+      setSaveStatus(options.emptyStatus || "No folder projects found");
+      return;
+    }
+
+    setSaveStatus(options.successStatus || "Folder scan finished");
     await showAlertDialog(
-      "Recovery Failed",
+      options.successTitle || "Folder Scan Finished",
+      getRecoverySummaryMessage(result)
+    );
+  } catch (error) {
+    setSaveStatus("Folder scan failed");
+    await showAlertDialog(
+      "Folder Scan Failed",
       "Dino Draw could not scan the selected folder."
     );
     console.error(error);
@@ -3556,7 +4147,7 @@ async function saveBrowserProjectsToFolder() {
   if (!hasWorkspaceFolderSelected()) {
     await showAlertDialog(
       "Choose A Folder",
-      "Choose a device folder before saving browser-cached projects there."
+      "Choose a device folder before importing browser-cached projects there."
     );
     return;
   }
@@ -3570,17 +4161,17 @@ async function saveBrowserProjectsToFolder() {
     setSaveStatus("No browser projects");
     await showAlertDialog(
       "No Browser Projects",
-      "There are no browser-cached projects to save to the device folder."
+      "There are no browser-cached projects to import into the device folder."
     );
     return;
   }
 
   const confirmed = await showConfirmDialog(
-    "Save Browser Projects?",
-    `Save ${browserDocuments.length} browser-cached project${
+    "Import Browser Projects?",
+    `Import ${browserDocuments.length} browser-cached project${
       browserDocuments.length === 1 ? "" : "s"
-    } to the connected device folder? This includes missing projects that can still open from the browser cache.`,
-    "Save Projects"
+    } into the connected device folder? This includes missing projects that can still open from the browser cache.`,
+    "Import Projects"
   );
 
   if (!confirmed) {
@@ -3594,7 +4185,7 @@ async function saveBrowserProjectsToFolder() {
     const record = browserDocuments[index];
 
     setSaveStatus(
-      `Saving browser projects ${index + 1}/${browserDocuments.length}...`
+      `Importing browser projects ${index + 1}/${browserDocuments.length}...`
     );
 
     if (await saveDocumentToFolder(record.id, { silent: true })) {
@@ -3608,41 +4199,61 @@ async function saveBrowserProjectsToFolder() {
 
   await refreshDocuments();
   updateStorageStatus();
-  setSaveStatus(`Saved ${saved} browser project${saved === 1 ? "" : "s"} to folder`);
+  setSaveStatus(`Imported ${saved} browser project${saved === 1 ? "" : "s"} to folder`);
   await showAlertDialog(
-    "Browser Projects Saved",
-    `Saved ${saved}. Failed ${failed}.`
+    "Browser Projects Imported",
+    `Imported ${saved}. Failed ${failed}.`
   );
 }
 
-function getStorageSummaryText() {
+function getStorageSummaryItems() {
   const counts = getStorageCounts();
 
-  const parts = [];
+  const items = [];
+  const getDocumentCountText = (count) =>
+    `${count} document${count === 1 ? "" : "s"}`;
 
   if (counts.fileSystem) {
-    parts.push(
-      `${counts.fileSystem} in device folder${
+    items.push(
+      `${getDocumentCountText(counts.fileSystem)} in device folder${
         counts.fileSystem === 1 ? "" : "s"
       }`
     );
   }
 
   if (counts.browser || state.documents.length === 0) {
-    parts.push(
-      `${counts.browser} in browser storage`
+    items.push(
+      `${getDocumentCountText(counts.browser)} in browser storage`
     );
   }
 
   if (counts.draft) {
-    parts.push(`${counts.draft} draft${counts.draft === 1 ? "" : "s"}`);
+    items.push(
+      `${getDocumentCountText(counts.draft)} in draft storage`
+    );
   }
 
   if (counts.missing) {
-    parts.push(`${counts.missing} missing`);
+    items.push(`${getDocumentCountText(counts.missing)} missing`);
   }
 
-  return parts.join(" - ");
+  return items;
+}
+
+function renderStorageSummaryChips() {
+  if (!storageStatusSummary) {
+    return;
+  }
+
+  storageStatusSummary.textContent = "";
+
+  getStorageSummaryItems().forEach((item) => {
+    const chip = document.createElement("div");
+
+    chip.className = "storage-summary-chip";
+    chip.textContent = item;
+    storageStatusSummary.appendChild(chip);
+  });
 }
 
 function updateStorageStatus() {
@@ -3654,10 +4265,8 @@ function updateStorageStatus() {
   const hasWorkspaceFolder = hasWorkspaceFolderSelected();
   const workspaceFolderName = getWorkspaceFolderName();
   const storageCounts = getStorageCounts();
-  const hasBrowserDocuments = storageCounts.browser > 0;
   const browserCacheCount = storageCounts.browser + storageCounts.missing;
   const hasBrowserCacheDocuments = browserCacheCount > 0;
-  const hasMissingDocuments = storageCounts.missing > 0;
 
   storageStatus.dataset.storageSupport = hasWorkspaceFolder
     ? "connected"
@@ -3665,30 +4274,44 @@ function updateStorageStatus() {
       ? "available"
       : "unavailable";
   storageStatusTitle.textContent = hasWorkspaceFolder
-    ? "Device folder active"
-    : supportsFileSystemStorage
-      ? "Browser storage active - device folder storage available"
-      : "Browser storage active";
-  storageStatusMessage.textContent = hasWorkspaceFolder
-    ? `New drawings save to "${workspaceFolderName}" as project files. Browser-stored drawings can use Save to Folder.`
-    : supportsFileSystemStorage
-      ? "Device folder storage is the recommended durable option. Choose a folder to save new drawings as project files."
-      : "This browser cannot grant Dino Draw direct folder access. Projects are saved inside this browser, and clearing site data may remove them.";
-  storageStatusSummary.textContent = hasMissingDocuments
-    ? hasWorkspaceFolder
-      ? `${getStorageSummaryText()}. Use Recover Library to reconnect disk files or Save Browser Projects to recreate them from browser cache.`
-      : `${getStorageSummaryText()}. Use Recover Library after reconnecting the folder.`
-    : hasBrowserDocuments
-    ? hasWorkspaceFolder
-      ? `${getStorageSummaryText()}. Use Save to Folder for browser-stored drawings.`
-      : `${getStorageSummaryText()}. Export important browser-stored projects as backups.`
-    : getStorageSummaryText();
+    ? "Storage Method: Device"
+    : "Storage Method: Browser";
+  if (storageStatusDetailText) {
+    storageStatusDetailText.textContent = hasWorkspaceFolder
+      ? `Folder: ${workspaceFolderName}`
+      : supportsFileSystemStorage
+        ? "Device Storage Available"
+        : "Device Storage Unavailable";
+  }
+  if (storageStatusDetailIcon) {
+    storageStatusDetailIcon.hidden = hasWorkspaceFolder;
+    storageStatusDetailIcon.textContent = supportsFileSystemStorage
+      ? "check_circle"
+      : "cancel";
+  }
+  if (storageSettingsMode) {
+    storageSettingsMode.textContent = hasWorkspaceFolder
+      ? "Storage Mode: Device"
+      : "Storage Mode: Browser";
+  }
+  if (storageSettingsFolderRow) {
+    storageSettingsFolderRow.hidden = !hasWorkspaceFolder;
+  }
+  if (storageSettingsFolder) {
+    storageSettingsFolder.textContent = hasWorkspaceFolder
+      ? `Folder: ${workspaceFolderName}`
+      : "";
+  }
+  renderStorageSummaryChips();
 
   if (storageChooseFolderButton) {
     storageChooseFolderButton.hidden = !supportsFileSystemStorage;
-    storageChooseFolderButton.textContent = hasWorkspaceFolder
+  }
+
+  if (storageChooseFolderLabel) {
+    storageChooseFolderLabel.textContent = hasWorkspaceFolder
       ? "Change Folder"
-      : "Choose Folder";
+      : "Use Device Storage";
   }
 
   if (storageForgetFolderButton) {
@@ -3702,15 +4325,16 @@ function updateStorageStatus() {
   }
 
   if (storageSaveBrowserButton) {
-    storageSaveBrowserButton.hidden =
-      !supportsFileSystemStorage || !hasWorkspaceFolder;
+    storageSaveBrowserButton.hidden = !hasWorkspaceFolder;
     storageSaveBrowserButton.disabled = !hasBrowserCacheDocuments;
-    storageSaveBrowserButton.textContent = hasBrowserCacheDocuments
-      ? `Save Browser Projects (${browserCacheCount})`
-      : "No Browser Projects";
+    if (storageSaveBrowserLabel) {
+      storageSaveBrowserLabel.textContent = hasBrowserCacheDocuments
+        ? `Import Browser Projects (${browserCacheCount})`
+        : "No Browser Projects";
+    }
     storageSaveBrowserButton.title = hasBrowserCacheDocuments
-      ? "Save browser-stored and missing-but-cached projects to the connected device folder."
-      : "There are no browser-cached projects to save to the connected device folder.";
+      ? "Import browser-stored and missing-but-cached projects into the connected device folder."
+      : "There are no browser-cached projects to import into the connected device folder.";
   }
 
   saveToFolderButtons.forEach((button) => {
@@ -3846,6 +4470,11 @@ function openDocumentActionMenu(id, anchor) {
 }
 
 function openFolderActionMenu(id, anchor) {
+  if (isWorkspaceRootFolder(getFolderById(id))) {
+    closeDocumentMenus();
+    return;
+  }
+
   const isOpenForFolder =
     !folderActionMenu.classList.contains("is-hidden") &&
     folderActionMenu.dataset.folderId === id;
@@ -3972,12 +4601,25 @@ function getCurrentLibraryFolderId(itemType, id) {
 function canDropLibraryItem(itemType, id, folderId) {
   const destinationId = resolveExistingFolderId(folderId);
   const currentFolderId = getCurrentLibraryFolderId(itemType, id);
+  const folder = itemType === "folder" ? getFolderById(id) : null;
+
+  if (itemType === "folder" && isWorkspaceRootFolder(folder)) {
+    return false;
+  }
 
   if (currentFolderId === destinationId) {
     return false;
   }
 
   if (itemType === "folder") {
+    if (
+      hasWorkspaceFolderSelected() &&
+      getFolderStorageKind(folder) === "fileSystem" &&
+      !isFolderInsideWorkspaceRoot(destinationId)
+    ) {
+      return false;
+    }
+
     if (destinationId === id) {
       return false;
     }
@@ -4045,17 +4687,26 @@ function moveLibraryItemToFolder(itemType, id, destinationId) {
       folder.updatedAt = new Date().toISOString();
       await putFolder(folder);
     } else {
-      const record = await getDocument(id);
+      const record =
+        getDocumentStorageKind(state.documents.find((item) => item.id === id)) ===
+        "fileSystem"
+          ? await getRecordForExport(id)
+          : await getDocument(id);
 
       if (!record || !canDropLibraryItem(itemType, id, destinationId)) {
         return false;
       }
 
-      record.folderId = resolveExistingFolderId(destinationId);
-      await putDocument(record);
+      if (getDocumentStorageKind(record) === "fileSystem") {
+        await moveFileSystemDocumentRecordToFolder(record, destinationId);
+      } else {
+        record.folderId = resolveExistingFolderId(destinationId);
+        await putDocument(record);
+      }
 
       if (state.documentId === id) {
         state.documentFolderId = record.folderId;
+        applyActiveDocumentStorageMetadata(record);
       }
     }
 
@@ -4257,11 +4908,14 @@ function renderFolderRow(folder) {
   const name = document.createElement("div");
   const icon = document.createElement("span");
   const label = document.createElement("span");
+  const storageBadge = document.createElement("span");
   const meta = document.createElement("div");
   const actions = document.createElement("div");
   const openButton = document.createElement("button");
   const menuButton = document.createElement("button");
   const itemCount = countDirectFolderItems(folder.id);
+  const storageKind = getFolderStorageKind(folder);
+  const storageDetail = getFolderStorageDetail(folder);
 
   row.className = "document-row document-folder-row";
   row.dataset.libraryType = "folder";
@@ -4273,8 +4927,15 @@ function renderFolderRow(folder) {
   icon.setAttribute("aria-hidden", "true");
   icon.textContent = "folder";
   label.textContent = folder.name || "Untitled folder";
+  storageBadge.className = `document-storage-badge is-${getFolderStorageClass(storageKind)}`;
+  storageBadge.textContent = getFolderStorageLabel(storageKind);
+  storageBadge.title = getFolderStorageTitle(storageKind);
   meta.className = "document-meta";
-  meta.textContent = `Folder - ${itemCount} item${itemCount === 1 ? "" : "s"} - updated ${formatDateLabel(folder.updatedAt)}`;
+  meta.textContent = `Folder - ${itemCount} item${
+    itemCount === 1 ? "" : "s"
+  } - updated ${formatDateLabel(folder.updatedAt)}${
+    storageDetail ? ` - ${storageDetail}` : ""
+  }`;
   actions.className = "document-row-actions";
 
   openButton.className = "document-button";
@@ -4294,12 +4955,15 @@ function renderFolderRow(folder) {
     event.stopPropagation();
     openFolderActionMenu(folder.id, menuButton);
   });
+  menuButton.hidden = isWorkspaceRootFolder(folder);
 
-  name.append(icon, label);
+  name.append(icon, label, storageBadge);
   details.append(name, meta);
   actions.append(openButton, menuButton);
   row.append(details, actions);
-  addLibraryDragInteractions(row);
+  if (!isWorkspaceRootFolder(folder)) {
+    addLibraryDragInteractions(row);
+  }
 
   return row;
 }
@@ -4422,9 +5086,26 @@ async function refreshDocuments() {
     state.folders = records[0];
     state.documents = records[1];
 
+    if (hasWorkspaceFolderSelected()) {
+      const rootFolder = await ensureWorkspaceRootFolder();
+
+      if (rootFolder && (await rehomeWorkspaceRootRecords(rootFolder.id))) {
+        const refreshedRecords = await Promise.all([
+          getAllFolders(),
+          getAllDocuments(),
+        ]);
+
+        state.folders = refreshedRecords[0];
+        state.documents = refreshedRecords[1];
+      }
+    }
+
     if (!state.isValidatingDocumentFiles) {
       state.isValidatingDocumentFiles = true;
       try {
+        if (await validateFileSystemFolderRecords(state.folders)) {
+          state.folders = await getAllFolders();
+        }
         if (await validateFileSystemDocumentRecords(state.documents)) {
           state.documents = await getAllDocuments();
         }
@@ -4753,7 +5434,10 @@ async function createNewDocument() {
   const name = enteredName && enteredName.trim()
     ? enteredName.trim()
     : "Untitled notebook";
-  const record = createDocumentRecord(name, state.currentFolderId);
+  const folderId = hasWorkspaceFolderSelected()
+    ? await getDeviceStorageTargetFolderId(state.currentFolderId)
+    : state.currentFolderId;
+  const record = createDocumentRecord(name, folderId);
 
   record.lastOpenedAt = new Date().toISOString();
   if (hasWorkspaceFolderSelected()) {
@@ -4796,7 +5480,28 @@ async function createNewFolder() {
   const name = enteredName && enteredName.trim()
     ? enteredName.trim()
     : "Untitled folder";
-  const record = createFolderRecord(name, state.currentFolderId);
+  const parentId = hasWorkspaceFolderSelected()
+    ? await getDeviceStorageTargetFolderId(state.currentFolderId)
+    : state.currentFolderId;
+  const record = createFolderRecord(name, parentId);
+
+  if (hasWorkspaceFolderSelected()) {
+    try {
+      await ensureFolderStorageForVirtualPath(record.parentId);
+      await attachFileSystemStorageToFolder(record);
+    } catch (error) {
+      if (record.directoryHandleId) {
+        await deleteStorageHandleRecord(record.directoryHandleId);
+      }
+      record.storageKind = "browser";
+      delete record.workspaceId;
+      delete record.directoryHandleId;
+      delete record.relativePath;
+      delete record.catalogedAt;
+      setSaveStatus("Device folder create failed; using browser folder");
+      console.error(error);
+    }
+  }
 
   await putFolder(record);
   await refreshDocuments();
@@ -4837,7 +5542,7 @@ async function renameDocument(id) {
 
 async function moveDocument(id) {
   await flushDocumentSave();
-  const record = await getDocument(id);
+  const record = await getRecordForExport(id);
 
   if (!record) {
     return;
@@ -4855,11 +5560,16 @@ async function moveDocument(id) {
     return;
   }
 
-  record.folderId = resolveExistingFolderId(destinationId);
-  await putDocument(record);
+  if (getDocumentStorageKind(record) === "fileSystem") {
+    await moveFileSystemDocumentRecordToFolder(record, destinationId);
+  } else {
+    record.folderId = resolveExistingFolderId(destinationId);
+    await putDocument(record);
+  }
 
   if (state.documentId === id) {
     state.documentFolderId = record.folderId;
+    applyActiveDocumentStorageMetadata(record);
   }
 
   await refreshDocuments();
@@ -4925,7 +5635,7 @@ async function renameFolder(id) {
   await flushDocumentSave();
   const record = await getFolder(id);
 
-  if (!record) {
+  if (!record || isWorkspaceRootFolder(record)) {
     return;
   }
 
@@ -4950,7 +5660,7 @@ async function moveFolder(id) {
   await flushDocumentSave();
   const record = await getFolder(id);
 
-  if (!record) {
+  if (!record || isWorkspaceRootFolder(record)) {
     return;
   }
 
@@ -4966,6 +5676,19 @@ async function moveFolder(id) {
     return;
   }
 
+  if (
+    hasWorkspaceFolderSelected() &&
+    getFolderStorageKind(record) === "fileSystem" &&
+    !isFolderInsideWorkspaceRoot(destinationId)
+  ) {
+    setSaveStatus("Choose a device folder destination");
+    await showAlertDialog(
+      "Move Folder",
+      "Device-backed folders must stay inside the connected device folder."
+    );
+    return;
+  }
+
   record.parentId = resolveExistingFolderId(destinationId);
   record.updatedAt = new Date().toISOString();
   await putFolder(record);
@@ -4976,7 +5699,7 @@ async function deleteFolder(id) {
   await flushDocumentSave();
   const record = await getFolder(id);
 
-  if (!record) {
+  if (!record || isWorkspaceRootFolder(record)) {
     return;
   }
 
@@ -9776,6 +10499,7 @@ function isBlockingPageKeyNavigation() {
     pageDialog,
     addPageDialog,
     guideDialog,
+    storageDialog,
     appDialog,
   ];
 
@@ -10746,6 +11470,22 @@ function openSettings() {
   }
 
   settingsDialog.setAttribute("open", "");
+}
+
+function openStorageSettings() {
+  closeDocumentMenus();
+  updateStorageStatus();
+
+  if (!storageDialog) {
+    return;
+  }
+
+  if (storageDialog.showModal) {
+    storageDialog.showModal();
+    return;
+  }
+
+  storageDialog.setAttribute("open", "");
 }
 
 function openGuide() {
@@ -12862,6 +13602,7 @@ async function initializeApp() {
   try {
     await ensureStorageSettingsRecord();
     await migrateExistingDocumentRecords();
+    await migrateExistingFolderRecords();
     await refreshDocuments();
     updateDocumentSubtitle();
     updatePageControls();
@@ -13083,6 +13824,9 @@ documentScreen.addEventListener("click", (event) => {
   }
 });
 documentPanel.addEventListener("scroll", closeDocumentMenus);
+if (storageSettingsButton) {
+  storageSettingsButton.addEventListener("click", openStorageSettings);
+}
 if (storageChooseFolderButton) {
   storageChooseFolderButton.addEventListener("click", () => {
     chooseStorageFolder().catch((error) => {
@@ -13094,7 +13838,7 @@ if (storageChooseFolderButton) {
 if (storageRecoverLibraryButton) {
   storageRecoverLibraryButton.addEventListener("click", () => {
     recoverLibraryFromFolder().catch((error) => {
-      setSaveStatus("Recovery failed");
+      setSaveStatus("Folder scan failed");
       console.error(error);
     });
   });
@@ -13102,7 +13846,7 @@ if (storageRecoverLibraryButton) {
 if (storageSaveBrowserButton) {
   storageSaveBrowserButton.addEventListener("click", () => {
     saveBrowserProjectsToFolder().catch((error) => {
-      setSaveStatus("Save browser projects failed");
+      setSaveStatus("Import browser projects failed");
       console.error(error);
     });
   });
@@ -13110,9 +13854,9 @@ if (storageSaveBrowserButton) {
 if (storageForgetFolderButton) {
   storageForgetFolderButton.addEventListener("click", async () => {
     const confirmed = await showConfirmDialog(
-      "Forget Device Folder?",
-      "Dino Draw will forget this folder permission. Current browser-stored projects will not be deleted.",
-      "Forget Folder"
+      "Use Browser Storage?",
+      "Dino Draw will stop using the connected device folder. Disk files stay where they are, and folder-backed library entries become missing until you reconnect the folder.",
+      "Use Browser Storage"
     );
 
     if (!confirmed) {

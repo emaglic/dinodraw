@@ -107,6 +107,6 @@ Important constants:
 
 ## Versioning
 
-Current app version: `v0.8.151`.
+Current app version: `v0.8.165`.
 
 Version bumps are required for code, UI, service-worker behavior, cacheable assets, or visible behavior changes. Update the version in `src/app.js`, `src/index.html`, and `src/service-worker.js` together. See `instructions.md` for the exact checklist.

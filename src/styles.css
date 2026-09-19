@@ -1307,9 +1307,9 @@ button {
 
 .storage-status {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 10px;
-  align-items: start;
+  align-items: center;
   padding: 10px;
   border: 2px solid #000000;
   border-radius: 6px;
@@ -1325,7 +1325,7 @@ button {
 
 .storage-status-copy {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -1334,18 +1334,48 @@ button {
   font-size: 14px;
   font-weight: 800;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
-.storage-status-message,
-.storage-status-summary {
-  color: #000000;
+.storage-status-detail {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: #333333;
   font-size: 12px;
   font-weight: 700;
-  line-height: 1.35;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.storage-status-detail-icon {
+  width: 16px;
+  height: 16px;
+  color: #000000;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.storage-status-detail-icon[hidden] {
+  display: none;
 }
 
 .storage-status-summary {
-  color: #333333;
+  display: grid;
+  gap: 6px;
+}
+
+.storage-summary-chip {
+  width: 100%;
+  min-height: 30px;
+  padding: 6px 9px;
+  border: 2px solid #000000;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #000000;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
 }
 
 .storage-status-actions {
@@ -1356,7 +1386,54 @@ button {
 }
 
 .storage-status-actions .document-button {
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
   min-height: 34px;
+}
+
+.storage-status-actions .document-button[hidden],
+.storage-rescan-button[hidden] {
+  display: none;
+}
+
+.storage-action-icon {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.storage-settings-mode {
+  color: #000000;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.storage-settings-folder-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.storage-settings-folder-row[hidden] {
+  display: none;
+}
+
+.storage-settings-folder {
+  color: #333333;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
+.storage-rescan-button {
+  width: 32px;
+  height: 32px;
 }
 
 .document-breadcrumb-button.is-drop-target,

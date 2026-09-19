@@ -28,16 +28,16 @@ Planned storage kinds:
 | --- | --- | --- |
 | 1. Storage status and user clarity | Complete in `v0.8.142` | Added storage capability detection, document-row storage badges, clear browser-storage warnings, and docs. |
 | 2. Data schema | Complete in `v0.8.143` | Added IndexedDB schema version 6, storage settings/handle stores, and file-system metadata fields. |
-| 3. Folder selection | Complete in `v0.8.144` | Added Choose/Change/Forget Folder controls and persisted the workspace directory handle where supported. |
+| 3. Folder selection | Complete in `v0.8.144` | Added Choose/Change/Use Browser Storage controls and persisted the workspace directory handle where supported. |
 | 4. Disk-backed save/open | Complete in `v0.8.145` | New documents can save directly to `.dinodraw.json` files, and browser docs can be converted with Save to Folder. |
-| 5. Recovery / rebuild library | Complete in `v0.8.146` | Added Recover Library to scan the selected folder for `.dinodraw.json` files and rebuild IndexedDB by `uuid`. |
-| 6. Mixed storage management | Complete in `v0.8.147` | Added Save Browser Projects bulk migration, missing-file guidance, and row-level storage details. |
+| 5. Recovery / rebuild library | Complete in `v0.8.146` | Added folder scanning for `.dinodraw.json` files and IndexedDB rebuild by `uuid`; folder selection now runs the scan automatically. |
+| 6. Mixed storage management | Complete in `v0.8.147` | Added Import Browser Projects bulk migration, missing-file guidance, and row-level storage details. |
 | 7. Docs and guardrails | Complete after `v0.8.147` | Added storage testing checklist, explicit guardrails, and real-device validation notes. |
 
 ## Phase 1 Scope
 
 - Detect whether File System Access APIs are available in a secure context.
-- Show a storage status panel on the Documents screen.
+- Show storage status on the Documents screen.
 - Tell the user that current projects are stored in browser storage until device-folder saving is enabled.
 - Add a per-document storage badge, defaulting existing documents to `Browser`.
 - Preserve existing save behavior.
@@ -57,11 +57,11 @@ Phase 2 was completed in `v0.8.143`. No folder picker or disk-backed write path 
 
 ## Phase 3 Scope
 
-- Add Documents-screen controls for choosing, changing, and forgetting a device folder.
+- Add Documents-screen controls for choosing, changing, and switching away from a device folder.
 - Use `showDirectoryPicker({ mode: "readwrite" })` when available in a secure context.
 - Persist the selected directory handle in the `storageHandles` store under `workspaceDirectory`.
 - Store the selected folder name and handle ID in `storageSettings`.
-- Update the storage status panel to distinguish `available` from `connected`.
+- Update the storage UI to distinguish `available` from `connected`.
 - Keep all current document saves browser-backed until Phase 4.
 
 Phase 3 was completed in `v0.8.144`. Selecting a folder only stores the workspace handle; it does not migrate, rewrite, or autosave projects to disk yet.
@@ -79,7 +79,7 @@ Phase 4 was completed in `v0.8.145`. Phase 5 starts with folder scanning and cat
 
 ## Phase 5 Scope
 
-- Add a Recover Library action to the storage status panel when a workspace folder is connected.
+- Add a folder scan action to Storage Settings when a workspace folder is connected.
 - Recursively scan the selected folder for `.dinodraw.json` project files.
 - Parse each project file and rebuild IndexedDB document/page records using the file's `uuid`.
 - Update existing same-UUID catalog records, unless a browser-backed record is newer than the file.
@@ -90,7 +90,7 @@ Phase 5 was completed in `v0.8.146`. Recovery rebuilds the local catalog/cache f
 
 ## Phase 6 Scope
 
-- Add a Save Browser Projects action when a workspace folder is connected and browser-backed drawings remain.
+- Add an Import Browser Projects action when a workspace folder is connected and browser-backed drawings remain.
 - Bulk-convert browser-backed drawings to folder-backed `.dinodraw.json` files with a summary.
 - Prioritize missing-file guidance in the storage status summary.
 - Show file path/name details on file-backed and missing document rows.
@@ -113,3 +113,6 @@ Phase 7 was completed as a docs/guardrails pass after `v0.8.147`. No app code ch
 - The current portable DinoDraw export shape, `{ format, formatVersion, exportedAt, document }`, should be reused for disk-backed project file contents unless a future migration justifies a new file format.
 - `uuid` remains the stable cross-storage document identity; local IndexedDB `id` remains the local key.
 - `folderId` remains a local library organization field and should not be exported as portable file identity.
+- Folder records now track storage metadata. The active workspace folder is represented by a protected top-level mounted folder row, device-backed folder rows beneath it map to workspace subdirectory paths, recovery/rescan rebuilds virtual folders from disk subdirectories inside that mount, and new device-backed drawings save into the mounted folder or the current folder's matching subdirectory.
+- Moving file-backed documents into device-backed virtual folders writes the project file into the matching device subdirectory and removes the old project file after the new write succeeds.
+- Virtual folder rename/move actions currently update Dino Draw's catalog only; they do not physically rename or move existing device folders.

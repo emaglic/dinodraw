@@ -12,7 +12,7 @@ Offline install/service-worker behavior requires HTTPS or localhost. On insecure
 
 ## File System Access Requires Target-Browser Validation
 
-Folder-backed storage depends on File System Access APIs such as `showDirectoryPicker()` and persisted `FileSystemHandle` objects. Chrome/Chromium support should be tested directly on the BOOX Note Air 5C target browser. In unsupported browsers, Dino Draw should remain browser-storage backed and make that clear in the storage panel.
+Folder-backed storage depends on File System Access APIs such as `showDirectoryPicker()` and persisted `FileSystemHandle` objects. Chrome/Chromium support should be tested directly on the BOOX Note Air 5C target browser. In unsupported browsers, Dino Draw should remain browser-storage backed and make that clear in the storage row and Storage Settings dialog.
 
 Known validation points:
 
