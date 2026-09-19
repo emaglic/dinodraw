@@ -1,4 +1,4 @@
-const APP_VERSION = "v0.8.141";
+const APP_VERSION = "v0.8.168";
 const canvas = document.querySelector("#drawing-canvas");
 const context = canvas.getContext("2d", {
   alpha: false,
@@ -387,7 +387,7 @@ const performanceLoggingStorageKey = "dinodrawPerformanceLogging";
 const debugConsoleStorageKey = "dinodrawDebug";
 const rootFolderLabel = "My Documents";
 const databaseName = "booxDrawingDocuments";
-const databaseVersion = 5;
+const databaseVersion = 6;
 const documentStoreName = "documents";
 const folderStoreName = "folders";
 const pageStoreName = "documentPages";
@@ -1164,6 +1164,204 @@ async function deleteFolderRecord(id) {
     request.onsuccess = () => resolve();
     request.onerror = () => reject(request.error);
   });
+}
+
+function normalizeRollbackStorageText(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+
+  return text || "";
+}
+
+function getRollbackRelativePath(record) {
+  return normalizeRollbackStorageText(record && record.relativePath)
+    .replace(/\\/g, "/")
+    .split("/")
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .join("/");
+}
+
+function hasRollbackFileSystemFolderMetadata(folder) {
+  return Boolean(
+    folder &&
+      (folder.storageKind === "fileSystem" ||
+        folder.storageKind === "missing" ||
+        folder.workspaceRoot === true ||
+        normalizeRollbackStorageText(folder.workspaceId) ||
+        normalizeRollbackStorageText(folder.directoryHandleId) ||
+        normalizeRollbackStorageText(folder.relativePath) ||
+        normalizeRollbackStorageText(folder.id).indexOf("workspaceRootFolder:") ===
+          0)
+  );
+}
+
+function isRollbackWorkspaceRootFolder(folder) {
+  return Boolean(
+    folder &&
+      (folder.workspaceRoot === true ||
+        normalizeRollbackStorageText(folder.id).indexOf("workspaceRootFolder:") ===
+          0 ||
+        (normalizeRollbackStorageText(folder.directoryHandleId) ===
+          "workspaceDirectory" &&
+          !getRollbackRelativePath(folder)))
+  );
+}
+
+function hasRollbackFileSystemDocumentMetadata(record) {
+  return Boolean(
+    record &&
+      (record.storageKind === "fileSystem" ||
+        record.storageKind === "missing" ||
+        normalizeRollbackStorageText(record.workspaceId) ||
+        normalizeRollbackStorageText(record.fileHandleId) ||
+        normalizeRollbackStorageText(record.fileName) ||
+        normalizeRollbackStorageText(record.relativePath))
+  );
+}
+
+function stripRollbackFolderStorageMetadata(folder) {
+  delete folder.storageKind;
+  delete folder.workspaceId;
+  delete folder.directoryHandleId;
+  delete folder.relativePath;
+  delete folder.catalogedAt;
+  delete folder.workspaceRoot;
+  return folder;
+}
+
+function stripRollbackDocumentStorageMetadata(record) {
+  delete record.storageKind;
+  delete record.workspaceId;
+  delete record.fileHandleId;
+  delete record.fileName;
+  delete record.relativePath;
+  delete record.fileLastModifiedAt;
+  delete record.catalogedAt;
+  return record;
+}
+
+async function sanitizeRolledBackFileSystemRecords() {
+  const folders = await getAllFromStore(await getFolderStore("readonly"));
+  const documents = await getAllFromStore(await getDocumentStore("readonly"));
+  const rootIds = new Set(
+    folders.filter(isRollbackWorkspaceRootFolder).map((folder) => folder.id)
+  );
+  const removedFolderIds = new Set(rootIds);
+  let changed = false;
+
+  for (const folder of folders) {
+    if (rootIds.has(folder.id)) {
+      continue;
+    }
+
+    if (rootIds.has(normalizeFolderId(folder.parentId))) {
+      folder.parentId = null;
+      folder.updatedAt = new Date().toISOString();
+      await putFolder(folder);
+      changed = true;
+    }
+  }
+
+  for (const record of documents) {
+    let shouldPut = false;
+
+    if (rootIds.has(normalizeFolderId(record.folderId))) {
+      record.folderId = null;
+      shouldPut = true;
+    }
+
+    if (hasRollbackFileSystemDocumentMetadata(record)) {
+      stripRollbackDocumentStorageMetadata(record);
+      shouldPut = true;
+    }
+
+    if (shouldPut) {
+      await putDocument(record);
+      changed = true;
+    }
+  }
+
+  for (const rootId of rootIds) {
+    await deleteFolderRecord(rootId);
+    changed = true;
+  }
+
+  const remainingFolders = folders.filter((folder) => !rootIds.has(folder.id));
+  const foldersByRelativePath = new Map();
+
+  remainingFolders.forEach((folder) => {
+    if (!hasRollbackFileSystemFolderMetadata(folder)) {
+      return;
+    }
+
+    const relativePath = getRollbackRelativePath(folder);
+
+    if (!relativePath) {
+      return;
+    }
+
+    if (!foldersByRelativePath.has(relativePath)) {
+      foldersByRelativePath.set(relativePath, []);
+    }
+
+    foldersByRelativePath.get(relativePath).push(folder);
+  });
+
+  for (const folderGroup of foldersByRelativePath.values()) {
+    if (folderGroup.length < 2) {
+      continue;
+    }
+
+    folderGroup.sort((a, b) =>
+      String(a.createdAt || a.updatedAt || "").localeCompare(
+        String(b.createdAt || b.updatedAt || "")
+      )
+    );
+
+    const canonicalFolder = folderGroup[0];
+    const duplicateIds = new Set(folderGroup.slice(1).map((folder) => folder.id));
+
+    for (const folder of remainingFolders) {
+      if (duplicateIds.has(normalizeFolderId(folder.parentId))) {
+        folder.parentId = canonicalFolder.id;
+        folder.updatedAt = new Date().toISOString();
+        await putFolder(folder);
+        changed = true;
+      }
+    }
+
+    for (const record of documents) {
+      if (duplicateIds.has(normalizeFolderId(record.folderId))) {
+        record.folderId = canonicalFolder.id;
+        await putDocument(record);
+        changed = true;
+      }
+    }
+
+    for (const duplicateId of duplicateIds) {
+      await deleteFolderRecord(duplicateId);
+      removedFolderIds.add(duplicateId);
+      changed = true;
+    }
+  }
+
+  for (const folder of remainingFolders) {
+    if (removedFolderIds.has(folder.id)) {
+      continue;
+    }
+
+    if (!hasRollbackFileSystemFolderMetadata(folder)) {
+      continue;
+    }
+
+    stripRollbackFolderStorageMetadata(folder);
+    await putFolder(folder);
+    changed = true;
+  }
+
+  if (changed) {
+    setSaveStatus("Cleaned up device storage cache");
+  }
 }
 
 function normalizeFolderId(value) {
@@ -11505,6 +11703,7 @@ async function initializeApp() {
 
   try {
     await migrateExistingDocumentRecords();
+    await sanitizeRolledBackFileSystemRecords();
     await refreshDocuments();
     updateDocumentSubtitle();
     updatePageControls();

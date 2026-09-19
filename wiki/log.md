@@ -516,3 +516,10 @@ Append entries chronologically. Use this file for wiki maintenance, durable conc
 - Serialized evicted page layers back to saved raster strings before releasing canvas layers and non-meaningful history snapshots.
 - Ran eviction after successful saves, page switches, and thumbnail rendering.
 - Bumped the app/cache version to `v0.8.141`.
+
+## [2026-09-19] rollback | Cache-Busted Pre-Device-Storage Build
+
+- Bumped the pre-device-storage rollback branch to `v0.8.168` so BOOX devices do not reuse newer broken service-worker assets.
+- Raised IndexedDB open version to `6` for compatibility with databases already opened by later device-storage builds.
+- Added startup cleanup to remove mounted device-root folder rows, merge duplicate device-path folders, and strip device-storage metadata from cached documents/folders.
+- Did not restore device-storage UI or file-system write behavior.
